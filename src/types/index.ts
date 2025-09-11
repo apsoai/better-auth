@@ -169,6 +169,122 @@ export interface RequestConfig {
   headers?: Record<string, string>;
   body?: any;
   timeout?: number;
+  retryConfig?: RetryConfig;
+  signal?: AbortSignal;
+}
+
+// =============================================================================
+// HTTP Client Configuration and Backend Types
+// =============================================================================
+
+export type HttpBackend = 'fetch' | 'axios';
+
+export interface HttpClientConfig {
+  backend?: HttpBackend;
+  timeout?: number;
+  retryConfig?: RetryConfig;
+  connectionPool?: ConnectionPoolConfig;
+  circuitBreaker?: CircuitBreakerConfig;
+  interceptors?: HttpInterceptors;
+  observability?: HttpObservabilityConfig;
+  ssl?: SslConfig;
+  logger?: Logger;
+}
+
+export interface ConnectionPoolConfig {
+  maxConnections?: number;
+  maxConnectionsPerHost?: number;
+  keepAlive?: boolean;
+  keepAliveTimeout?: number;
+  idleTimeout?: number;
+  connectionTimeout?: number;
+  enableHttp2?: boolean;
+}
+
+export interface CircuitBreakerConfig {
+  enabled: boolean;
+  failureThreshold: number;
+  recoveryTimeout: number;
+  monitoringPeriod: number;
+  minimumRequests: number;
+}
+
+export interface HttpInterceptors {
+  request?: RequestInterceptor[];
+  response?: ResponseInterceptor[];
+  error?: ErrorInterceptor[];
+}
+
+export interface HttpObservabilityConfig {
+  enableMetrics: boolean;
+  enableTracing: boolean;
+  enableLogging: boolean;
+  logLevel: LogLevel;
+  metricsReporter?: MetricsReporter;
+}
+
+export interface SslConfig {
+  rejectUnauthorized?: boolean;
+  ca?: string | string[];
+  cert?: string;
+  key?: string;
+  ciphers?: string;
+  secureProtocol?: string;
+}
+
+export type RequestInterceptor = (config: RequestConfig) => RequestConfig | Promise<RequestConfig>;
+export type ResponseInterceptor = <T>(response: HttpResponse<T>) => HttpResponse<T> | Promise<HttpResponse<T>>;
+export type ErrorInterceptor = (error: Error) => Error | Promise<Error>;
+
+export interface HttpResponse<T> {
+  data: T;
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  url: string;
+  duration: number;
+}
+
+export interface MetricsReporter {
+  reportRequest(metrics: RequestMetrics): void;
+  reportError(metrics: ErrorMetrics): void;
+}
+
+export interface RequestMetrics {
+  method: string;
+  url: string;
+  duration: number;
+  status: number;
+  success: boolean;
+  retries: number;
+  timestamp: Date;
+}
+
+export interface ErrorMetrics {
+  method: string;
+  url: string;
+  error: string;
+  retryable: boolean;
+  timestamp: Date;
+}
+
+// =============================================================================
+// Circuit Breaker Types
+// =============================================================================
+
+export enum CircuitState {
+  CLOSED = 'CLOSED',
+  OPEN = 'OPEN',
+  HALF_OPEN = 'HALF_OPEN'
+}
+
+export interface CircuitBreakerStats {
+  state: CircuitState;
+  failures: number;
+  successes: number;
+  requests: number;
+  lastFailureTime?: Date;
+  nextAttemptTime?: Date;
 }
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -433,6 +549,32 @@ export interface RequestStats {
   duration?: number;
   success?: boolean;
   error?: Error;
+  retries?: number;
+  circuitBreakerState?: CircuitState;
+}
+
+// =============================================================================
+// Connection Pool Types
+// =============================================================================
+
+export interface ConnectionPoolStats {
+  activeConnections: number;
+  idleConnections: number;
+  totalConnections: number;
+  connectionErrors: number;
+  connectionTimeouts: number;
+  requestsWaiting: number;
+}
+
+export interface ConnectionInfo {
+  id: string;
+  host: string;
+  port: number;
+  protocol: 'http:' | 'https:';
+  connected: boolean;
+  lastUsed: Date;
+  requestCount: number;
+  errorCount: number;
 }
 
 export interface BatchOperationResult<T> {
@@ -489,3 +631,137 @@ export type RequiredFields<T, K extends keyof T> = T & Required<Pick<T, K>>;
 export type OptionalFields<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
 
 export type NonNullable<T> = T extends null | undefined ? never : T;
+
+// =============================================================================
+// Entity Types for Better Auth and Apso API
+// =============================================================================
+
+/**
+ * Better Auth User entity format
+ */
+export interface BetterAuthUser {
+  id: string;
+  email: string;
+  emailVerified: boolean;
+  name?: string;
+  image?: string;
+}
+
+/**
+ * Better Auth Session entity format
+ */
+export interface BetterAuthSession {
+  id: string;
+  sessionToken: string;
+  userId: string;
+  expiresAt: Date;
+}
+
+/**
+ * Better Auth VerificationToken entity format
+ */
+export interface BetterAuthVerificationToken {
+  identifier: string;
+  token: string;
+  expiresAt: Date;
+}
+
+/**
+ * Better Auth Account entity format (optional)
+ */
+export interface BetterAuthAccount {
+  id: string;
+  userId: string;
+  type: string;
+  provider: string;
+  providerAccountId: string;
+  refresh_token?: string;
+  access_token?: string;
+  expires_at?: number;
+  token_type?: string;
+  scope?: string;
+  id_token?: string;
+  session_state?: string;
+}
+
+/**
+ * Apso API User entity format
+ */
+export interface ApsoUser {
+  id: string;
+  email: string;
+  emailVerified: boolean;
+  hashedPassword?: string;
+  name?: string;
+  image?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * Apso API Session entity format
+ */
+export interface ApsoSession {
+  id: string;
+  sessionToken: string;
+  userId: string;
+  expiresAt: Date;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * Apso API VerificationToken entity format
+ */
+export interface ApsoVerificationToken {
+  id?: string;
+  identifier: string;
+  token: string;
+  expiresAt: Date;
+  created_at: Date;
+}
+
+/**
+ * Apso API Account entity format (optional)
+ */
+export interface ApsoAccount {
+  id: string;
+  userId: string;
+  type: string;
+  provider: string;
+  providerAccountId: string;
+  refresh_token?: string;
+  access_token?: string;
+  expires_at?: number;
+  token_type?: string;
+  scope?: string;
+  id_token?: string;
+  session_state?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * Entity type enumeration
+ */
+export enum EntityType {
+  USER = 'user',
+  SESSION = 'session',
+  VERIFICATION_TOKEN = 'verificationToken',
+  ACCOUNT = 'account'
+}
+
+/**
+ * Transformation direction
+ */
+export type TransformationDirection = 'toApi' | 'fromApi';
+
+/**
+ * Union type for Better Auth entities
+ */
+export type BetterAuthEntity = BetterAuthUser | BetterAuthSession | BetterAuthVerificationToken | BetterAuthAccount;
+
+/**
+ * Union type for Apso API entities
+ */
+export type ApsoEntity = ApsoUser | ApsoSession | ApsoVerificationToken | ApsoAccount;
