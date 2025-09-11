@@ -13,7 +13,9 @@ export class RetryHandler {
 
   constructor(config: RetryConfig, logger?: Logger) {
     this.config = config;
-    this.logger = logger;
+    if (logger !== undefined) {
+      this.logger = logger;
+    }
   }
 
   /**
@@ -33,7 +35,7 @@ export class RetryHandler {
     // 4. Retry up to maxRetries
     // 5. Throw final error if all attempts fail
     
-    let lastError: Error;
+    let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
       try {
@@ -78,11 +80,11 @@ export class RetryHandler {
 
     this.logger?.error('All retry attempts failed', {
       attempts: this.config.maxRetries + 1,
-      finalError: lastError.message,
+      finalError: lastError?.message || 'Unknown error',
       ...context,
     });
 
-    throw lastError;
+    throw lastError || new Error('All retry attempts failed with unknown error');
   }
 
   /**

@@ -9,7 +9,6 @@
 import type {
   HttpClient as IHttpClient,
   RequestConfig,
-  HttpMethod,
   RetryConfig,
   AdapterError,
   Logger,
@@ -25,12 +24,16 @@ export class HttpClient implements IHttpClient {
     timeout: number = 3000,
     logger?: Logger
   ) {
-    this.retryConfig = retryConfig;
+    if (retryConfig !== undefined) {
+      this.retryConfig = retryConfig;
+    }
     this.timeout = timeout;
-    this.logger = logger;
+    if (logger !== undefined) {
+      this.logger = logger;
+    }
   }
 
-  async request<T>(config: RequestConfig): Promise<T> {
+  async request<T>(_config: RequestConfig): Promise<T> {
     // TODO: Implement core request method with retry logic
     // 1. Validate request configuration
     // 2. Apply default timeout if not specified
@@ -106,7 +109,7 @@ export class HttpClient implements IHttpClient {
   // Batch Operations
   // =============================================================================
 
-  async batchRequest<T>(configs: RequestConfig[]): Promise<T[]> {
+  async batchRequest<T>(_configs: RequestConfig[]): Promise<T[]> {
     // TODO: Implement batch request execution
     // 1. Execute requests with concurrency control
     // 2. Collect results and errors
@@ -135,9 +138,9 @@ export class HttpClient implements IHttpClient {
   // Private Helper Methods
   // =============================================================================
 
-  private async executeWithRetry<T>(
-    requestFn: () => Promise<T>,
-    attempt: number = 0
+  private async _executeWithRetry<T>(
+    _requestFn: () => Promise<T>,
+    _attempt: number = 0
   ): Promise<T> {
     // TODO: Implement retry logic with exponential backoff
     // 1. Execute request function
@@ -148,7 +151,7 @@ export class HttpClient implements IHttpClient {
     throw new Error('Method not implemented');
   }
 
-  private calculateBackoffDelay(attempt: number): number {
+  private _calculateBackoffDelay(attempt: number): number {
     // TODO: Calculate exponential backoff delay with jitter
     if (!this.retryConfig) return 0;
 
@@ -160,13 +163,13 @@ export class HttpClient implements IHttpClient {
     return Math.min(delay, maxDelayMs);
   }
 
-  private isRetryableError(error: AdapterError): boolean {
+  private _isRetryableError(error: AdapterError): boolean {
     // TODO: Determine if error is retryable
     // Check error code and status code against retryable conditions
     return error.retryable;
   }
 
-  private async parseResponse<T>(response: Response): Promise<T> {
+  private async _parseResponse<T>(_response: Response): Promise<T> {
     // TODO: Parse and validate HTTP response
     // 1. Check response status
     // 2. Parse JSON if content-type is JSON
@@ -175,17 +178,17 @@ export class HttpClient implements IHttpClient {
     throw new Error('Method not implemented');
   }
 
-  private mapHttpError(
-    status: number,
-    statusText: string,
-    body?: any
+  private _mapHttpError(
+    _status: number,
+    _statusText: string,
+    _body?: any
   ): AdapterError {
     // TODO: Map HTTP errors to AdapterError instances
     // Use ErrorMapper to create appropriate AdapterError
     throw new Error('Method not implemented');
   }
 
-  private logRequest(config: RequestConfig): void {
+  private _logRequest(config: RequestConfig): void {
     // TODO: Log HTTP request details
     if (this.logger) {
       this.logger.debug('HTTP Request', {
@@ -197,7 +200,7 @@ export class HttpClient implements IHttpClient {
     }
   }
 
-  private logResponse(
+  private _logResponse(
     config: RequestConfig,
     response: Response,
     duration: number
@@ -214,7 +217,7 @@ export class HttpClient implements IHttpClient {
     }
   }
 
-  private async delay(ms: number): Promise<void> {
+  private async _delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 }

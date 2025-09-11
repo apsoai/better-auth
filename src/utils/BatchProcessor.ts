@@ -29,7 +29,9 @@ export class BatchProcessor {
 
   constructor(config: BatchConfig, logger?: Logger) {
     this.config = config;
-    this.logger = logger;
+    if (logger !== undefined) {
+      this.logger = logger;
+    }
   }
 
   /**
@@ -74,6 +76,8 @@ export class BatchProcessor {
 
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
+      if (!batch) continue;
+      
       const batchStartIndex = i * this.config.batchSize;
 
       this.logger?.debug(`Processing batch ${i + 1}/${batches.length}`, {
@@ -135,17 +139,21 @@ export class BatchProcessor {
 
     for (let i = 0; i < batch.length; i++) {
       const item = batch[i];
+      if (!item) continue;
+      
       const globalIndex = baseIndex + i;
 
       // Create processing promise
       const promise = this.processItem(item, globalIndex, processor)
         .then(result => {
-          successful.push(result);
+          if (result !== undefined) {
+            successful.push(result);
+          }
         })
         .catch(error => {
           failed.push({
             index: globalIndex,
-            item,
+            item: item as any,
             error: error as Error,
           });
         });

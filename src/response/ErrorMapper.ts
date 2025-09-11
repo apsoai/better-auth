@@ -11,7 +11,9 @@ export class ErrorMapper {
   private readonly logger?: Logger;
 
   constructor(logger?: Logger) {
-    this.logger = logger;
+    if (logger !== undefined) {
+      this.logger = logger;
+    }
   }
 
   // =============================================================================

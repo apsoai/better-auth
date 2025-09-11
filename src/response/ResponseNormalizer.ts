@@ -18,7 +18,9 @@ export class ResponseNormalizer {
   private readonly logger?: Logger;
 
   constructor(logger?: Logger) {
-    this.logger = logger;
+    if (logger !== undefined) {
+      this.logger = logger;
+    }
   }
 
   // =============================================================================
@@ -219,7 +221,7 @@ export class ResponseNormalizer {
     );
   }
 
-  private isEmptyResponse(value: any): boolean {
+  private _isEmptyResponse(value: any): boolean {
     if (value === null || value === undefined) {
       return true;
     }
@@ -266,7 +268,7 @@ export class ResponseNormalizer {
   // Debug and Logging
   // =============================================================================
 
-  private logNormalization(
+  private _logNormalization(
     type: string,
     original: any,
     normalized: any

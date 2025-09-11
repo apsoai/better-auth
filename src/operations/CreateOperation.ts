@@ -10,11 +10,11 @@ export class CreateOperation {
   // TODO: Implement create operation
   // Will be implemented in Phase 3
   
-  async create<T>(params: CreateParams): Promise<T> {
+  async create<T>(_params: CreateParams): Promise<T> {
     throw new Error('Method not implemented - Phase 3');
   }
 
-  async createMany<T>(params: CreateManyParams): Promise<T[]> {
+  async createMany<T>(_params: CreateManyParams): Promise<T[]> {
     throw new Error('Method not implemented - Phase 3');
   }
 }

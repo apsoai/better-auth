@@ -275,7 +275,9 @@ export class AdapterError extends Error {
     this.code = code;
     this.details = details;
     this.retryable = retryable;
-    this.statusCode = statusCode;
+    if (statusCode !== undefined) {
+      this.statusCode = statusCode;
+    }
   }
 }
 

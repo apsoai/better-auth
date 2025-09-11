@@ -20,7 +20,6 @@ import type {
   CountParams,
   CreateManyParams,
   AdapterMetrics,
-  HealthCheckResult,
 } from '../types';
 
 export class ApsoAdapter implements IApsoAdapter {
@@ -44,7 +43,7 @@ export class ApsoAdapter implements IApsoAdapter {
   // Better Auth Required Methods
   // =============================================================================
 
-  async create<T>(params: CreateParams): Promise<T> {
+  async create<T>(_params: CreateParams): Promise<T> {
     // TODO: Implement create method
     // 1. Validate input data
     // 2. Transform data using EntityMapper
@@ -55,7 +54,7 @@ export class ApsoAdapter implements IApsoAdapter {
     throw new Error('Method not implemented');
   }
 
-  async update<T>(params: UpdateParams): Promise<T> {
+  async update<T>(_params: UpdateParams): Promise<T> {
     // TODO: Implement update method
     // 1. Build query conditions
     // 2. Transform update data
@@ -65,7 +64,7 @@ export class ApsoAdapter implements IApsoAdapter {
     throw new Error('Method not implemented');
   }
 
-  async updateMany(params: UpdateManyParams): Promise<number> {
+  async updateMany(_params: UpdateManyParams): Promise<number> {
     // TODO: Implement bulk update method
     // 1. Find all matching records
     // 2. Batch update with concurrency control
@@ -73,7 +72,7 @@ export class ApsoAdapter implements IApsoAdapter {
     throw new Error('Method not implemented');
   }
 
-  async delete<T>(params: DeleteParams): Promise<T> {
+  async delete<T>(_params: DeleteParams): Promise<T> {
     // TODO: Implement delete method
     // 1. Find record to delete
     // 2. Execute delete request
@@ -81,7 +80,7 @@ export class ApsoAdapter implements IApsoAdapter {
     throw new Error('Method not implemented');
   }
 
-  async deleteMany(params: DeleteManyParams): Promise<number> {
+  async deleteMany(_params: DeleteManyParams): Promise<number> {
     // TODO: Implement bulk delete method
     // 1. Find all matching records
     // 2. Batch delete with concurrency control
@@ -89,7 +88,7 @@ export class ApsoAdapter implements IApsoAdapter {
     throw new Error('Method not implemented');
   }
 
-  async findOne<T>(params: FindOneParams): Promise<T | null> {
+  async findOne<T>(_params: FindOneParams): Promise<T | null> {
     // TODO: Implement findOne method
     // 1. Check for ID-based lookup (direct API call)
     // 2. Fallback to query-based lookup
@@ -99,7 +98,7 @@ export class ApsoAdapter implements IApsoAdapter {
     throw new Error('Method not implemented');
   }
 
-  async findMany<T>(params: FindManyParams): Promise<T[]> {
+  async findMany<T>(_params: FindManyParams): Promise<T[]> {
     // TODO: Implement findMany method
     // 1. Transform query conditions
     // 2. Build pagination parameters
@@ -109,7 +108,7 @@ export class ApsoAdapter implements IApsoAdapter {
     throw new Error('Method not implemented');
   }
 
-  async count(params: CountParams): Promise<number> {
+  async count(_params: CountParams): Promise<number> {
     // TODO: Implement count method
     // 1. Try to get count from meta.total
     // 2. Fallback to findMany().length if needed
@@ -123,7 +122,7 @@ export class ApsoAdapter implements IApsoAdapter {
   // Extended Adapter Methods
   // =============================================================================
 
-  async createMany<T>(params: CreateManyParams): Promise<T[]> {
+  async createMany<T>(_params: CreateManyParams): Promise<T[]> {
     // TODO: Implement bulk create method
     // 1. Validate all input data
     // 2. Transform data
@@ -160,7 +159,7 @@ export class ApsoAdapter implements IApsoAdapter {
     // Clear response cache if enabled
   }
 
-  setTenantContext(tenantId: string): void {
+  setTenantContext(_tenantId: string): void {
     // TODO: Implement tenant context setting
     // Store tenant ID for multi-tenancy
   }
@@ -182,7 +181,7 @@ export class ApsoAdapter implements IApsoAdapter {
   // Private Helper Methods
   // =============================================================================
 
-  private buildHeaders(): Record<string, string> {
+  private _buildHeaders(): Record<string, string> {
     // TODO: Build common HTTP headers
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -199,7 +198,7 @@ export class ApsoAdapter implements IApsoAdapter {
     return headers;
   }
 
-  private getApiPath(modelName: string): string {
+  private _getApiPath(modelName: string): string {
     // TODO: Get API path for model
     // Use EntityMapper to transform model name to API path
     const pluralized = this.config.usePlural !== false;

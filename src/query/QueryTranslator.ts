@@ -17,18 +17,16 @@ import type {
 
 export class QueryTranslator {
   private readonly emailNormalization: boolean;
-  private readonly logger?: Logger;
 
-  constructor(emailNormalization: boolean = true, logger?: Logger) {
+  constructor(emailNormalization: boolean = true, _logger?: Logger) {
     this.emailNormalization = emailNormalization;
-    this.logger = logger;
   }
 
   // =============================================================================
   // Main Translation Methods
   // =============================================================================
 
-  translateWhere(where: Record<string, any>): CrudFilter[] {
+  translateWhere(_where: Record<string, any>): CrudFilter[] {
     // TODO: Translate Better Auth where conditions to nestjsx/crud filters
     // 1. Handle simple equality conditions
     // 2. Handle complex operators (in, not, lt, gt, etc.)
@@ -96,7 +94,7 @@ export class QueryTranslator {
   // Filter Construction
   // =============================================================================
 
-  private buildFilter(
+  private _buildFilter(
     field: string,
     operator: CrudOperator,
     value: any,
@@ -115,7 +113,7 @@ export class QueryTranslator {
     };
   }
 
-  private mapOperator(betterAuthOperator: string): CrudOperator {
+  private _mapOperator(betterAuthOperator: string): CrudOperator {
     // TODO: Map Better Auth operators to CRUD operators
     // Handle operators like: equals, in, not, contains, startsWith, etc.
     const operatorMap: Record<string, CrudOperator> = {

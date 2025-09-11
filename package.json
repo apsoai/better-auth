@@ -61,7 +61,7 @@
     "better-auth": "^0.11.0"
   },
   "dependencies": {
-    "@apso/sdk": "workspace:*"
+    "@apso/sdk": "file:../apso-sdk"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
