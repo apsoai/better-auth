@@ -10,27 +10,16 @@ import type {
   HttpClient as IHttpClient,
   RequestConfig,
   RetryConfig,
-  AdapterError,
   Logger,
 } from '../types';
 
 export class HttpClient implements IHttpClient {
-  private readonly retryConfig?: RetryConfig;
-  private readonly timeout: number;
-  private readonly logger?: Logger;
-
   constructor(
-    retryConfig?: RetryConfig,
-    timeout: number = 3000,
-    logger?: Logger
+    _retryConfig?: RetryConfig,
+    _timeout: number = 3000,
+    _logger?: Logger
   ) {
-    if (retryConfig !== undefined) {
-      this.retryConfig = retryConfig;
-    }
-    this.timeout = timeout;
-    if (logger !== undefined) {
-      this.logger = logger;
-    }
+    // Configuration will be stored and used when implementing methods in Phase 3
   }
 
   async request<T>(_config: RequestConfig): Promise<T> {
@@ -137,87 +126,6 @@ export class HttpClient implements IHttpClient {
   // =============================================================================
   // Private Helper Methods
   // =============================================================================
-
-  private async _executeWithRetry<T>(
-    _requestFn: () => Promise<T>,
-    _attempt: number = 0
-  ): Promise<T> {
-    // TODO: Implement retry logic with exponential backoff
-    // 1. Execute request function
-    // 2. Handle retryable errors
-    // 3. Apply exponential backoff with jitter
-    // 4. Retry up to maxRetries
-    // 5. Throw final error if all attempts fail
-    throw new Error('Method not implemented');
-  }
-
-  private _calculateBackoffDelay(attempt: number): number {
-    // TODO: Calculate exponential backoff delay with jitter
-    if (!this.retryConfig) return 0;
-
-    const { initialDelayMs, maxDelayMs } = this.retryConfig;
-    const exponentialDelay = initialDelayMs * Math.pow(2, attempt);
-    const jitter = Math.random() * 0.1; // 10% jitter
-    const delay = exponentialDelay * (1 + jitter);
-    
-    return Math.min(delay, maxDelayMs);
-  }
-
-  private _isRetryableError(error: AdapterError): boolean {
-    // TODO: Determine if error is retryable
-    // Check error code and status code against retryable conditions
-    return error.retryable;
-  }
-
-  private async _parseResponse<T>(_response: Response): Promise<T> {
-    // TODO: Parse and validate HTTP response
-    // 1. Check response status
-    // 2. Parse JSON if content-type is JSON
-    // 3. Handle different content types
-    // 4. Throw appropriate errors for non-2xx status
-    throw new Error('Method not implemented');
-  }
-
-  private _mapHttpError(
-    _status: number,
-    _statusText: string,
-    _body?: any
-  ): AdapterError {
-    // TODO: Map HTTP errors to AdapterError instances
-    // Use ErrorMapper to create appropriate AdapterError
-    throw new Error('Method not implemented');
-  }
-
-  private _logRequest(config: RequestConfig): void {
-    // TODO: Log HTTP request details
-    if (this.logger) {
-      this.logger.debug('HTTP Request', {
-        method: config.method,
-        url: config.url,
-        hasBody: Boolean(config.body),
-        timeout: config.timeout || this.timeout,
-      });
-    }
-  }
-
-  private _logResponse(
-    config: RequestConfig,
-    response: Response,
-    duration: number
-  ): void {
-    // TODO: Log HTTP response details
-    if (this.logger) {
-      this.logger.debug('HTTP Response', {
-        method: config.method,
-        url: config.url,
-        status: response.status,
-        statusText: response.statusText,
-        duration,
-      });
-    }
-  }
-
-  private async _delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
+  
+  // Private helper methods will be implemented in Phase 3 when HTTP operations are built
 }

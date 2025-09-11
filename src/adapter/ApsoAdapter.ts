@@ -180,28 +180,6 @@ export class ApsoAdapter implements IApsoAdapter {
   // =============================================================================
   // Private Helper Methods
   // =============================================================================
-
-  private _buildHeaders(): Record<string, string> {
-    // TODO: Build common HTTP headers
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
-
-    if (this.config.apiKey) {
-      headers[this.config.authHeader || 'Authorization'] = 
-        this.config.authHeader?.toLowerCase().includes('bearer') 
-          ? this.config.apiKey 
-          : `Bearer ${this.config.apiKey}`;
-    }
-
-    return headers;
-  }
-
-  private _getApiPath(modelName: string): string {
-    // TODO: Get API path for model
-    // Use EntityMapper to transform model name to API path
-    const pluralized = this.config.usePlural !== false;
-    return pluralized ? `${modelName}s` : modelName;
-  }
+  
+  // Private methods will be implemented in Phase 3 when the operations are built
 }

@@ -221,21 +221,6 @@ export class ResponseNormalizer {
     );
   }
 
-  private _isEmptyResponse(value: any): boolean {
-    if (value === null || value === undefined) {
-      return true;
-    }
-
-    if (Array.isArray(value)) {
-      return value.length === 0;
-    }
-
-    if (this.isPaginatedResponse(value)) {
-      return value.data.length === 0;
-    }
-
-    return false;
-  }
 
   // =============================================================================
   // Response Validation
@@ -267,23 +252,6 @@ export class ResponseNormalizer {
   // =============================================================================
   // Debug and Logging
   // =============================================================================
-
-  private _logNormalization(
-    type: string,
-    original: any,
-    normalized: any
-  ): void {
-    if (this.logger) {
-      this.logger.debug(`Response normalization: ${type}`, {
-        originalType: typeof original,
-        originalKeys: original && typeof original === 'object' 
-          ? Object.keys(original) 
-          : undefined,
-        normalizedType: typeof normalized,
-        normalizedLength: Array.isArray(normalized) 
-          ? normalized.length 
-          : undefined,
-      });
-    }
-  }
+  
+  // Private logging methods will be implemented in Phase 3
 }

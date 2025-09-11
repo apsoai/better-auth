@@ -8,7 +8,6 @@
 
 import type {
   CrudFilter,
-  CrudOperator,
   CrudPagination,
   CrudSort,
   PaginationOptions,
@@ -93,47 +92,8 @@ export class QueryTranslator {
   // =============================================================================
   // Filter Construction
   // =============================================================================
-
-  private _buildFilter(
-    field: string,
-    operator: CrudOperator,
-    value: any,
-    not: boolean = false
-  ): CrudFilter {
-    // TODO: Build individual CrudFilter
-    // 1. Validate field name and operator
-    // 2. Transform value based on operator type
-    // 3. Apply email normalization if needed
-    // 4. Return CrudFilter object
-    return {
-      field: this.normalizeFieldName(field),
-      operator,
-      value: this.normalizeValue(field, value),
-      not,
-    };
-  }
-
-  private _mapOperator(betterAuthOperator: string): CrudOperator {
-    // TODO: Map Better Auth operators to CRUD operators
-    // Handle operators like: equals, in, not, contains, startsWith, etc.
-    const operatorMap: Record<string, CrudOperator> = {
-      '=': 'equals',
-      '!=': 'not',
-      'in': 'in',
-      'notIn': 'notIn',
-      '<': 'lt',
-      '<=': 'lte',
-      '>': 'gt',
-      '>=': 'gte',
-      'contains': 'contains',
-      'startsWith': 'startsWith',
-      'endsWith': 'endsWith',
-      'isNull': 'isNull',
-      'isNotNull': 'isNotNull',
-    };
-
-    return operatorMap[betterAuthOperator] || 'equals';
-  }
+  
+  // Private filter construction methods will be implemented in Phase 3
 
   // =============================================================================
   // Email Normalization
@@ -210,24 +170,7 @@ export class QueryTranslator {
     return validFieldPattern.test(fieldName) && fieldName.length <= 50;
   }
 
-  private normalizeFieldName(fieldName: string): string {
-    // TODO: Normalize field names for API compatibility
-    // Handle camelCase to snake_case conversion if needed
-    return fieldName;
-  }
-
-  private normalizeValue(fieldName: string, value: any): any {
-    // TODO: Normalize values based on field type
-    // 1. Handle date formatting
-    // 2. Handle boolean conversion
-    // 3. Handle number formatting
-    // 4. Apply email normalization
-    if (this.isEmailField(fieldName)) {
-      return this.normalizeEmailValue(value);
-    }
-
-    return value;
-  }
+  // Field and value normalization methods will be implemented in Phase 3
 
   // =============================================================================
   // Query String Building
