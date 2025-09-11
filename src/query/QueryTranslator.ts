@@ -426,4 +426,23 @@ export class QueryTranslator {
 
     return !suspiciousPatterns.some(pattern => pattern.test(fieldName));
   }
+
+  // =============================================================================
+  // Adapter Compatibility Methods
+  // =============================================================================
+
+  /**
+   * Builds a query for find operations - compatibility method for ApsoAdapter
+   */
+  buildFindQuery(
+    where?: Record<string, any>,
+    pagination?: PaginationOptions,
+    orderBy?: Record<string, 'asc' | 'desc'>
+  ): QueryParams {
+    return this.buildQuery({
+      where: where || {},
+      ...(pagination && { pagination }),
+      ...(orderBy && { sort: orderBy })
+    });
+  }
 }

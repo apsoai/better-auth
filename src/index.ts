@@ -24,8 +24,17 @@
 // Export all types
 export * from './types';
 
-// Export main adapter factory
-export { apsoAdapter } from './adapter';
+// Export main adapter factory and specialized factories
+export { 
+  apsoAdapter,
+  createApsoAdapter,
+  createReliableApsoAdapter,
+  createHighThroughputApsoAdapter,
+  checkAdapterHealth,
+  getActiveAdapters,
+  closeAllAdapters,
+  ApsoAdapterFactory,
+} from './adapter';
 
 // Export individual components for advanced usage
 export { ApsoAdapter } from './adapter/ApsoAdapter';

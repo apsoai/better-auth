@@ -37,29 +37,8 @@ module.exports = {
   resetMocks: true,
   restoreMocks: true,
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/dist/'],
-  projects: [
-    {
-      displayName: 'unit',
-      testMatch: ['<rootDir>/tests/unit/**/*.test.ts'],
-    },
-    {
-      displayName: 'integration',
-      testMatch: ['<rootDir>/tests/integration/**/*.test.ts'],
-      testTimeout: 30000,
-    },
-    {
-      displayName: 'conformance',
-      testMatch: ['<rootDir>/tests/conformance/**/*.test.ts'],
-      testTimeout: 30000,
-    },
-    {
-      displayName: 'performance',
-      testMatch: ['<rootDir>/tests/performance/**/*.test.ts'],
-      testTimeout: 60000,
-    },
-  ],
 };

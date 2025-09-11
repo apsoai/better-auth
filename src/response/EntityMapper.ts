@@ -1171,4 +1171,138 @@ export class EntityMapper {
   resetConfig(): void {
     Object.assign(this.config, DEFAULT_CONFIG);
   }
+
+  // =============================================================================
+  // Generic Adapter Interface Methods
+  // =============================================================================
+
+  /**
+   * Get the API path for a given model name
+   */
+  getApiPath(modelName: string): string {
+    // Convert model name to API endpoint path
+    const pluralize = (name: string): string => {
+      if (name.endsWith('s')) return name;
+      if (name.endsWith('y')) return name.slice(0, -1) + 'ies';
+      return name + 's';
+    };
+
+    switch (modelName.toLowerCase()) {
+      case 'user':
+        return 'users';
+      case 'session':
+        return 'sessions';
+      case 'verificationtoken':
+        return 'verification-tokens';
+      case 'account':
+        return 'accounts';
+      default:
+        return pluralize(modelName.toLowerCase());
+    }
+  }
+
+  /**
+   * Transform data from Better Auth format to API format (outbound)
+   */
+  transformOutbound(model: string, data: any): any {
+    if (!data || typeof data !== 'object') {
+      return data;
+    }
+
+    switch (model.toLowerCase()) {
+      case 'user':
+        return this.mapUserToApi(data as BetterAuthUser);
+      case 'session':
+        return this.mapSessionToApi(data as BetterAuthSession);
+      case 'verificationtoken':
+        return this.mapVerificationTokenToApi(data as BetterAuthVerificationToken);
+      case 'account':
+        return this.mapAccountToApi(data as BetterAuthAccount);
+      default:
+        // For unknown models, return data as-is
+        return data;
+    }
+  }
+
+  /**
+   * Transform data from API format to Better Auth format (inbound)
+   */
+  transformInbound(model: string, data: any): any {
+    if (!data || typeof data !== 'object') {
+      return data;
+    }
+
+    switch (model.toLowerCase()) {
+      case 'user':
+        return this.mapUserFromApi(data as ApsoUser);
+      case 'session':
+        return this.mapSessionFromApi(data as ApsoSession);
+      case 'verificationtoken':
+        return this.mapVerificationTokenFromApi(data as ApsoVerificationToken);
+      case 'account':
+        return this.mapAccountFromApi(data as ApsoAccount);
+      default:
+        // For unknown models, return data as-is
+        return data;
+    }
+  }
+
+  /**
+   * Validate data for a given model
+   */
+  validate(model: string, data: any): { valid: boolean; errors?: Array<{ field: string; message: string; }> } {
+    try {
+      switch (model.toLowerCase()) {
+        case 'user':
+          if (this.isBetterAuthUser(data)) {
+            this.validateBetterAuthUser(data);
+          } else if (this.isApsoUser(data)) {
+            this.validateApsoUser(data);
+          } else {
+            return { valid: false, errors: [{ field: 'data', message: 'Invalid user data format' }] };
+          }
+          break;
+        case 'session':
+          if (this.isBetterAuthSession(data)) {
+            this.validateBetterAuthSession(data);
+          } else if (this.isApsoSession(data)) {
+            this.validateApsoSession(data);
+          } else {
+            return { valid: false, errors: [{ field: 'data', message: 'Invalid session data format' }] };
+          }
+          break;
+        case 'verificationtoken':
+          if (this.isBetterAuthVerificationToken(data)) {
+            this.validateBetterAuthVerificationToken(data);
+          } else if (this.isApsoVerificationToken(data)) {
+            this.validateApsoVerificationToken(data);
+          } else {
+            return { valid: false, errors: [{ field: 'data', message: 'Invalid verification token data format' }] };
+          }
+          break;
+        case 'account':
+          if (this.isBetterAuthAccount(data)) {
+            this.validateBetterAuthAccount(data);
+          } else if (this.isApsoAccount(data)) {
+            this.validateApsoAccount(data);
+          } else {
+            return { valid: false, errors: [{ field: 'data', message: 'Invalid account data format' }] };
+          }
+          break;
+        default:
+          // For unknown models, assume valid
+          return { valid: true };
+      }
+      
+      return { valid: true };
+    } catch (error) {
+      return { 
+        valid: false, 
+        errors: [{ 
+          field: 'data', 
+          message: error instanceof Error ? error.message : 'Validation failed' 
+        }] 
+      };
+    }
+  }
 }

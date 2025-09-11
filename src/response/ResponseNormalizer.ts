@@ -1093,5 +1093,109 @@ export class ResponseNormalizer {
       hasMore: metadata.hasMore
     };
   }
+
+  /**
+   * Normalizes a response to extract count information
+   * 
+   * Attempts to extract count from:
+   * 1. response.meta.total (paginated responses)
+   * 2. response.length (if array)
+   * 3. response.count (if present)
+   * 4. response.data.length (if wrapped array)
+   * 
+   * @param response The raw response from the API
+   * @param options Optional normalization configuration
+   * @returns The count as a number
+   */
+  normalizeCountResponse(response: unknown, options?: NormalizationOptions): number {
+    const opts = { strict: false, logWarnings: true, ...options };
+    
+    try {
+      // Check for null/undefined
+      if (response == null) {
+        return 0;
+      }
+
+      // If it's a number, return it directly
+      if (typeof response === 'number') {
+        return Math.max(0, Math.floor(response));
+      }
+
+      // If it's not an object, can't extract count
+      if (typeof response !== 'object') {
+        if (opts.logWarnings && this.logger) {
+          this.logger.warn('Cannot extract count from non-object response', { response, type: typeof response });
+        }
+        return 0;
+      }
+
+      const resp = response as any;
+
+      // Try to get count from meta.total (paginated responses)
+      if (resp.meta && typeof resp.meta.total === 'number') {
+        return Math.max(0, Math.floor(resp.meta.total));
+      }
+
+      // Try to get count from response.count
+      if (typeof resp.count === 'number') {
+        return Math.max(0, Math.floor(resp.count));
+      }
+
+      // Try to get count from response.total
+      if (typeof resp.total === 'number') {
+        return Math.max(0, Math.floor(resp.total));
+      }
+
+      // If response is an array, return its length
+      if (Array.isArray(resp)) {
+        return resp.length;
+      }
+
+      // If response.data is an array, return its length
+      if (resp.data && Array.isArray(resp.data)) {
+        return resp.data.length;
+      }
+
+      // If response has a single item, count is 1
+      if (resp.id || resp._id || (typeof resp === 'object' && Object.keys(resp).length > 0)) {
+        return 1;
+      }
+
+      // Default to 0
+      if (opts.logWarnings && this.logger) {
+        this.logger.warn('Could not extract count from response, defaulting to 0', { response });
+      }
+      
+      return 0;
+    } catch (error) {
+      if (opts.logWarnings && this.logger) {
+        this.logger.warn('Error normalizing count response', { error, response });
+      }
+      
+      if (opts.strict) {
+        throw new Error(`Failed to normalize count response: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+      
+      return 0;
+    }
+  }
+
+  // =============================================================================
+  // Adapter Integration Methods (Aliases for compatibility)
+  // =============================================================================
+
+  /**
+   * Alias for normalizeToArray - used by ApsoAdapter
+   */
+  normalizeArrayResponse<T>(response: unknown, options?: NormalizationOptions): T[] {
+    return this.normalizeToArray<T>(response, options);
+  }
+
+  /**
+   * Alias for extractSingleItem - used by ApsoAdapter
+   */
+  normalizeSingleResponse<T>(response: unknown, options?: NormalizationOptions): T | null {
+    return this.extractSingleItem<T>(response, options);
+  }
   
 }
