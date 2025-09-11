@@ -24,8 +24,8 @@ import type {
   AdapterError,
   CrudPagination,
   ValidationError
-} from '../types/index.js';
-import { AdapterError as AdapterErrorClass, AdapterErrorCode } from '../types/index.js';
+} from '../types';
+import { AdapterError as AdapterErrorClass, AdapterErrorCode } from '../types';
 import { HttpClient } from '../client/HttpClient';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';

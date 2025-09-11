@@ -20,6 +20,8 @@ module.exports = {
     '!src/**/*.d.ts',
     '!src/**/*.test.{ts,tsx}',
     '!src/**/__tests__/**',
+    // Exclude HttpClient since we use Apso SDK instead
+    '!src/client/HttpClient.ts',
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
