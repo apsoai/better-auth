@@ -18,13 +18,10 @@ import type {
   BetterAuthUser,
   ApsoUser,
   ApsoAdapterConfig,
-  AdapterError,
-  AdapterErrorCode,
   CrudPagination,
-  CrudSort,
   ValidationError
 } from '../types/index.js';
-import { AdapterError as AdapterErrorClass } from '../types/index.js';
+import { AdapterError, AdapterErrorCode } from '../types/index.js';
 import { HttpClient } from '../client/HttpClient';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
@@ -112,7 +109,7 @@ export class UserOperations {
         try {
           normalizedData.email = EmailNormalizer.normalize(userData.email);
         } catch (error) {
-          throw new AdapterErrorClass(
+          throw new AdapterError(
             AdapterErrorCode.VALIDATION_ERROR,
             `Email normalization failed: ${(error as Error).message}`,
             { email: userData.email },
@@ -149,7 +146,7 @@ export class UserOperations {
       });
       
       // Normalize and transform response
-      const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response);
+      const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response) as ApsoUser;
       const result = this.entityMapper.mapUserFromApi(normalizedResponse);
       
       this.logOperation('createUser', performance.now() - startTime, true);
@@ -185,7 +182,7 @@ export class UserOperations {
     
     try {
       if (!id || typeof id !== 'string') {
-        throw new AdapterErrorClass(
+        throw new AdapterError(
           AdapterErrorCode.VALIDATION_ERROR,
           'User ID must be a non-empty string',
           { id },
@@ -202,7 +199,7 @@ export class UserOperations {
           ...(this.config.timeout && { timeout: this.config.timeout }),
         });
         
-        const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response);
+        const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response) as ApsoUser;
         const result = this.entityMapper.mapUserFromApi(normalizedResponse);
         
         this.logOperation('findUserById', performance.now() - startTime, true);
@@ -243,7 +240,7 @@ export class UserOperations {
     
     try {
       if (!email || typeof email !== 'string') {
-        throw new AdapterErrorClass(
+        throw new AdapterError(
           AdapterErrorCode.VALIDATION_ERROR,
           'Email must be a non-empty string',
           { email },
@@ -257,7 +254,7 @@ export class UserOperations {
       try {
         normalizedEmail = EmailNormalizer.normalize(email);
       } catch (error) {
-        throw new AdapterErrorClass(
+        throw new AdapterError(
           AdapterErrorCode.VALIDATION_ERROR,
           `Invalid email format: ${(error as Error).message}`,
           { email },
@@ -266,8 +263,8 @@ export class UserOperations {
         );
       }
 
-      // Build query with email filter
-      const query = this.queryTranslator.buildFindQuery(
+      // Build query with email filter (for future query parameter implementation)
+      this.queryTranslator.buildFindQuery(
         { email: normalizedEmail }, 
         { limit: 1 }
       );
@@ -281,10 +278,10 @@ export class UserOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
       
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(response);
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(response) as ApsoUser[];
       
       // Find user by email (case-insensitive)
-      const matchingUser = normalizedResults.find(user => 
+      const matchingUser = normalizedResults.find((user: ApsoUser) => 
         user.email.toLowerCase() === normalizedEmail.toLowerCase()
       );
       
@@ -323,8 +320,8 @@ export class UserOperations {
     const startTime = performance.now();
     
     try {
-      // Build query with filters and options
-      const query = this.queryTranslator.buildFindQuery(
+      // Build query with filters and options (for future query parameter implementation)
+      this.queryTranslator.buildFindQuery(
         options.where || {},
         options.pagination,
         this.convertSortOptions(options.sort)
@@ -339,7 +336,7 @@ export class UserOperations {
       });
       
       // Normalize and transform results
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(response);
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(response) as ApsoUser[];
       
       // Apply client-side filtering if needed (in a real implementation,
       // this would be handled by query parameters)
@@ -354,7 +351,7 @@ export class UserOperations {
       }
       
       // Transform results
-      const transformedResults = filteredResults.map(item => 
+      const transformedResults = filteredResults.map((item: ApsoUser) => 
         this.entityMapper.mapUserFromApi(item)
       );
       
@@ -392,7 +389,7 @@ export class UserOperations {
     
     try {
       if (!id || typeof id !== 'string') {
-        throw new AdapterErrorClass(
+        throw new AdapterError(
           AdapterErrorCode.VALIDATION_ERROR,
           'User ID must be a non-empty string',
           { id },
@@ -412,7 +409,7 @@ export class UserOperations {
           // Check for email conflicts with other users
           await this.checkEmailConflict(normalizedUpdates.email, id);
         } catch (error) {
-          throw new AdapterErrorClass(
+          throw new AdapterError(
             AdapterErrorCode.VALIDATION_ERROR,
             `Email normalization failed: ${(error as Error).message}`,
             { email: updates.email },
@@ -425,7 +422,7 @@ export class UserOperations {
       // Get existing user to merge updates
       const existingUser = await this.findUserById(id);
       if (!existingUser) {
-        throw new AdapterErrorClass(
+        throw new AdapterError(
           AdapterErrorCode.NOT_FOUND,
           `User with ID ${id} not found`,
           { id },
@@ -452,7 +449,7 @@ export class UserOperations {
       });
       
       // Normalize and transform response
-      const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response);
+      const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response) as ApsoUser;
       const result = this.entityMapper.mapUserFromApi(normalizedResponse);
       
       this.logOperation('updateUser', performance.now() - startTime, true);
@@ -486,7 +483,7 @@ export class UserOperations {
       // Find user by email first
       const existingUser = await this.findUserByEmail(email);
       if (!existingUser) {
-        throw new AdapterErrorClass(
+        throw new AdapterError(
           AdapterErrorCode.NOT_FOUND,
           `User with email ${email} not found`,
           { email },
@@ -529,7 +526,7 @@ export class UserOperations {
     
     try {
       if (!id || typeof id !== 'string') {
-        throw new AdapterErrorClass(
+        throw new AdapterError(
           AdapterErrorCode.VALIDATION_ERROR,
           'User ID must be a non-empty string',
           { id },
@@ -541,7 +538,7 @@ export class UserOperations {
       // Get user first to return it after deletion
       const existingUser = await this.findUserById(id);
       if (!existingUser) {
-        throw new AdapterErrorClass(
+        throw new AdapterError(
           AdapterErrorCode.NOT_FOUND,
           `User with ID ${id} not found`,
           { id },
@@ -586,7 +583,7 @@ export class UserOperations {
       // Find user by email first
       const existingUser = await this.findUserByEmail(email);
       if (!existingUser) {
-        throw new AdapterErrorClass(
+        throw new AdapterError(
           AdapterErrorCode.NOT_FOUND,
           `User with email ${email} not found`,
           { email },
@@ -628,8 +625,8 @@ export class UserOperations {
     const startTime = performance.now();
     
     try {
-      // Build query with filters
-      const query = this.queryTranslator.buildFindQuery(where || {});
+      // Build query with filters (for future query parameter implementation)
+      this.queryTranslator.buildFindQuery(where || {});
       
       const url = `${this.config.baseUrl}/${this.apiPath}`;
       
@@ -646,7 +643,7 @@ export class UserOperations {
         
       } catch (error) {
         // Fallback: get all records and count them
-        const users = await this.findManyUsers({ where });
+        const users = await this.findManyUsers({ where: where || {} });
         const count = users.length;
         
         this.logOperation('countUsers', performance.now() - startTime, true);
@@ -686,7 +683,7 @@ export class UserOperations {
     }
 
     if (errors.length > 0) {
-      throw new AdapterErrorClass(
+      throw new AdapterError(
         AdapterErrorCode.VALIDATION_ERROR,
         'User creation validation failed',
         { errors },
@@ -723,7 +720,7 @@ export class UserOperations {
     }
 
     if (errors.length > 0) {
-      throw new AdapterErrorClass(
+      throw new AdapterError(
         AdapterErrorCode.VALIDATION_ERROR,
         'User update validation failed',
         { errors },
@@ -740,7 +737,7 @@ export class UserOperations {
     const existingUser = await this.findUserByEmail(email);
     
     if (existingUser && existingUser.id !== excludeId) {
-      throw new AdapterErrorClass(
+      throw new AdapterError(
         AdapterErrorCode.CONFLICT,
         `User with email ${email} already exists`,
         { email, existingUserId: existingUser.id },
@@ -811,7 +808,7 @@ export class UserOperations {
   private applyClientSideFiltering(users: ApsoUser[], where: Partial<BetterAuthUser>): ApsoUser[] {
     return users.filter(user => {
       for (const [key, value] of Object.entries(where)) {
-        if (key === 'email' && value) {
+        if (key === 'email' && value && typeof value === 'string') {
           // Case-insensitive email matching
           if (user.email.toLowerCase() !== value.toLowerCase()) {
             return false;
@@ -855,7 +852,7 @@ export class UserOperations {
    */
   private handleError(error: any, operation: string): AdapterError {
     // If it's already an AdapterError, just rethrow it
-    if (error instanceof AdapterErrorClass) {
+    if (error instanceof AdapterError) {
       return error;
     }
 
@@ -916,7 +913,7 @@ export class UserOperations {
       this.config.logger.error(message, { error, operation });
     }
 
-    return new AdapterErrorClass(
+    return new AdapterError(
       errorCode,
       message,
       error,

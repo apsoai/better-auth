@@ -833,8 +833,8 @@ export class SessionOperations {
     const startTime = performance.now();
     
     try {
-      // Build query with filters and options
-      const query = this.queryTranslator.buildFindQuery(
+      // Build query with filters and options (for future query parameter implementation)
+      this.queryTranslator.buildFindQuery(
         options.where || {},
         options.pagination,
         this.convertSortOptions(options.sort)
@@ -902,8 +902,8 @@ export class SessionOperations {
     const startTime = performance.now();
     
     try {
-      // Build query with filters
-      const query = this.queryTranslator.buildFindQuery(where || {});
+      // Build query with filters (for future query parameter implementation)
+      this.queryTranslator.buildFindQuery(where || {});
       
       const url = `${this.config.baseUrl}/${this.apiPath}`;
       
@@ -920,7 +920,7 @@ export class SessionOperations {
         
       } catch (error) {
         // Fallback: get all records and count them
-        const sessions = await this.findManySessions({ where });
+        const sessions = await this.findManySessions({ where: where || {} });
         const count = sessions.length;
         
         this.logOperation('countSessions', performance.now() - startTime, true);

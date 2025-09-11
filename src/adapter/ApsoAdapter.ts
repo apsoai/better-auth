@@ -32,6 +32,7 @@ import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper } from '../response/EntityMapper';
 import { UserOperations } from '../operations/UserOperations';
 import { SessionOperations } from '../operations/SessionOperations';
+import { VerificationTokenOperations } from '../operations/VerificationTokenOperations';
 
 /**
  * Components interface for dependency injection
@@ -49,6 +50,7 @@ export interface ApsoAdapterComponents {
 export interface EntityOperations {
   userOperations: UserOperations;
   sessionOperations: SessionOperations;
+  verificationTokenOperations: VerificationTokenOperations;
 }
 
 export class ApsoAdapter implements IApsoAdapter {
@@ -61,6 +63,7 @@ export class ApsoAdapter implements IApsoAdapter {
   // Specialized operation handlers
   private readonly userOperations: UserOperations;
   private readonly sessionOperations: SessionOperations;
+  private readonly verificationTokenOperations: VerificationTokenOperations;
   
   // Metrics tracking
   private metrics: AdapterMetrics;
@@ -92,6 +95,7 @@ export class ApsoAdapter implements IApsoAdapter {
     
     this.userOperations = new UserOperations(operationsDependencies);
     this.sessionOperations = new SessionOperations(operationsDependencies);
+    this.verificationTokenOperations = new VerificationTokenOperations(operationsDependencies);
     
     // Initialize metrics
     this.metrics = this.initializeMetrics();
@@ -100,7 +104,7 @@ export class ApsoAdapter implements IApsoAdapter {
       this.config.logger.info('ApsoAdapter initialized', {
         baseUrl: this.config.baseUrl,
         components: Object.keys(components),
-        operations: ['UserOperations', 'SessionOperations']
+        operations: ['UserOperations', 'SessionOperations', 'VerificationTokenOperations']
       });
     }
   }
@@ -161,6 +165,25 @@ export class ApsoAdapter implements IApsoAdapter {
           });
           this.updateSuccessMetrics(performance.now() - startTime);
           return sessionResult as T;
+          
+        case 'verificationtoken':
+          // Validate verification token data format
+          if (!params.data.identifier || !params.data.token || !params.data.expiresAt) {
+            throw new AdapterError(
+              AdapterErrorCode.VALIDATION_ERROR,
+              'VerificationToken creation requires identifier, token, and expiresAt',
+              params.data,
+              false,
+              400
+            );
+          }
+          const tokenResult = await this.verificationTokenOperations.createVerificationToken({
+            identifier: params.data.identifier,
+            token: params.data.token,
+            expiresAt: new Date(params.data.expiresAt)
+          });
+          this.updateSuccessMetrics(performance.now() - startTime);
+          return tokenResult as T;
           
         default:
           // Fall back to generic implementation for unsupported models
@@ -259,6 +282,67 @@ export class ApsoAdapter implements IApsoAdapter {
             const sessionResult = await this.sessionOperations.updateSession(recordWithId.id, params.update);
             this.updateSuccessMetrics(performance.now() - startTime);
             return sessionResult as T;
+          }
+          
+        case 'verificationtoken':
+          // VerificationTokens are typically not updated but consumed/deleted
+          // For Better Auth compatibility, we allow updates but recommend using consume operations
+          if (params.where.token && typeof params.where.token === 'string') {
+            // Find the token first to get its current data
+            const existingToken = await this.verificationTokenOperations.findVerificationTokenByToken(params.where.token);
+            if (!existingToken) {
+              throw new AdapterError(
+                AdapterErrorCode.NOT_FOUND,
+                `No verification token found for update`,
+                params.where,
+                false,
+                404
+              );
+            }
+            
+            // Delete the old token and create a new one with updates
+            await this.verificationTokenOperations.deleteVerificationToken(params.where.token);
+            const updatedTokenData = {
+              ...existingToken,
+              ...params.update,
+              expiresAt: params.update.expiresAt ? new Date(params.update.expiresAt) : existingToken.expiresAt
+            };
+            const tokenResult = await this.verificationTokenOperations.createVerificationToken({
+              identifier: updatedTokenData.identifier || existingToken!.identifier,
+              token: updatedTokenData.token || existingToken!.token,
+              expiresAt: updatedTokenData.expiresAt
+            });
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return tokenResult as T;
+          } else {
+            // Find token first using other criteria
+            const existingTokens = await this.verificationTokenOperations.findVerificationTokensByIdentifier(
+              params.where.identifier || '', { activeOnly: false, limit: 1 }
+            );
+            if (existingTokens.length === 0) {
+              throw new AdapterError(
+                AdapterErrorCode.NOT_FOUND,
+                `No verification token found for update`,
+                params.where,
+                false,
+                404
+              );
+            }
+            
+            const existingToken = existingTokens[0];
+            await this.verificationTokenOperations.deleteVerificationToken(existingToken!.token);
+            const updatedTokenData = {
+              ...existingToken,
+              ...params.update,
+              expiresAt: params.update.expiresAt ? new Date(params.update.expiresAt) : existingToken!.expiresAt
+            };
+            const tokenResult = await this.verificationTokenOperations.createVerificationToken({
+              identifier: updatedTokenData.identifier || existingToken!.identifier,
+              token: updatedTokenData.token || existingToken!.token,
+              expiresAt: updatedTokenData.expiresAt
+            });
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return tokenResult as T;
           }
           
         default:
@@ -360,6 +444,53 @@ export class ApsoAdapter implements IApsoAdapter {
     try {
       this.updateModelMetrics(params.model);
       
+      // Handle verification token deletion specially
+      if (params.model.toLowerCase() === 'verificationtoken') {
+        if (params.where.token && typeof params.where.token === 'string') {
+          // Direct token deletion
+          const deletedToken = await this.verificationTokenOperations.deleteVerificationToken(params.where.token);
+          this.updateSuccessMetrics(performance.now() - startTime);
+          return deletedToken as T;
+        } else if (params.where.identifier && typeof params.where.identifier === 'string') {
+          // Find token by identifier and delete
+          const tokens = await this.verificationTokenOperations.findVerificationTokensByIdentifier(
+            params.where.identifier, 
+            { activeOnly: false, limit: 1 }
+          );
+          if (tokens.length === 0) {
+            throw new AdapterError(
+              AdapterErrorCode.NOT_FOUND,
+              `No verification token found for deletion`,
+              params.where,
+              false,
+              404
+            );
+          }
+          if (tokens[0]) {
+            const deletedToken = await this.verificationTokenOperations.deleteVerificationToken(tokens[0].token);
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return deletedToken as T;
+          } else {
+            throw new AdapterError(
+              AdapterErrorCode.NOT_FOUND,
+              `No verification token found for deletion`,
+              params.where,
+              false,
+              404
+            );
+          }
+        } else {
+          throw new AdapterError(
+            AdapterErrorCode.VALIDATION_ERROR,
+            `VerificationToken deletion requires token or identifier`,
+            params.where,
+            false,
+            400
+          );
+        }
+      }
+      
+      // For other models, use the standard deletion flow
       // Find the record first to return it
       const existing = await this.findOne<T>({
         model: params.model,
@@ -485,6 +616,34 @@ export class ApsoAdapter implements IApsoAdapter {
             });
             this.updateSuccessMetrics(performance.now() - startTime);
             return sessions.length > 0 ? sessions[0] as T : null;
+          }
+          
+        case 'verificationtoken':
+          // Handle verification token-specific lookups
+          if (params.where.token && typeof params.where.token === 'string') {
+            const tokenResult = await this.verificationTokenOperations.findVerificationTokenByToken(params.where.token);
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return tokenResult as T;
+          } else if (params.where.identifier && typeof params.where.identifier === 'string') {
+            const tokens = await this.verificationTokenOperations.findVerificationTokensByIdentifier(
+              params.where.identifier, 
+              { activeOnly: true, limit: 1 }
+            );
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return tokens.length > 0 ? tokens[0] as T : null;
+          } else {
+            // For other token filters, find by identifier or return null
+            const identifier = params.where.identifier;
+            if (identifier) {
+              const tokens = await this.verificationTokenOperations.findVerificationTokensByIdentifier(
+                identifier, 
+                { activeOnly: true, limit: 1 }
+              );
+              this.updateSuccessMetrics(performance.now() - startTime);
+              return tokens.length > 0 ? tokens[0] as T : null;
+            }
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return null;
           }
           
         default:
