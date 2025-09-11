@@ -466,14 +466,9 @@ export class ApsoAdapter implements IApsoAdapter {
         return [];
       }
       
-      // Transform all data items
-      const transformedData = params.data.map(item => 
-        this.entityMapper.transformOutbound(params.model, item)
-      );
-      
-      // Create records individually (batch operations would be implemented in Phase 3)
+      // Create records individually using the appropriate operation handler
       const results: T[] = [];
-      for (const item of transformedData) {
+      for (const item of params.data) {
         try {
           const created = await this.create<T>({
             model: params.model,
