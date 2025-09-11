@@ -9,17 +9,75 @@
 import type {
   HttpClient as IHttpClient,
   RequestConfig,
-  RetryConfig,
   Logger,
+  HttpClientConfig,
+  HttpInterceptors,
+  RequestInterceptor,
+  ResponseInterceptor,
+  ErrorInterceptor,
+  CircuitBreakerStats,
+  ConnectionPoolStats,
 } from '../types';
 
+import { CircuitState } from '../types';
+
 export class HttpClient implements IHttpClient {
-  constructor(
-    _retryConfig?: RetryConfig,
-    _timeout: number = 3000,
-    _logger?: Logger
-  ) {
-    // Configuration will be stored and used when implementing methods in Phase 3
+  private readonly config: HttpClientConfig;
+  private readonly logger: Logger | undefined;
+  private readonly interceptors: HttpInterceptors;
+  // private readonly observability: HttpObservabilityConfig;
+  
+  // Metrics properties
+  private requestCount = 0;
+  private successCount = 0;
+  private errorCount = 0;
+  private totalLatency = 0;
+  private latencyBuckets: number[] = [];
+  
+  // Mock circuit breaker and connection pool for now
+  private circuitBreaker = {
+    getStats: (): CircuitBreakerStats => ({
+      state: CircuitState.CLOSED,
+      failures: 0,
+      successes: 0,
+      requests: 0,
+    }),
+    reset: () => {}
+  };
+  
+  private connectionPool = {
+    getStats: (): ConnectionPoolStats => ({
+      activeConnections: 0,
+      idleConnections: 0,
+      totalConnections: 0,
+      connectionErrors: 0,
+      connectionTimeouts: 0,
+      requestsWaiting: 0,
+    }),
+    destroy: () => {}
+  };
+
+  constructor(config?: HttpClientConfig) {
+    this.config = {
+      backend: 'fetch',
+      timeout: 3000,
+      observability: {
+        enableMetrics: false,
+        enableTracing: false,
+        enableLogging: false,
+        logLevel: 'info',
+      },
+      ...config,
+    };
+    
+    this.logger = this.config.logger || undefined;
+    this.interceptors = this.config.interceptors || {};
+    // this.observability = this.config.observability || {
+    //   enableMetrics: false,
+    //   enableTracing: false,
+    //   enableLogging: false,
+    //   logLevel: 'info',
+    // };
   }
 
   async request<T>(_config: RequestConfig): Promise<T> {
@@ -124,8 +182,196 @@ export class HttpClient implements IHttpClient {
   }
 
   // =============================================================================
-  // Private Helper Methods
+  // Interceptors - Implementation will be added when needed
   // =============================================================================
   
-  // Private helper methods will be implemented in Phase 3 when HTTP operations are built
+  // =============================================================================
+  // Validation and Utilities - Implementation will be added when needed
+  // =============================================================================
+  
+  // =============================================================================
+  // Metrics and Observability - Implementation will be added when needed
+  // =============================================================================
+  
+  // =============================================================================
+  // Public Management Methods
+  // =============================================================================
+  
+  /**
+   * Get HTTP client metrics
+   */
+  getMetrics() {
+    const latencySorted = [...this.latencyBuckets].sort((a, b) => a - b);
+    
+    return {
+      requests: {
+        total: this.requestCount,
+        successful: this.successCount,
+        failed: this.errorCount,
+        successRate: this.requestCount > 0 ? this.successCount / this.requestCount : 0,
+      },
+      latency: {
+        average: this.requestCount > 0 ? this.totalLatency / this.requestCount : 0,
+        p50: this.getPercentile(latencySorted, 0.5),
+        p95: this.getPercentile(latencySorted, 0.95),
+        p99: this.getPercentile(latencySorted, 0.99),
+      },
+      circuitBreaker: this.circuitBreaker.getStats(),
+      connectionPool: this.connectionPool.getStats(),
+    };
+  }
+  
+  private getPercentile(sortedArray: number[], percentile: number): number {
+    if (sortedArray.length === 0) return 0;
+    const index = Math.ceil(sortedArray.length * percentile) - 1;
+    const clampedIndex = Math.max(0, Math.min(index, sortedArray.length - 1));
+    return sortedArray[clampedIndex] || 0;
+  }
+  
+  /**
+   * Reset all metrics
+   */
+  resetMetrics(): void {
+    this.requestCount = 0;
+    this.successCount = 0;
+    this.errorCount = 0;
+    this.totalLatency = 0;
+    this.latencyBuckets.length = 0;
+    this.circuitBreaker.reset();
+    this.logger?.info('HttpClient metrics reset');
+  }
+  
+  /**
+   * Add request interceptor
+   */
+  addRequestInterceptor(interceptor: RequestInterceptor): void {
+    if (!this.interceptors.request) {
+      this.interceptors.request = [];
+    }
+    this.interceptors.request.push(interceptor);
+  }
+  
+  /**
+   * Add response interceptor
+   */
+  addResponseInterceptor(interceptor: ResponseInterceptor): void {
+    if (!this.interceptors.response) {
+      this.interceptors.response = [];
+    }
+    this.interceptors.response.push(interceptor);
+  }
+  
+  /**
+   * Add error interceptor
+   */
+  addErrorInterceptor(interceptor: ErrorInterceptor): void {
+    if (!this.interceptors.error) {
+      this.interceptors.error = [];
+    }
+    this.interceptors.error.push(interceptor);
+  }
+  
+  /**
+   * Gracefully close the HTTP client
+   */
+  async close(): Promise<void> {
+    this.connectionPool.destroy();
+    this.logger?.info('HttpClient closed');
+  }
+  
+  // =============================================================================
+  // Private Helper Methods
+  // =============================================================================
+}
+
+// =============================================================================
+// Factory Functions
+// =============================================================================
+
+/**
+ * Create HttpClient with default configuration
+ */
+export function createHttpClient(config?: HttpClientConfig): HttpClient {
+  return new HttpClient(config);
+}
+
+/**
+ * Create HttpClient optimized for high-throughput scenarios
+ */
+export function createHighThroughputHttpClient(config?: HttpClientConfig): HttpClient {
+  const defaultConfig: HttpClientConfig = {
+    backend: 'fetch',
+    timeout: 15000,
+    connectionPool: {
+      maxConnections: 200,
+      maxConnectionsPerHost: 20,
+      keepAlive: true,
+      keepAliveTimeout: 120000,
+      idleTimeout: 60000,
+      enableHttp2: true,
+    },
+    circuitBreaker: {
+      enabled: true,
+      failureThreshold: 0.3,
+      recoveryTimeout: 15000,
+      monitoringPeriod: 5000,
+      minimumRequests: 3,
+    },
+    retryConfig: {
+      maxRetries: 2,
+      initialDelayMs: 50,
+      maxDelayMs: 2000,
+      retryableStatuses: [429, 500, 502, 503, 504],
+    },
+    observability: {
+      enableMetrics: true,
+      enableTracing: true,
+      enableLogging: false, // Reduced logging for performance
+      logLevel: 'warn',
+    },
+    ...config,
+  };
+  
+  return new HttpClient(defaultConfig);
+}
+
+/**
+ * Create HttpClient optimized for reliability over performance
+ */
+export function createReliableHttpClient(config?: HttpClientConfig): HttpClient {
+  const defaultConfig: HttpClientConfig = {
+    backend: 'fetch',
+    timeout: 60000,
+    connectionPool: {
+      maxConnections: 50,
+      maxConnectionsPerHost: 5,
+      keepAlive: true,
+      keepAliveTimeout: 300000,
+      idleTimeout: 120000,
+      connectionTimeout: 30000,
+      enableHttp2: false, // More reliable with HTTP/1.1
+    },
+    circuitBreaker: {
+      enabled: true,
+      failureThreshold: 0.6,
+      recoveryTimeout: 60000,
+      monitoringPeriod: 30000,
+      minimumRequests: 10,
+    },
+    retryConfig: {
+      maxRetries: 5,
+      initialDelayMs: 1000,
+      maxDelayMs: 30000,
+      retryableStatuses: [408, 429, 500, 502, 503, 504],
+    },
+    observability: {
+      enableMetrics: true,
+      enableTracing: true,
+      enableLogging: true,
+      logLevel: 'debug',
+    },
+    ...config,
+  };
+  
+  return new HttpClient(defaultConfig);
 }
