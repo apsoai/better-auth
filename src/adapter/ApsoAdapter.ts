@@ -21,6 +21,7 @@ import type {
   CreateManyParams,
   AdapterMetrics,
 } from '../types';
+import { EntityType } from '../types';
 import { 
   AdapterError, 
   AdapterErrorCode 
@@ -33,6 +34,7 @@ import { EntityMapper } from '../response/EntityMapper';
 import { UserOperations } from '../operations/UserOperations';
 import { SessionOperations } from '../operations/SessionOperations';
 import { VerificationTokenOperations } from '../operations/VerificationTokenOperations';
+import { BulkOperations } from '../operations/BulkOperations';
 
 /**
  * Components interface for dependency injection
@@ -64,6 +66,9 @@ export class ApsoAdapter implements IApsoAdapter {
   private readonly userOperations: UserOperations;
   private readonly sessionOperations: SessionOperations;
   private readonly verificationTokenOperations: VerificationTokenOperations;
+  
+  // Bulk operations handler
+  private readonly bulkOperations: BulkOperations;
   
   // Metrics tracking
   private metrics: AdapterMetrics;
@@ -97,6 +102,17 @@ export class ApsoAdapter implements IApsoAdapter {
     this.sessionOperations = new SessionOperations(operationsDependencies);
     this.verificationTokenOperations = new VerificationTokenOperations(operationsDependencies);
     
+    // Initialize bulk operations handler
+    this.bulkOperations = new BulkOperations({
+      httpClient: this.httpClient,
+      responseNormalizer: this.responseNormalizer,
+      entityMapper: this.entityMapper,
+      config: this.config,
+      userOperations: this.userOperations,
+      sessionOperations: this.sessionOperations,
+      verificationTokenOperations: this.verificationTokenOperations,
+    });
+    
     // Initialize metrics
     this.metrics = this.initializeMetrics();
     
@@ -104,7 +120,7 @@ export class ApsoAdapter implements IApsoAdapter {
       this.config.logger.info('ApsoAdapter initialized', {
         baseUrl: this.config.baseUrl,
         components: Object.keys(components),
-        operations: ['UserOperations', 'SessionOperations', 'VerificationTokenOperations']
+        operations: ['UserOperations', 'SessionOperations', 'VerificationTokenOperations', 'BulkOperations']
       });
     }
   }
@@ -400,38 +416,40 @@ export class ApsoAdapter implements IApsoAdapter {
     try {
       this.updateModelMetrics(params.model);
       
-      // Find all matching records first
-      const existingRecords = await this.findMany({
-        model: params.model,
-        ...(params.where && { where: params.where }),
-      });
+      // Convert model name to EntityType enum
+      const entityType = this.getEntityType(params.model);
       
-      if (existingRecords.length === 0) {
-        this.updateSuccessMetrics(performance.now() - startTime);
-        return 0;
+      // Use BulkOperations for efficient batch processing
+      const updateManyOptions = {
+        model: entityType,
+        where: params.where || {},
+        update: params.update,
+      } as any;
+      
+      if (this.config.batchConfig?.batchSize) {
+        updateManyOptions.batchSize = this.config.batchConfig.batchSize;
       }
       
-      // Update each record individually
-      let updatedCount = 0;
-      for (const record of existingRecords) {
-        try {
-          const recordWithId = record as any;
-          await this.update({
-            model: params.model,
-            where: { id: recordWithId.id },
-            update: params.update,
-          });
-          updatedCount++;
-        } catch (error) {
-          // Log individual errors but continue
-          if (this.config.logger) {
-            this.config.logger.warn('Failed to update individual record', { error, record });
-          }
-        }
+      if (this.config.batchConfig?.concurrency) {
+        updateManyOptions.maxConcurrency = this.config.batchConfig.concurrency;
       }
       
+      const result = await this.bulkOperations.updateMany(updateManyOptions);
+      
+      // Update adapter metrics
       this.updateSuccessMetrics(performance.now() - startTime);
-      return updatedCount;
+      
+      // Log bulk operation results
+      if (this.config.logger && (result.failures > 0 || result.errors.length > 0)) {
+        this.config.logger.warn('Bulk update completed with some failures', {
+          model: params.model,
+          success: result.success,
+          failures: result.failures,
+          errorCount: result.errors.length,
+        });
+      }
+      
+      return result.success;
     } catch (error) {
       this.updateErrorMetrics(error, performance.now() - startTime);
       throw this.handleError(error, 'updateMany', params.model);
@@ -532,37 +550,41 @@ export class ApsoAdapter implements IApsoAdapter {
     try {
       this.updateModelMetrics(params.model);
       
-      // Find all matching records
-      const existingRecords = await this.findMany({
-        model: params.model,
-        ...(params.where && { where: params.where }),
-      });
+      // Convert model name to EntityType enum
+      const entityType = this.getEntityType(params.model);
       
-      if (existingRecords.length === 0) {
-        this.updateSuccessMetrics(performance.now() - startTime);
-        return 0;
+      // Use BulkOperations for efficient batch processing
+      // Enable cascade deletion for users by default for data integrity
+      const deleteManyOptions = {
+        model: entityType,
+        where: params.where || {},
+        cascadeDelete: entityType === EntityType.USER, // Enable cascade for users
+      } as any;
+      
+      if (this.config.batchConfig?.batchSize) {
+        deleteManyOptions.batchSize = this.config.batchConfig.batchSize;
       }
       
-      // Delete each record individually
-      let deletedCount = 0;
-      for (const record of existingRecords) {
-        try {
-          const recordWithId = record as any;
-          await this.delete({
-            model: params.model,
-            where: { id: recordWithId.id },
-          });
-          deletedCount++;
-        } catch (error) {
-          // Log individual errors but continue
-          if (this.config.logger) {
-            this.config.logger.warn('Failed to delete individual record', { error, record });
-          }
-        }
+      if (this.config.batchConfig?.concurrency) {
+        deleteManyOptions.maxConcurrency = this.config.batchConfig.concurrency;
       }
       
+      const result = await this.bulkOperations.deleteMany(deleteManyOptions);
+      
+      // Update adapter metrics
       this.updateSuccessMetrics(performance.now() - startTime);
-      return deletedCount;
+      
+      // Log bulk operation results
+      if (this.config.logger && (result.failures > 0 || result.errors.length > 0)) {
+        this.config.logger.warn('Bulk delete completed with some failures', {
+          model: params.model,
+          success: result.success,
+          failures: result.failures,
+          errorCount: result.errors.length,
+        });
+      }
+      
+      return result.success;
     } catch (error) {
       this.updateErrorMetrics(error, performance.now() - startTime);
       throw this.handleError(error, 'deleteMany', params.model);
@@ -778,26 +800,41 @@ export class ApsoAdapter implements IApsoAdapter {
         return [];
       }
       
-      // Create records individually using the appropriate operation handler
-      const results: T[] = [];
-      for (const item of params.data) {
-        try {
-          const created = await this.create<T>({
-            model: params.model,
-            data: item,
-            ...(params.select && { select: params.select }),
-          });
-          results.push(created);
-        } catch (error) {
-          // Log individual errors but continue
-          if (this.config.logger) {
-            this.config.logger.warn('Failed to create individual record', { error, item });
-          }
-        }
+      // Convert model name to EntityType enum
+      const entityType = this.getEntityType(params.model);
+      
+      // Use BulkOperations for efficient batch processing
+      const createManyOptions = {
+        model: entityType,
+        data: params.data,
+        skipDuplicates: true, // Skip duplicates by default for safety
+        validateBeforeInsert: true, // Validate data by default
+      } as any;
+      
+      if (this.config.batchConfig?.batchSize) {
+        createManyOptions.batchSize = this.config.batchConfig.batchSize;
       }
       
+      if (this.config.batchConfig?.concurrency) {
+        createManyOptions.maxConcurrency = this.config.batchConfig.concurrency;
+      }
+      
+      const result = await this.bulkOperations.createMany(createManyOptions);
+      
+      // Update adapter metrics
       this.updateSuccessMetrics(performance.now() - startTime);
-      return results;
+      
+      // Log bulk operation results
+      if (this.config.logger && (result.failures > 0 || result.errors.length > 0)) {
+        this.config.logger.warn('Bulk create completed with some failures', {
+          model: params.model,
+          success: result.success,
+          failures: result.failures,
+          errorCount: result.errors.length,
+        });
+      }
+      
+      return result.results || [];
     } catch (error) {
       this.updateErrorMetrics(error, performance.now() - startTime);
       throw this.handleError(error, 'createMany', params.model);
@@ -1024,5 +1061,32 @@ export class ApsoAdapter implements IApsoAdapter {
       return error.statusCode;
     }
     return undefined;
+  }
+
+  /**
+   * Convert model name string to EntityType enum
+   * Provides safe conversion with fallback for unknown models
+   */
+  private getEntityType(model: string): EntityType {
+    const normalizedModel = model.toLowerCase();
+    
+    switch (normalizedModel) {
+      case 'user':
+        return EntityType.USER;
+      case 'session':
+        return EntityType.SESSION;
+      case 'verificationtoken':
+        return EntityType.VERIFICATION_TOKEN;
+      case 'account':
+        return EntityType.ACCOUNT;
+      default:
+        // For unknown models, default to USER type
+        // This ensures the BulkOperations can still function
+        this.config.logger?.warn('Unknown model type, defaulting to USER', {
+          originalModel: model,
+          normalizedModel,
+        });
+        return EntityType.USER;
+    }
   }
 }
