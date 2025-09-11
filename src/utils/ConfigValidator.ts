@@ -48,21 +48,123 @@ export enum ConfigErrorCode {
 // Validation Constants
 // =============================================================================
 
+/**
+ * Configuration validation limits with security and performance considerations
+ */
 const VALIDATION_LIMITS = {
-  timeout: { min: 1000, max: 300000 }, // 1s to 5min
+  /** 
+   * HTTP timeout limits: 1s minimum to prevent very fast timeouts that could cause cascading failures.
+   * 5min maximum to prevent indefinitely hanging requests that consume resources.
+   */
+  timeout: { min: 1000, max: 300000 },
+  
+  /** 
+   * Retry attempt limits: 0 minimum allows disabling retries for critical operations.
+   * 10 maximum prevents excessive API load and potential DoS scenarios.
+   */
   retryAttempts: { min: 0, max: 10 },
-  retryDelay: { min: 100, max: 60000 }, // 100ms to 1min
-  cacheTtl: { min: 1000, max: 24 * 60 * 60 * 1000 }, // 1s to 24h
+  
+  /** 
+   * Retry delay limits: 100ms minimum prevents tight retry loops that could overwhelm servers.
+   * 1min maximum balances user experience with avoiding indefinite delays.
+   */
+  retryDelay: { min: 100, max: 60000 },
+  
+  /** 
+   * Cache TTL limits: 1s minimum ensures some caching benefit.
+   * 24h maximum prevents stale data issues in dynamic environments.
+   */
+  cacheTtl: { min: 1000, max: 24 * 60 * 60 * 1000 },
+  
+  /** 
+   * Cache size limits: Minimum 1 entry for functionality.
+   * 10,000 maximum prevents excessive memory usage (assuming ~1KB per entry = ~10MB max).
+   */
   cacheMaxSize: { min: 1, max: 10000 },
+  
+  /** 
+   * Batch size limits: Minimum 1 for functionality.
+   * 1000 maximum prevents oversized requests that could timeout or be rejected by APIs.
+   */
   batchSize: { min: 1, max: 1000 },
+  
+  /** 
+   * Batch concurrency limits: Minimum 1 for functionality.
+   * 50 maximum prevents overwhelming target systems with too many concurrent requests.
+   */
   batchConcurrency: { min: 1, max: 50 },
-  batchDelay: { min: 0, max: 10000 } // 0 to 10s
+  
+  /** 
+   * Batch delay limits: 0 minimum allows continuous batching when appropriate.
+   * 10s maximum prevents excessively slow batch processing.
+   */
+  batchDelay: { min: 0, max: 10000 }
 } as const;
 
 const RETRYABLE_STATUS_CODES = [408, 429, 500, 502, 503, 504];
 const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error'];
 const URL_PROTOCOL_REGEX = /^https?:\/\//i;
 const TENANT_SCOPE_REGEX = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
+
+// Security constants
+const PRODUCTION_API_KEY_MIN_LENGTH = 32;
+const DEVELOPMENT_API_KEY_MIN_LENGTH = 8;
+const PRIVATE_IP_RANGES = [
+  /^10\./,
+  /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
+  /^192\.168\./,
+  /^127\./,
+  /^localhost$/i,
+  /^0\.0\.0\.0$/,
+  /^::1$/,
+  /^fe80:/i
+];
+
+/**
+ * Branded types for enhanced type safety with sensitive values
+ */
+export type ApiKey = string & { readonly __brand: 'ApiKey' };
+export type SecureUrl = string & { readonly __brand: 'SecureUrl' };
+
+/**
+ * Environment detection utility
+ */
+function isProductionEnvironment(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
+/**
+ * Cache for validation results to improve performance
+ */
+class ValidationCache {
+  private cache = new Map<string, { result: ConfigValidationResult; timestamp: number }>();
+  private readonly TTL = 5 * 60 * 1000; // 5 minutes
+
+  get(key: string): ConfigValidationResult | null {
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.TTL) {
+      return cached.result;
+    }
+    this.cache.delete(key);
+    return null;
+  }
+
+  set(key: string, result: ConfigValidationResult): void {
+    this.cache.set(key, { result, timestamp: Date.now() });
+    // Cleanup old entries if cache gets too large
+    if (this.cache.size > 100) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey) this.cache.delete(oldestKey);
+    }
+  }
+
+  generateKey(config: Partial<ApsoAdapterConfig>): string {
+    // Create a stable hash of the config for caching
+    return JSON.stringify(config, Object.keys(config).sort());
+  }
+}
+
+const validationCache = new ValidationCache();
 
 // =============================================================================
 // ConfigValidator Class
@@ -72,9 +174,23 @@ export class ConfigValidator {
   /**
    * Validates and normalizes the complete ApsoAdapterConfig
    * @param config - The configuration to validate
+   * @param options - Validation options
    * @returns Validation result with errors, warnings, and normalized config
    */
-  public static validateConfig(config: Partial<ApsoAdapterConfig>): ConfigValidationResult {
+  public static validateConfig(
+    config: Partial<ApsoAdapterConfig>,
+    options: { useCache?: boolean; disableHealthCheck?: boolean } = {}
+  ): ConfigValidationResult {
+    const { useCache = true } = options;
+    
+    // Check cache first if enabled
+    if (useCache) {
+      const cacheKey = validationCache.generateKey(config);
+      const cached = validationCache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
     const errors: ConfigValidationError[] = [];
     const warnings: ConfigValidationWarning[] = [];
 
@@ -106,12 +222,20 @@ export class ConfigValidator {
     this.validateSecuritySettings(normalizedConfig, errors, warnings);
 
     const valid = errors.length === 0;
-    return {
+    const result: ConfigValidationResult = {
       valid,
       errors,
       warnings,
       ...(valid ? { normalizedConfig } : {})
-    } as ConfigValidationResult;
+    };
+    
+    // Cache the result if enabled
+    if (options.useCache !== false && valid) {
+      const cacheKey = validationCache.generateKey(config);
+      validationCache.set(cacheKey, result);
+    }
+    
+    return result;
   }
 
   /**
@@ -140,19 +264,63 @@ export class ConfigValidator {
   }
 
   /**
-   * Performs async health check validation
+   * Performs async health check validation with SSRF protection
    * @param config - Validated configuration
+   * @param options - Health check options
    * @returns Promise resolving to health check result
    */
-  public static async validateHealthCheck(config: ApsoAdapterConfig): Promise<{
+  public static async validateHealthCheck(
+    config: ApsoAdapterConfig, 
+    options: { 
+      allowPrivateIPs?: boolean; 
+      skipHealthCheck?: boolean;
+      maxRedirects?: number;
+    } = {}
+  ): Promise<{
     healthy: boolean;
     errors: string[];
     latency?: number;
+    skipped?: boolean;
   }> {
+    const { allowPrivateIPs = false, skipHealthCheck = false, maxRedirects = 0 } = options;
     const errors: string[] = [];
     let latency: number | undefined;
 
+    // Option to skip health checks for security-sensitive environments
+    if (skipHealthCheck) {
+      return {
+        healthy: true,
+        errors: [],
+        skipped: true
+      };
+    }
+
     try {
+      // SSRF Protection: Validate the URL before making the request
+      const url = new URL(config.baseUrl);
+      
+      // Block private/internal addresses unless explicitly allowed
+      if (!allowPrivateIPs && this.isPrivateOrLoopbackAddress(url.hostname)) {
+        errors.push('Health check blocked: Target URL points to private/internal address (SSRF protection)');
+        return {
+          healthy: false,
+          errors
+        };
+      }
+      
+      // Block non-standard ports that might indicate internal services
+      if (url.port && !allowPrivateIPs) {
+        const port = parseInt(url.port, 10);
+        const commonWebPorts = [80, 443, 8080, 8443];
+        if (!commonWebPorts.includes(port)) {
+          errors.push(`Health check blocked: Non-standard port ${port} may indicate internal service (SSRF protection)`);
+          return {
+            healthy: false,
+            errors
+          };
+        }
+      }
+
       const startTime = Date.now();
       
       // Attempt a simple HTTP request to baseUrl
@@ -176,7 +344,8 @@ export class ConfigValidator {
         const response = await fetch(config.baseUrl, {
           method: 'HEAD',
           headers,
-          signal: controller.signal
+          signal: controller.signal,
+          redirect: maxRedirects > 0 ? 'follow' : 'manual'
         });
 
         clearTimeout(timeoutId);
@@ -184,22 +353,30 @@ export class ConfigValidator {
 
         if (!response.ok && response.status !== 404) {
           // 404 is acceptable for health check - means endpoint is reachable
-          errors.push(`HTTP ${response.status}: ${response.statusText}`);
+          const statusText = isProductionEnvironment() ? 'HTTP Error' : response.statusText;
+          errors.push(`HTTP ${response.status}: ${statusText}`);
         }
       } catch (fetchError: any) {
         clearTimeout(timeoutId);
         if (fetchError.name === 'AbortError') {
           errors.push(`Health check timeout after ${config.timeout || 10000}ms`);
         } else {
-          errors.push(`Network error: ${fetchError.message}`);
+          // Sanitize error messages in production
+          const errorMsg = isProductionEnvironment() 
+            ? 'Network connectivity issue' 
+            : `Network error: ${fetchError.message}`;
+          errors.push(errorMsg);
         }
       }
 
     } catch (error: any) {
-      errors.push(`Health check failed: ${error.message}`);
+      const errorMsg = isProductionEnvironment()
+        ? 'Health check configuration error'
+        : `Health check failed: ${error.message}`;
+      errors.push(errorMsg);
     }
 
-    const result: { healthy: boolean; errors: string[]; latency?: number } = {
+    const result: { healthy: boolean; errors: string[]; latency?: number; skipped?: boolean } = {
       healthy: errors.length === 0,
       errors
     };
@@ -228,6 +405,37 @@ export class ConfigValidator {
     }
   }
 
+  /**
+   * Validates if a hostname is a private/internal IP address
+   */
+  private static isPrivateOrLoopbackAddress(hostname: string): boolean {
+    return PRIVATE_IP_RANGES.some(regex => regex.test(hostname));
+  }
+
+  /**
+   * Sanitizes error details based on environment
+   */
+  private static sanitizeErrorDetails(details: any): any {
+    if (!isProductionEnvironment()) {
+      return details;
+    }
+    
+    // In production, remove potentially sensitive information
+    if (typeof details === 'object' && details !== null) {
+      const sanitized: any = {};
+      for (const [key, value] of Object.entries(details)) {
+        if (key === 'error' && typeof value === 'string') {
+          sanitized[key] = 'Error details hidden in production';
+        } else if (typeof value !== 'string' || !value.includes('password') && !value.includes('token') && !value.includes('key')) {
+          sanitized[key] = value;
+        }
+      }
+      return sanitized;
+    }
+    
+    return details;
+  }
+
   private static validateAndNormalizeBaseUrl(
     config: ApsoAdapterConfig,
     errors: ConfigValidationError[],
@@ -240,7 +448,8 @@ export class ConfigValidator {
       errors.push({
         field: 'baseUrl',
         message: 'baseUrl must start with http:// or https://',
-        code: ConfigErrorCode.INVALID_FORMAT
+        code: ConfigErrorCode.INVALID_FORMAT,
+        details: this.sanitizeErrorDetails({ suggestion: 'Use https://your-api-domain.com format' })
       });
       return;
     }
@@ -248,13 +457,39 @@ export class ConfigValidator {
     try {
       const url = new URL(config.baseUrl);
       
-      // Security check for HTTPS in production
-      if (url.protocol === 'http:' && !url.hostname.includes('localhost') && !url.hostname.startsWith('127.')) {
-        warnings.push({
-          field: 'baseUrl',
-          message: 'Using HTTP instead of HTTPS may pose security risks',
-          suggestion: 'Consider using HTTPS for production environments'
-        });
+      // CRITICAL: HTTP URLs are errors in production, warnings in development
+      if (url.protocol === 'http:' && !this.isPrivateOrLoopbackAddress(url.hostname)) {
+        const message = 'HTTP URLs are not allowed in production environments for security';
+        const suggestion = 'Use HTTPS instead. HTTP is only acceptable for localhost/private IPs in development';
+        
+        if (isProductionEnvironment()) {
+          errors.push({
+            field: 'baseUrl',
+            message,
+            code: ConfigErrorCode.SECURITY_RISK,
+            details: this.sanitizeErrorDetails({ suggestion })
+          });
+        } else {
+          warnings.push({
+            field: 'baseUrl',
+            message: 'Using HTTP instead of HTTPS may pose security risks',
+            suggestion
+          });
+        }
+      }
+      
+      // SSRF Protection: Check for private IP ranges in URLs
+      if (this.isPrivateOrLoopbackAddress(url.hostname)) {
+        const message = 'URLs pointing to private/internal addresses may pose SSRF risks';
+        const suggestion = 'Ensure this is intentional and the target service is trusted';
+        
+        if (isProductionEnvironment()) {
+          warnings.push({
+            field: 'baseUrl',
+            message,
+            suggestion: suggestion + '. Consider using allowPrivateIPs option if needed.'
+          });
+        }
       }
 
       // Normalize URL (remove trailing slash)
@@ -273,9 +508,12 @@ export class ConfigValidator {
         if (port < 1 || port > 65535) {
           errors.push({
             field: 'baseUrl',
-            message: 'Invalid port number in baseUrl',
+            message: 'Invalid port number in baseUrl (must be 1-65535)',
             code: ConfigErrorCode.OUT_OF_RANGE,
-            details: { port }
+            details: this.sanitizeErrorDetails({ 
+              port, 
+              suggestion: 'Use a valid port number between 1 and 65535' 
+            })
           });
         }
       }
@@ -283,9 +521,12 @@ export class ConfigValidator {
     } catch (urlError) {
       errors.push({
         field: 'baseUrl',
-        message: 'Invalid URL format',
+        message: 'Invalid URL format - unable to parse the provided URL',
         code: ConfigErrorCode.INVALID_FORMAT,
-        details: { error: urlError instanceof Error ? urlError.message : String(urlError) }
+        details: this.sanitizeErrorDetails({ 
+          error: urlError instanceof Error ? urlError.message : String(urlError),
+          suggestion: 'Ensure URL follows the format: https://your-api-domain.com'
+        })
       });
     }
   }
@@ -298,32 +539,93 @@ export class ConfigValidator {
     if (!config.apiKey && !config.authHeader) {
       warnings.push({
         field: 'authentication',
-        message: 'No authentication configured',
-        suggestion: 'Consider setting apiKey or authHeader for secure API access'
+        message: 'No authentication configured - API requests may fail',
+        suggestion: 'Set apiKey for Bearer token auth or authHeader for custom authentication'
       });
     }
 
     if (config.apiKey && typeof config.apiKey !== 'string') {
       errors.push({
         field: 'apiKey',
-        message: 'apiKey must be a string',
-        code: ConfigErrorCode.INVALID_TYPE
+        message: 'apiKey must be a non-empty string',
+        code: ConfigErrorCode.INVALID_TYPE,
+        details: this.sanitizeErrorDetails({ 
+          suggestion: 'Provide a valid API key as a string value' 
+        })
       });
     }
 
-    if (config.apiKey && config.apiKey.length < 8) {
-      warnings.push({
-        field: 'apiKey',
-        message: 'API key appears to be very short',
-        suggestion: 'Ensure API key is valid and sufficiently secure'
-      });
+    // Enhanced API key validation based on environment
+    if (config.apiKey && typeof config.apiKey === 'string') {
+      const isProduction = isProductionEnvironment();
+      const minLength = isProduction ? PRODUCTION_API_KEY_MIN_LENGTH : DEVELOPMENT_API_KEY_MIN_LENGTH;
+      
+      if (config.apiKey.length < minLength) {
+        const message = `API key is too short (${config.apiKey.length} chars, minimum ${minLength} required${isProduction ? ' in production' : ''})`;
+        const suggestion = isProduction 
+          ? 'Use a production-grade API key with at least 32 characters for security'
+          : 'Use a longer API key. Production requires at least 32 characters.';
+        
+        if (isProduction) {
+          errors.push({
+            field: 'apiKey',
+            message,
+            code: ConfigErrorCode.SECURITY_RISK,
+            details: this.sanitizeErrorDetails({ 
+              currentLength: config.apiKey.length,
+              requiredMinLength: minLength,
+              suggestion 
+            })
+          });
+        } else {
+          warnings.push({
+            field: 'apiKey',
+            message,
+            suggestion
+          });
+        }
+      }
+      
+      // Check for obviously weak API keys
+      const weakPatterns = [/^(test|demo|example|sample)/i, /^(123|abc|password)/i];
+      if (weakPatterns.some(pattern => pattern.test(config.apiKey!))) {
+        const message = 'API key appears to be a placeholder or test value';
+        const suggestion = 'Replace with a proper API key from your service provider';
+        
+        if (isProduction) {
+          errors.push({
+            field: 'apiKey',
+            message,
+            code: ConfigErrorCode.SECURITY_RISK,
+            details: this.sanitizeErrorDetails({ suggestion })
+          });
+        } else {
+          warnings.push({
+            field: 'apiKey',
+            message,
+            suggestion
+          });
+        }
+      }
     }
 
     if (config.authHeader && typeof config.authHeader !== 'string') {
       errors.push({
         field: 'authHeader',
-        message: 'authHeader must be a string',
-        code: ConfigErrorCode.INVALID_TYPE
+        message: 'authHeader must be a non-empty string',
+        code: ConfigErrorCode.INVALID_TYPE,
+        details: this.sanitizeErrorDetails({ 
+          suggestion: 'Provide a valid HTTP header name (e.g., "X-API-Key", "Authorization")' 
+        })
+      });
+    } else if (config.authHeader && !config.authHeader.trim()) {
+      errors.push({
+        field: 'authHeader',
+        message: 'authHeader cannot be empty or whitespace',
+        code: ConfigErrorCode.INVALID_VALUE,
+        details: this.sanitizeErrorDetails({ 
+          suggestion: 'Provide a valid HTTP header name' 
+        })
       });
     }
   }

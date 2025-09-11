@@ -3,7 +3,7 @@
  * Tests comprehensive configuration validation, normalization, and health checks
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { 
   ConfigValidator, 
   ConfigValidationResult, 
@@ -15,17 +15,24 @@ import {
   AdapterErrorCode 
 } from '../../src/types/index.js';
 
+// Mock NODE_ENV for production tests
+const originalEnv = process.env.NODE_ENV;
+
 // Mock fetch for health check tests
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
+const mockFetch = jest.fn();
+global.fetch = mockFetch as any;
 
 describe('ConfigValidator', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
+    // Reset NODE_ENV
+    process.env.NODE_ENV = originalEnv;
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    jest.restoreAllMocks();
+    // Reset NODE_ENV
+    process.env.NODE_ENV = originalEnv;
   });
 
   // =============================================================================
@@ -56,7 +63,7 @@ describe('ConfigValidator', () => {
       expect(result.errors).toHaveLength(0);
       expect(result.normalizedConfig).toBeDefined();
       expect(result.normalizedConfig!.baseUrl).toBe('https://api.example.com');
-      expect(result.normalizedConfig!.timeout).toBe(30000); // Default timeout
+      expect(result.normalizedConfig!.timeout).toBe(10000); // New default timeout
     });
 
     it('should normalize baseUrl by removing trailing slash', () => {
@@ -121,7 +128,52 @@ describe('ConfigValidator', () => {
       const result = ConfigValidator.validateConfig(config);
       
       expect(result.valid).toBe(true);
-      expect(result.warnings.some(w => w.field === 'baseUrl')).toBe(false);
+      expect(result.warnings.some(w => w.field === 'baseUrl' && w.message.includes('security risks'))).toBe(false);
+    });
+
+    it('should make HTTP URLs an error in production environment', () => {
+      process.env.NODE_ENV = 'production';
+      
+      const config = {
+        baseUrl: 'http://api.example.com'
+      };
+      const result = ConfigValidator.validateConfig(config);
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => 
+        e.field === 'baseUrl' && 
+        e.code === ConfigErrorCode.SECURITY_RISK &&
+        e.message.includes('HTTP URLs are not allowed in production')
+      )).toBe(true);
+    });
+
+    it('should warn about private IP addresses (SSRF protection)', () => {
+      const config = {
+        baseUrl: 'https://192.168.1.100'
+      };
+      const result = ConfigValidator.validateConfig(config);
+      
+      expect(result.valid).toBe(true);
+      // Should not warn in development, only in production
+      expect(result.warnings.some(w => 
+        w.field === 'baseUrl' && 
+        w.message.includes('SSRF risks')
+      )).toBe(false);
+    });
+
+    it('should warn about private IP addresses in production (SSRF protection)', () => {
+      process.env.NODE_ENV = 'production';
+      
+      const config = {
+        baseUrl: 'https://10.0.0.1'
+      };
+      const result = ConfigValidator.validateConfig(config);
+      
+      expect(result.valid).toBe(true);
+      expect(result.warnings.some(w => 
+        w.field === 'baseUrl' && 
+        w.message.includes('SSRF risks')
+      )).toBe(true);
     });
 
     it('should validate port numbers', () => {
@@ -170,7 +222,7 @@ describe('ConfigValidator', () => {
       )).toBe(true);
     });
 
-    it('should warn about short API keys', () => {
+    it('should warn about short API keys in development', () => {
       const config = {
         baseUrl: 'https://api.example.com',
         apiKey: '1234567'
@@ -180,7 +232,68 @@ describe('ConfigValidator', () => {
       expect(result.valid).toBe(true);
       expect(result.warnings.some(w => 
         w.field === 'apiKey' && 
-        w.message.includes('very short')
+        w.message.includes('too short')
+      )).toBe(true);
+    });
+
+    it('should make short API keys an error in production', () => {
+      process.env.NODE_ENV = 'production';
+      
+      const config = {
+        baseUrl: 'https://api.example.com',
+        apiKey: 'short-key-123'
+      };
+      const result = ConfigValidator.validateConfig(config);
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => 
+        e.field === 'apiKey' && 
+        e.code === ConfigErrorCode.SECURITY_RISK &&
+        e.message.includes('too short')
+      )).toBe(true);
+    });
+
+    it('should accept long API keys in production', () => {
+      process.env.NODE_ENV = 'production';
+      
+      const config = {
+        baseUrl: 'https://api.example.com',
+        apiKey: 'sk-proj-1234567890abcdef1234567890abcdef1234567890abcdef' // 54 chars
+      };
+      const result = ConfigValidator.validateConfig(config);
+      
+      expect(result.valid).toBe(true);
+      expect(result.errors.some(e => e.field === 'apiKey')).toBe(false);
+    });
+
+    it('should detect weak/placeholder API keys in production', () => {
+      process.env.NODE_ENV = 'production';
+      
+      const config = {
+        baseUrl: 'https://api.example.com',
+        apiKey: 'test-api-key-1234567890abcdef1234567890' // Long but obviously a test key
+      };
+      const result = ConfigValidator.validateConfig(config);
+      
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => 
+        e.field === 'apiKey' && 
+        e.code === ConfigErrorCode.SECURITY_RISK &&
+        e.message.includes('placeholder or test value')
+      )).toBe(true);
+    });
+
+    it('should warn about weak API keys in development', () => {
+      const config = {
+        baseUrl: 'https://api.example.com',
+        apiKey: 'demo-key-for-testing'
+      };
+      const result = ConfigValidator.validateConfig(config);
+      
+      expect(result.valid).toBe(true);
+      expect(result.warnings.some(w => 
+        w.field === 'apiKey' && 
+        w.message.includes('placeholder or test value')
       )).toBe(true);
     });
 
@@ -256,7 +369,31 @@ describe('ConfigValidator', () => {
       expect(result.valid).toBe(true);
       expect(result.warnings.some(w => 
         w.field === 'timeout' && 
-        w.message.includes('Very high timeout')
+        w.message.includes('High timeout value')
+      )).toBe(true);
+    });
+
+    it('should use 10 second default timeout', () => {
+      const config = {
+        baseUrl: 'https://api.example.com'
+      };
+      const result = ConfigValidator.validateConfig(config);
+      
+      expect(result.valid).toBe(true);
+      expect(result.normalizedConfig!.timeout).toBe(10000); // 10 seconds
+    });
+
+    it('should warn about very high timeouts that impact performance', () => {
+      const config = {
+        baseUrl: 'https://api.example.com',
+        timeout: 120000 // 2 minutes
+      };
+      const result = ConfigValidator.validateConfig(config);
+      
+      expect(result.valid).toBe(true);
+      expect(result.warnings.some(w => 
+        w.field === 'timeout' && 
+        w.message.includes('may impact user experience')
       )).toBe(true);
     });
   });
@@ -585,7 +722,7 @@ describe('ConfigValidator', () => {
       
       expect(result).toBeDefined();
       expect(result.baseUrl).toBe('https://api.example.com');
-      expect(result.timeout).toBe(30000);
+      expect(result.timeout).toBe(10000);
     });
 
     it('should throw AdapterError for invalid config', () => {
@@ -605,7 +742,7 @@ describe('ConfigValidator', () => {
     });
 
     it('should log warnings but not throw for valid config with warnings', () => {
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
       
       const config = {
         baseUrl: 'https://api.example.com',
@@ -743,8 +880,177 @@ describe('ConfigValidator', () => {
           'User-Agent': 'Apso-Adapter-HealthCheck/1.0',
           'X-API-Key': 'test-api-key'
         },
-        signal: expect.any(AbortSignal)
+        signal: expect.any(AbortSignal),
+        redirect: 'manual'
       });
+    });
+
+    it('should support skipping health checks for security-sensitive environments', async () => {
+      const config: ApsoAdapterConfig = {
+        baseUrl: 'https://api.example.com',
+        timeout: 10000
+      };
+
+      const result = await ConfigValidator.validateHealthCheck(config, { skipHealthCheck: true });
+
+      expect(result.healthy).toBe(true);
+      expect(result.errors).toHaveLength(0);
+      expect(result.skipped).toBe(true);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should block private IP addresses (SSRF protection)', async () => {
+      const config: ApsoAdapterConfig = {
+        baseUrl: 'https://192.168.1.100',
+        timeout: 10000
+      };
+
+      const result = await ConfigValidator.validateHealthCheck(config);
+
+      expect(result.healthy).toBe(false);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toContain('SSRF protection');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should allow private IPs when explicitly enabled', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK'
+      });
+
+      const config: ApsoAdapterConfig = {
+        baseUrl: 'https://192.168.1.100',
+        timeout: 10000
+      };
+
+      const result = await ConfigValidator.validateHealthCheck(config, { allowPrivateIPs: true });
+
+      expect(result.healthy).toBe(true);
+      expect(result.errors).toHaveLength(0);
+      expect(mockFetch).toHaveBeenCalled();
+    });
+
+    it('should block non-standard ports (SSRF protection)', async () => {
+      const config: ApsoAdapterConfig = {
+        baseUrl: 'https://api.example.com:6379', // Redis port
+        timeout: 10000
+      };
+
+      const result = await ConfigValidator.validateHealthCheck(config);
+
+      expect(result.healthy).toBe(false);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toContain('Non-standard port');
+      expect(result.errors[0]).toContain('SSRF protection');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should allow standard web ports', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK'
+      });
+
+      const config: ApsoAdapterConfig = {
+        baseUrl: 'https://api.example.com:8443',
+        timeout: 10000
+      };
+
+      const result = await ConfigValidator.validateHealthCheck(config);
+
+      expect(result.healthy).toBe(true);
+      expect(result.errors).toHaveLength(0);
+      expect(mockFetch).toHaveBeenCalled();
+    });
+
+    it('should sanitize error messages in production', async () => {
+      process.env.NODE_ENV = 'production';
+      mockFetch.mockRejectedValueOnce(new Error('Connection refused to internal service'));
+
+      const config: ApsoAdapterConfig = {
+        baseUrl: 'https://api.example.com',
+        timeout: 10000
+      };
+
+      const result = await ConfigValidator.validateHealthCheck(config);
+
+      expect(result.healthy).toBe(false);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toBe('Network connectivity issue');
+      expect(result.errors[0]).not.toContain('internal service');
+    });
+
+    it('should show detailed error messages in development', async () => {
+      process.env.NODE_ENV = 'development';
+      mockFetch.mockRejectedValueOnce(new Error('Connection refused'));
+
+      const config: ApsoAdapterConfig = {
+        baseUrl: 'https://api.example.com',
+        timeout: 10000
+      };
+
+      const result = await ConfigValidator.validateHealthCheck(config);
+
+      expect(result.healthy).toBe(false);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toContain('Connection refused');
+    });
+  });
+
+  // =============================================================================
+  // Configuration Caching Tests
+  // =============================================================================
+
+  describe('validation caching', () => {
+    it('should cache valid configuration results', () => {
+      const config = {
+        baseUrl: 'https://api.example.com'
+      };
+      
+      // First call
+      const result1 = ConfigValidator.validateConfig(config, { useCache: true });
+      expect(result1.valid).toBe(true);
+      
+      // Second call should return cached result (same reference)
+      const result2 = ConfigValidator.validateConfig(config, { useCache: true });
+      expect(result2.valid).toBe(true);
+      // Results should be the same object (cached)
+      expect(result2).toBe(result1);
+    });
+
+    it('should allow disabling cache', () => {
+      const config = {
+        baseUrl: 'https://api.example.com'
+      };
+      
+      // First call with cache disabled
+      const result1 = ConfigValidator.validateConfig(config, { useCache: false });
+      expect(result1.valid).toBe(true);
+      
+      // Second call with cache disabled should create new result
+      const result2 = ConfigValidator.validateConfig(config, { useCache: false });
+      expect(result2.valid).toBe(true);
+      // Results should be different objects (not cached)
+      expect(result2).not.toBe(result1);
+    });
+
+    it('should not cache invalid configuration results', () => {
+      const config = {
+        baseUrl: 'invalid-url'
+      };
+      
+      // First call
+      const result1 = ConfigValidator.validateConfig(config, { useCache: true });
+      expect(result1.valid).toBe(false);
+      
+      // Second call should not return cached result for invalid configs
+      const result2 = ConfigValidator.validateConfig(config, { useCache: true });
+      expect(result2.valid).toBe(false);
+      // Results should be different objects (invalid configs not cached)
+      expect(result2).not.toBe(result1);
     });
   });
 });
