@@ -30,6 +30,8 @@ import { HttpClient } from '../client/HttpClient';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper } from '../response/EntityMapper';
+import { UserOperations } from '../operations/UserOperations';
+import { SessionOperations } from '../operations/SessionOperations';
 
 /**
  * Components interface for dependency injection
@@ -41,12 +43,24 @@ export interface ApsoAdapterComponents {
   entityMapper: EntityMapper;
 }
 
+/**
+ * Specialized operation handlers for different entity types
+ */
+export interface EntityOperations {
+  userOperations: UserOperations;
+  sessionOperations: SessionOperations;
+}
+
 export class ApsoAdapter implements IApsoAdapter {
   public readonly config: ApsoAdapterConfig;
   private readonly httpClient: HttpClient;
   private readonly queryTranslator: QueryTranslator;
   private readonly responseNormalizer: ResponseNormalizer;
   private readonly entityMapper: EntityMapper;
+  
+  // Specialized operation handlers
+  private readonly userOperations: UserOperations;
+  private readonly sessionOperations: SessionOperations;
   
   // Metrics tracking
   private metrics: AdapterMetrics;
@@ -67,6 +81,18 @@ export class ApsoAdapter implements IApsoAdapter {
     this.responseNormalizer = components.responseNormalizer;
     this.entityMapper = components.entityMapper;
     
+    // Initialize specialized operation handlers
+    const operationsDependencies = {
+      httpClient: this.httpClient,
+      queryTranslator: this.queryTranslator,
+      responseNormalizer: this.responseNormalizer,
+      entityMapper: this.entityMapper,
+      config: this.config
+    };
+    
+    this.userOperations = new UserOperations(operationsDependencies);
+    this.sessionOperations = new SessionOperations(operationsDependencies);
+    
     // Initialize metrics
     this.metrics = this.initializeMetrics();
     
@@ -74,6 +100,7 @@ export class ApsoAdapter implements IApsoAdapter {
       this.config.logger.info('ApsoAdapter initialized', {
         baseUrl: this.config.baseUrl,
         components: Object.keys(components),
+        operations: ['UserOperations', 'SessionOperations']
       });
     }
   }
@@ -109,27 +136,49 @@ export class ApsoAdapter implements IApsoAdapter {
       // Track request
       this.updateModelMetrics(params.model);
       
-      // Transform data using EntityMapper
-      const transformedData = this.entityMapper.transformOutbound(params.model, params.data);
-      
-      // Get API path for the model
-      const apiPath = this.entityMapper.getApiPath(params.model);
-      const url = `${this.config.baseUrl}/${apiPath}`;
-      
-      // Execute HTTP request
-      const response = await this.httpClient.post<T>(url, transformedData, {
-        headers: this.buildHeaders(),
-        ...(this.config.timeout && { timeout: this.config.timeout }),
-      });
-      
-      // Transform response
-      const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response);
-      const finalResult = this.entityMapper.transformInbound(params.model, normalizedResponse);
-      
-      // Update metrics
-      this.updateSuccessMetrics(performance.now() - startTime);
-      
-      return finalResult;
+      // Route to specialized operations for supported models
+      switch (params.model.toLowerCase()) {
+        case 'user':
+          const userResult = await this.userOperations.createUser(params.data);
+          this.updateSuccessMetrics(performance.now() - startTime);
+          return userResult as T;
+          
+        case 'session':
+          // Validate session data format
+          if (!params.data.sessionToken || !params.data.userId || !params.data.expiresAt) {
+            throw new AdapterError(
+              AdapterErrorCode.VALIDATION_ERROR,
+              'Session creation requires sessionToken, userId, and expiresAt',
+              params.data,
+              false,
+              400
+            );
+          }
+          const sessionResult = await this.sessionOperations.createSession({
+            sessionToken: params.data.sessionToken,
+            userId: params.data.userId,
+            expiresAt: new Date(params.data.expiresAt)
+          });
+          this.updateSuccessMetrics(performance.now() - startTime);
+          return sessionResult as T;
+          
+        default:
+          // Fall back to generic implementation for unsupported models
+          const transformedData = this.entityMapper.transformOutbound(params.model, params.data);
+          const apiPath = this.entityMapper.getApiPath(params.model);
+          const url = `${this.config.baseUrl}/${apiPath}`;
+          
+          const response = await this.httpClient.post<T>(url, transformedData, {
+            headers: this.buildHeaders(),
+            ...(this.config.timeout && { timeout: this.config.timeout }),
+          });
+          
+          const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response);
+          const finalResult = this.entityMapper.transformInbound(params.model, normalizedResponse);
+          
+          this.updateSuccessMetrics(performance.now() - startTime);
+          return finalResult;
+      }
     } catch (error) {
       this.updateErrorMetrics(error, performance.now() - startTime);
       throw this.handleError(error, 'create', params.model);
@@ -142,49 +191,119 @@ export class ApsoAdapter implements IApsoAdapter {
     try {
       this.updateModelMetrics(params.model);
       
-      // Transform update data
-      const transformedData = this.entityMapper.transformOutbound(params.model, params.update);
-      
-      // Handle ID-based updates
-      if (params.where.id && typeof params.where.id === 'string') {
-        const apiPath = this.entityMapper.getApiPath(params.model);
-        const url = `${this.config.baseUrl}/${apiPath}/${params.where.id}`;
-        
-        const response = await this.httpClient.patch<T>(url, transformedData, {
-          headers: this.buildHeaders(),
-          ...(this.config.timeout && { timeout: this.config.timeout }),
-        });
-        
-        const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response);
-        const result = this.entityMapper.transformInbound(params.model, normalizedResponse);
-        
-        this.updateSuccessMetrics(performance.now() - startTime);
-        return result;
+      // Route to specialized operations for supported models
+      switch (params.model.toLowerCase()) {
+        case 'user':
+          // Handle user-specific updates
+          if (params.where.id && typeof params.where.id === 'string') {
+            const userResult = await this.userOperations.updateUser(params.where.id, params.update);
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return userResult as T;
+          } else if (params.where.email && typeof params.where.email === 'string') {
+            const userResult = await this.userOperations.updateUserByEmail(params.where.email, params.update);
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return userResult as T;
+          } else {
+            // Find user first, then update by ID
+            const existing = await this.findOne<T>({
+              model: params.model,
+              where: params.where,
+              ...(params.select && { select: params.select }),
+            });
+            
+            if (!existing) {
+              throw new AdapterError(
+                AdapterErrorCode.NOT_FOUND,
+                `No user found for update`,
+                params.where,
+                false,
+                404
+              );
+            }
+            
+            const recordWithId = existing as any;
+            const userResult = await this.userOperations.updateUser(recordWithId.id, params.update);
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return userResult as T;
+          }
+          
+        case 'session':
+          // Handle session-specific updates
+          if (params.where.id && typeof params.where.id === 'string') {
+            const sessionResult = await this.sessionOperations.updateSession(params.where.id, params.update);
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return sessionResult as T;
+          } else if (params.where.sessionToken && typeof params.where.sessionToken === 'string') {
+            const sessionResult = await this.sessionOperations.updateSessionByToken(params.where.sessionToken, params.update);
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return sessionResult as T;
+          } else {
+            // Find session first, then update by ID
+            const existing = await this.findOne<T>({
+              model: params.model,
+              where: params.where,
+              ...(params.select && { select: params.select }),
+            });
+            
+            if (!existing) {
+              throw new AdapterError(
+                AdapterErrorCode.NOT_FOUND,
+                `No session found for update`,
+                params.where,
+                false,
+                404
+              );
+            }
+            
+            const recordWithId = existing as any;
+            const sessionResult = await this.sessionOperations.updateSession(recordWithId.id, params.update);
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return sessionResult as T;
+          }
+          
+        default:
+          // Fall back to generic implementation for unsupported models
+          const transformedData = this.entityMapper.transformOutbound(params.model, params.update);
+          
+          if (params.where.id && typeof params.where.id === 'string') {
+            const apiPath = this.entityMapper.getApiPath(params.model);
+            const url = `${this.config.baseUrl}/${apiPath}/${params.where.id}`;
+            
+            const response = await this.httpClient.patch<T>(url, transformedData, {
+              headers: this.buildHeaders(),
+              ...(this.config.timeout && { timeout: this.config.timeout }),
+            });
+            
+            const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response);
+            const result = this.entityMapper.transformInbound(params.model, normalizedResponse);
+            
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return result;
+          }
+          
+          // For query-based updates, find the record first
+          const existing = await this.findOne<T>({
+            model: params.model,
+            where: params.where,
+            ...(params.select && { select: params.select }),
+          });
+          
+          if (!existing) {
+            throw new AdapterError(
+              AdapterErrorCode.NOT_FOUND,
+              `No record found for update in model ${params.model}`,
+              params.where,
+              false,
+              404
+            );
+          }
+          
+          const recordWithId = existing as any;
+          return this.update({
+            ...params,
+            where: { id: recordWithId.id },
+          });
       }
-      
-      // For query-based updates, we need to find the record first
-      const existing = await this.findOne<T>({
-        model: params.model,
-        where: params.where,
-        ...(params.select && { select: params.select }),
-      });
-      
-      if (!existing) {
-        throw new AdapterError(
-          AdapterErrorCode.NOT_FOUND,
-          `No record found for update in model ${params.model}`,
-          params.where,
-          false,
-          404
-        );
-      }
-      
-      // Update using the found record's ID
-      const recordWithId = existing as any;
-      return this.update({
-        ...params,
-        where: { id: recordWithId.id },
-      });
     } catch (error) {
       this.updateErrorMetrics(error, performance.now() - startTime);
       throw this.handleError(error, 'update', params.model);
@@ -326,40 +445,74 @@ export class ApsoAdapter implements IApsoAdapter {
       // Track request
       this.updateModelMetrics(params.model);
       
-      // Check for direct ID lookup
-      if (params.where.id && typeof params.where.id === 'string') {
-        return this.findById<T>(params.model, params.where.id);
+      // Route to specialized operations for supported models
+      switch (params.model.toLowerCase()) {
+        case 'user':
+          // Handle user-specific lookups
+          if (params.where.id && typeof params.where.id === 'string') {
+            const userResult = await this.userOperations.findUserById(params.where.id);
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return userResult as T;
+          } else if (params.where.email && typeof params.where.email === 'string') {
+            const userResult = await this.userOperations.findUserByEmail(params.where.email);
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return userResult as T;
+          } else {
+            // For other user filters, use findManyUsers with limit 1
+            const users = await this.userOperations.findManyUsers({
+              where: params.where,
+              pagination: { limit: 1 }
+            });
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return users.length > 0 ? users[0] as T : null;
+          }
+          
+        case 'session':
+          // Handle session-specific lookups
+          if (params.where.id && typeof params.where.id === 'string') {
+            const sessionResult = await this.sessionOperations.findSessionById(params.where.id);
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return sessionResult as T;
+          } else if (params.where.sessionToken && typeof params.where.sessionToken === 'string') {
+            const sessionResult = await this.sessionOperations.findSessionByToken(params.where.sessionToken);
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return sessionResult as T;
+          } else {
+            // For other session filters, use findManySessions with limit 1
+            const sessions = await this.sessionOperations.findManySessions({
+              where: params.where,
+              pagination: { limit: 1 }
+            });
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return sessions.length > 0 ? sessions[0] as T : null;
+          }
+          
+        default:
+          // Fall back to generic implementation for unsupported models
+          if (params.where.id && typeof params.where.id === 'string') {
+            return this.findById<T>(params.model, params.where.id);
+          }
+          
+          this.queryTranslator.buildFindQuery(params.where, { limit: 1 });
+          const apiPath = this.entityMapper.getApiPath(params.model);
+          const url = `${this.config.baseUrl}/${apiPath}`;
+          
+          const response = await this.httpClient.get<T[]>(url, {
+            headers: this.buildHeaders(),
+            ...(this.config.timeout && { timeout: this.config.timeout }),
+          });
+          
+          const normalizedResults = this.responseNormalizer.normalizeArrayResponse(response);
+          
+          if (!normalizedResults || normalizedResults.length === 0) {
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return null;
+          }
+          
+          const result = this.entityMapper.transformInbound(params.model, normalizedResults[0]);
+          this.updateSuccessMetrics(performance.now() - startTime);
+          return result;
       }
-      
-      // Build query parameters (for potential future use with query string)
-      this.queryTranslator.buildFindQuery(params.where, {
-        limit: 1,
-      });
-      
-      // Get API path
-      const apiPath = this.entityMapper.getApiPath(params.model);
-      const url = `${this.config.baseUrl}/${apiPath}`;
-      
-      // Execute request
-      const response = await this.httpClient.get<T[]>(url, {
-        headers: this.buildHeaders(),
-        ...(this.config.timeout && { timeout: this.config.timeout }),
-        // Convert queryParams to URL search params
-      });
-      
-      // Normalize response
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(response);
-      
-      if (!normalizedResults || normalizedResults.length === 0) {
-        this.updateSuccessMetrics(performance.now() - startTime);
-        return null;
-      }
-      
-      // Transform and return first result
-      const result = this.entityMapper.transformInbound(params.model, normalizedResults[0]);
-      this.updateSuccessMetrics(performance.now() - startTime);
-      
-      return result;
     } catch (error) {
       this.updateErrorMetrics(error, performance.now() - startTime);
       throw this.handleError(error, 'findOne', params.model);
