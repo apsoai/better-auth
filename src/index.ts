@@ -38,6 +38,7 @@ export { ErrorMapper } from './response/ErrorMapper';
 export { EmailNormalizer } from './utils/EmailNormalizer';
 export { RetryHandler } from './utils/RetryHandler';
 export { BatchProcessor } from './utils/BatchProcessor';
+export { ConfigValidator } from './utils/ConfigValidator';
 
 // Re-export common types for convenience
 export type {

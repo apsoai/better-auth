@@ -21,12 +21,14 @@ import type {
   CreateManyParams,
   AdapterMetrics,
 } from '../types';
+import { ConfigValidator } from '../utils/ConfigValidator.js';
 
 export class ApsoAdapter implements IApsoAdapter {
   public readonly config: ApsoAdapterConfig;
 
-  constructor(config: ApsoAdapterConfig) {
-    this.config = config;
+  constructor(config: Partial<ApsoAdapterConfig>) {
+    // Validate and normalize configuration
+    this.config = ConfigValidator.validateAndThrow(config);
     
     // TODO: Initialize components:
     // - HttpClient with retry logic
@@ -132,11 +134,16 @@ export class ApsoAdapter implements IApsoAdapter {
   }
 
   async healthCheck(): Promise<boolean> {
-    // TODO: Implement health check
-    // 1. Make a simple API call (e.g., GET /health or GET /)
-    // 2. Check response time and status
-    // 3. Return boolean result
-    throw new Error('Method not implemented');
+    try {
+      const result = await ConfigValidator.validateHealthCheck(this.config);
+      return result.healthy;
+    } catch (error) {
+      // Log error if logger is available
+      if (this.config.logger) {
+        this.config.logger.error('Health check failed', { error });
+      }
+      return false;
+    }
   }
 
   getMetrics(): AdapterMetrics {

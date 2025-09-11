@@ -25,7 +25,7 @@ import type { ApsoAdapterConfig } from '../types';
  * });
  * ```
  */
-export function apsoAdapter(config: ApsoAdapterConfig): ApsoAdapter {
+export function apsoAdapter(config: Partial<ApsoAdapterConfig>): ApsoAdapter {
   return new ApsoAdapter(config);
 }
 
