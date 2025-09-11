@@ -4,7 +4,7 @@
  */
 
 import { HttpClient, createHttpClient } from '../../src/client/HttpClient';
-import { AdapterError, AdapterErrorCode, HttpClientConfig } from '../../src/types';
+import { AdapterError, AdapterErrorCode } from '../../src/types';
 
 // Only run integration tests if INTEGRATION_TESTS=true
 const shouldRunTests = process.env.INTEGRATION_TESTS === 'true';

@@ -8,7 +8,7 @@ import {
   LogLevel,
   AdapterError,
   AdapterErrorCode 
-} from '../types/index.js';
+} from '../types';
 
 // =============================================================================
 // Validation Result Types
