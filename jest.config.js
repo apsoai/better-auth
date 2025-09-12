@@ -1,12 +1,8 @@
 /** @type {import('jest').Config} */
-module.exports = {
+const baseConfig = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src', '<rootDir>/tests'],
-  testMatch: [
-    '**/__tests__/**/*.+(ts|tsx|js)',
-    '**/*.(test|spec).+(ts|tsx|js)',
-  ],
   transform: {
     '^.+\\.(ts|tsx)$': [
       'ts-jest',
@@ -33,7 +29,6 @@ module.exports = {
       statements: 90,
     },
   },
-  testTimeout: 10000,
   verbose: true,
   clearMocks: true,
   resetMocks: true,
@@ -43,4 +38,37 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/dist/'],
+};
+
+module.exports = {
+  ...baseConfig,
+  // Default configuration for single test runs
+  testMatch: [
+    '**/__tests__/**/*.+(ts|tsx|js)',
+    '**/*.(test|spec).+(ts|tsx|js)',
+  ],
+  testTimeout: 10000,
+  // Integration tests configuration
+  projects: [
+    {
+      ...baseConfig,
+      displayName: 'unit',
+      testMatch: ['<rootDir>/tests/unit/**/*.test.ts', '<rootDir>/tests/conformance/**/*.test.ts'],
+      testTimeout: 10000,
+    },
+    {
+      ...baseConfig,
+      displayName: 'integration',
+      testMatch: ['<rootDir>/tests/integration/**/*.test.ts'],
+      testTimeout: 30000, // Longer timeout for integration tests
+      // Only run integration tests when explicitly enabled
+      testEnvironment: process.env.INTEGRATION_TESTS === 'true' ? 'node' : '<rootDir>/tests/integration/skipEnvironment.js',
+    },
+    {
+      ...baseConfig,
+      displayName: 'performance',
+      testMatch: ['<rootDir>/tests/performance/**/*.test.ts'],
+      testTimeout: 60000, // Even longer timeout for performance tests
+    },
+  ],
 };
