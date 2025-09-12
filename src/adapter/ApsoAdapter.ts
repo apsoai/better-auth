@@ -26,7 +26,7 @@ import {
   AdapterError, 
   AdapterErrorCode 
 } from '../types';
-import { ConfigValidator } from '../utils/ConfigValidator.js';
+import { ConfigValidator } from '../utils/ConfigValidator';
 import { HttpClient } from '../client/HttpClient';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
@@ -993,6 +993,14 @@ export class ApsoAdapter implements IApsoAdapter {
    * Handle and normalize errors
    */
   private handleError(error: any, operation: string, model: string): AdapterError {
+    // If it's already an AdapterError with a specific message, preserve it
+    if (error instanceof AdapterError) {
+      if (this.config.logger) {
+        this.config.logger.error(`${operation} operation failed for model ${model}`, { error, operation, model });
+      }
+      return error;
+    }
+
     const errorCode = this.getErrorCode(error);
     const message = `${operation} operation failed for model ${model}`;
     

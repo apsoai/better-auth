@@ -420,7 +420,7 @@ export class QueryTranslator {
     const suspiciousPatterns = [
       /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|UNION|EXEC|SCRIPT)\b/i,
       /-{2,}/, // SQL comments
-      /\/\*.*\*\//s, // Block comments
+      /\/\*.*\*\//, // Block comments
       /[;\x00]/, // Null bytes and semicolons
     ];
 

@@ -39,8 +39,8 @@ import {
   ValidationError,
   AdapterError,
   AdapterErrorCode
-} from '../types/index.js';
-import { EmailNormalizer } from '../utils/EmailNormalizer.js';
+} from '../types/index';
+import { EmailNormalizer } from '../utils/EmailNormalizer';
 
 /**
  * Configuration options for EntityMapper

@@ -127,6 +127,22 @@ export class MockDataStore {
             // Case-insensitive email matching
             return entity[key]?.toLowerCase() === value.toLowerCase();
           }
+          if (key === 'emailVerified' && typeof value === 'boolean') {
+            // Handle boolean matching
+            return entity[key] === value;
+          }
+          if (key === 'sessionToken' && typeof value === 'string') {
+            // Handle session token matching
+            return entity[key] === value;
+          }
+          if (key === 'identifier' && typeof value === 'string') {
+            // Handle verification token identifier matching
+            return entity[key] === value;
+          }
+          if (key === 'token' && typeof value === 'string') {
+            // Handle verification token matching
+            return entity[key] === value;
+          }
           return entity[key] === value;
         });
       });
@@ -137,6 +153,49 @@ export class MockDataStore {
 
   public countEntities(entityType: string, filter?: Record<string, any>): number {
     return this.findEntities(entityType, filter).length;
+  }
+
+  public updateMany(entityType: string, filter: Record<string, any>, updates: any): number {
+    const entities = this.findEntities(entityType, filter);
+    let updateCount = 0;
+
+    entities.forEach(entity => {
+      const updated = this.updateEntity(entityType, entity.id, updates);
+      if (updated) {
+        updateCount++;
+      }
+    });
+
+    return updateCount;
+  }
+
+  public deleteMany(entityType: string, filter: Record<string, any>): number {
+    const entities = this.findEntities(entityType, filter);
+    let deleteCount = 0;
+
+    entities.forEach(entity => {
+      const deleted = this.deleteEntity(entityType, entity.id);
+      if (deleted) {
+        deleteCount++;
+      }
+    });
+
+    return deleteCount;
+  }
+
+  public findByUniqueField(entityType: string, field: string, value: any): any | null {
+    const entities = this.data.get(entityType);
+    if (!entities) return null;
+
+    const results = Array.from(entities.values());
+    const found = results.find(entity => {
+      if (field === 'email' && typeof value === 'string') {
+        return entity[field]?.toLowerCase() === value.toLowerCase();
+      }
+      return entity[field] === value;
+    });
+
+    return found || null;
   }
 
   private generateId(entityType: string): string {

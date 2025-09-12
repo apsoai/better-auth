@@ -22,8 +22,8 @@ import type {
   ApsoAdapterConfig,
   CrudPagination,
   ValidationError
-} from '../types/index.js';
-import { AdapterError, AdapterErrorCode } from '../types/index.js';
+} from '../types/index';
+import { AdapterError, AdapterErrorCode } from '../types/index';
 import { HttpClient } from '../client/HttpClient';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
