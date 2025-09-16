@@ -117,19 +117,29 @@ export default function HomePage() {
                 </Card>
               </div>
             ) : (
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button asChild size="lg">
-                  <Link href="/login">
-                    <Lock className="w-4 h-4 mr-2" />
-                    Sign In
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" size="lg">
-                  <Link href="/register">
-                    <Users className="w-4 h-4 mr-2" />
-                    Create Account
-                  </Link>
-                </Button>
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <Button asChild size="lg">
+                    <Link href="/login">
+                      <Lock className="w-4 h-4 mr-2" />
+                      Sign In
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="lg">
+                    <Link href="/register">
+                      <Users className="w-4 h-4 mr-2" />
+                      Create Account
+                    </Link>
+                  </Button>
+                </div>
+                <div className="flex justify-center">
+                  <Button asChild variant="ghost" size="lg">
+                    <a href="/GETTING_STARTED.md" target="_blank" rel="noopener noreferrer">
+                      <Code className="w-4 h-4 mr-2" />
+                      Setup Guide
+                    </a>
+                  </Button>
+                </div>
               </div>
             )}
           </div>
