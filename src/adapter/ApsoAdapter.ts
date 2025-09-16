@@ -580,6 +580,26 @@ export class ApsoAdapter implements IApsoAdapter {
     try {
       this.updateModelMetrics(params.model);
 
+      // Handle session deletion specially (since session ID is now a string token)
+      if (params.model.toLowerCase() === 'session') {
+        const sessionWhere = this.parseWhereClause(params.where);
+        if (sessionWhere.id || sessionWhere.token) {
+          const sessionToken = sessionWhere.id || sessionWhere.token;
+          // Use session operations to delete by token
+          const deletedSession = await this.sessionOperations.deleteSessionByToken(sessionToken);
+          this.updateSuccessMetrics(performance.now() - startTime);
+          return deletedSession as T;
+        } else {
+          throw new AdapterError(
+            AdapterErrorCode.VALIDATION_ERROR,
+            'Session deletion requires id or token',
+            params.where,
+            false,
+            400
+          );
+        }
+      }
+
       // Handle verification token deletion specially
       if (params.model.toLowerCase() === 'verificationtoken') {
         if (params.where.token && typeof params.where.token === 'string') {
