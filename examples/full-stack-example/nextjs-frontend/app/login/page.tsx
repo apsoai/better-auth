@@ -61,7 +61,7 @@ export default function LoginPage() {
 
         <Card className="shadow-brand">
           <CardHeader className="text-center space-y-4">
-            <div className="mx-auto h-12 w-12 rounded-lg bg-gradient-to-br from-primary to-brand-blue flex items-center justify-center">
+            <div className="mx-auto h-12 w-12 rounded-lg bg-primary flex items-center justify-center">
               <Lock className="h-6 w-6 text-white" />
             </div>
             <div>

@@ -118,7 +118,7 @@ export default function HomePage() {
               </div>
             ) : (
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button asChild size="lg" variant="gradient">
+                <Button asChild size="lg">
                   <Link href="/login">
                     <Lock className="w-4 h-4 mr-2" />
                     Sign In
