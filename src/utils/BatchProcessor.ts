@@ -1,6 +1,6 @@
 /**
  * Batch Processor Utility
- * 
+ *
  * This utility handles batch processing of operations with concurrency control
  * and progress tracking for bulk operations.
  */
@@ -52,7 +52,7 @@ export class BatchProcessor {
     // 3. Collect results and errors
     // 4. Call progress callback
     // 5. Return batch results
-    
+
     if (items.length === 0) {
       return {
         successful: [],
@@ -77,7 +77,7 @@ export class BatchProcessor {
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
       if (!batch) continue;
-      
+
       const batchStartIndex = i * this.config.batchSize;
 
       this.logger?.debug(`Processing batch ${i + 1}/${batches.length}`, {
@@ -140,7 +140,7 @@ export class BatchProcessor {
     for (let i = 0; i < batch.length; i++) {
       const item = batch[i];
       if (!item) continue;
-      
+
       const globalIndex = baseIndex + i;
 
       // Create processing promise
@@ -164,7 +164,7 @@ export class BatchProcessor {
       if (executing.length >= this.config.concurrency) {
         // Wait for at least one to complete
         await Promise.race(executing);
-        
+
         // Remove completed promises
         const stillExecuting = executing.filter(p => this.isPromisePending(p));
         executing.length = 0;
@@ -196,7 +196,7 @@ export class BatchProcessor {
   ): Promise<R> {
     try {
       const result = await processor(item, index);
-      
+
       this.logger?.debug('Item processed successfully', {
         index,
         hasResult: Boolean(result),
@@ -220,7 +220,7 @@ export class BatchProcessor {
    */
   private createBatches<T>(items: T[]): T[][] {
     const batches: T[][] = [];
-    
+
     for (let i = 0; i < items.length; i += this.config.batchSize) {
       batches.push(items.slice(i, i + this.config.batchSize));
     }

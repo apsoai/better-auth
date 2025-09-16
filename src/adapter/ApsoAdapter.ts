@@ -1,6 +1,6 @@
 /**
  * Core Apso Adapter Implementation
- * 
+ *
  * This class implements the Better Auth adapter interface and serves as the main
  * entry point for all database operations. It orchestrates the various components
  * (HttpClient, QueryTranslator, ResponseNormalizer, etc.) to provide a complete
@@ -22,10 +22,7 @@ import type {
   AdapterMetrics,
 } from '../types';
 import { EntityType } from '../types';
-import { 
-  AdapterError, 
-  AdapterErrorCode 
-} from '../types';
+import { AdapterError, AdapterErrorCode } from '../types';
 import { ConfigValidator } from '../utils/ConfigValidator';
 import { HttpClient } from '../client/HttpClient';
 import { QueryTranslator } from '../query/QueryTranslator';
@@ -34,6 +31,7 @@ import { EntityMapper } from '../response/EntityMapper';
 import { UserOperations } from '../operations/UserOperations';
 import { SessionOperations } from '../operations/SessionOperations';
 import { VerificationTokenOperations } from '../operations/VerificationTokenOperations';
+import { AccountOperations } from '../operations/AccountOperations';
 import { BulkOperations } from '../operations/BulkOperations';
 
 /**
@@ -53,6 +51,7 @@ export interface EntityOperations {
   userOperations: UserOperations;
   sessionOperations: SessionOperations;
   verificationTokenOperations: VerificationTokenOperations;
+  accountOperations: AccountOperations;
 }
 
 export class ApsoAdapter implements IApsoAdapter {
@@ -61,18 +60,19 @@ export class ApsoAdapter implements IApsoAdapter {
   private readonly queryTranslator: QueryTranslator;
   private readonly responseNormalizer: ResponseNormalizer;
   private readonly entityMapper: EntityMapper;
-  
+
   // Specialized operation handlers
   private readonly userOperations: UserOperations;
   private readonly sessionOperations: SessionOperations;
   private readonly verificationTokenOperations: VerificationTokenOperations;
-  
+  private readonly accountOperations: AccountOperations;
+
   // Bulk operations handler
   private readonly bulkOperations: BulkOperations;
-  
+
   // Metrics tracking
   private metrics: AdapterMetrics;
-  
+
   // Multi-tenancy support
   private tenantContext: string | null = null;
 
@@ -82,26 +82,34 @@ export class ApsoAdapter implements IApsoAdapter {
   ) {
     // Validate and normalize configuration
     this.config = ConfigValidator.validateAndThrow(config);
-    
+
     // Initialize components
     this.httpClient = components.httpClient;
     this.queryTranslator = components.queryTranslator;
     this.responseNormalizer = components.responseNormalizer;
     this.entityMapper = components.entityMapper;
-    
+
     // Initialize specialized operation handlers
     const operationsDependencies = {
       httpClient: this.httpClient,
       queryTranslator: this.queryTranslator,
       responseNormalizer: this.responseNormalizer,
       entityMapper: this.entityMapper,
-      config: this.config
+      config: this.config,
     };
-    
+
     this.userOperations = new UserOperations(operationsDependencies);
     this.sessionOperations = new SessionOperations(operationsDependencies);
-    this.verificationTokenOperations = new VerificationTokenOperations(operationsDependencies);
-    
+    this.verificationTokenOperations = new VerificationTokenOperations(
+      operationsDependencies
+    );
+    this.accountOperations = new AccountOperations(
+      this.config,
+      this.httpClient,
+      this.entityMapper,
+      this.responseNormalizer
+    );
+
     // Initialize bulk operations handler
     this.bulkOperations = new BulkOperations({
       httpClient: this.httpClient,
@@ -111,16 +119,22 @@ export class ApsoAdapter implements IApsoAdapter {
       userOperations: this.userOperations,
       sessionOperations: this.sessionOperations,
       verificationTokenOperations: this.verificationTokenOperations,
+      accountOperations: this.accountOperations,
     });
-    
+
     // Initialize metrics
     this.metrics = this.initializeMetrics();
-    
+
     if (this.config.logger) {
       this.config.logger.info('ApsoAdapter initialized', {
         baseUrl: this.config.baseUrl,
         components: Object.keys(components),
-        operations: ['UserOperations', 'SessionOperations', 'VerificationTokenOperations', 'BulkOperations']
+        operations: [
+          'UserOperations',
+          'SessionOperations',
+          'VerificationTokenOperations',
+          'BulkOperations',
+        ],
       });
     }
   }
@@ -152,39 +166,71 @@ export class ApsoAdapter implements IApsoAdapter {
   async create<T>(params: CreateParams): Promise<T> {
     const startTime = performance.now();
     
+    console.log('🔍 [SIGN-IN DEBUG] ApsoAdapter.create called with model:', params.model, 'data:', JSON.stringify(params.data, null, 2));
+
     try {
       // Track request
       this.updateModelMetrics(params.model);
-      
+
       // Route to specialized operations for supported models
       switch (params.model.toLowerCase()) {
         case 'user':
           const userResult = await this.userOperations.createUser(params.data);
           this.updateSuccessMetrics(performance.now() - startTime);
           return userResult as T;
-          
+
         case 'session':
+          // Debug logging to see what session data we're receiving
+          console.log('🔍 [DEBUG] Session creation - params.data:', JSON.stringify(params.data, null, 2));
+
           // Validate session data format
-          if (!params.data.sessionToken || !params.data.userId || !params.data.expiresAt) {
+          // Better Auth might pass 'token' instead of 'sessionToken'
+          const sessionToken = params.data.sessionToken || params.data.token;
+          console.log('🔍 [SESSION DEBUG] Extracted sessionToken:', sessionToken);
+          console.log('🔍 [SESSION DEBUG] userId:', params.data.userId);
+          console.log('🔍 [SESSION DEBUG] expiresAt:', params.data.expiresAt);
+
+          if (
+            !sessionToken ||
+            !params.data.userId ||
+            !params.data.expiresAt
+          ) {
+            console.error('🔍 [SESSION DEBUG] Validation failed - missing required fields');
             throw new AdapterError(
               AdapterErrorCode.VALIDATION_ERROR,
-              'Session creation requires sessionToken, userId, and expiresAt',
+              'Session creation requires sessionToken (or token), userId, and expiresAt',
               params.data,
               false,
               400
             );
           }
-          const sessionResult = await this.sessionOperations.createSession({
-            sessionToken: params.data.sessionToken,
-            userId: params.data.userId,
-            expiresAt: new Date(params.data.expiresAt)
-          });
-          this.updateSuccessMetrics(performance.now() - startTime);
-          return sessionResult as T;
-          
+
+          console.log('🔍 [SESSION DEBUG] Validation passed, creating session...');
+
+          try {
+            const sessionData = {
+              sessionToken: sessionToken,
+              userId: params.data.userId,
+              expiresAt: new Date(params.data.expiresAt),
+            };
+            console.log('🔍 [SESSION DEBUG] Calling createSession with:', JSON.stringify(sessionData, null, 2));
+
+            const sessionResult = await this.sessionOperations.createSession(sessionData);
+            console.log('🔍 [SESSION DEBUG] Session creation successful:', JSON.stringify(sessionResult, null, 2));
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return sessionResult as T;
+          } catch (sessionError) {
+            console.error('🔍 [SESSION DEBUG] Session creation failed with error:', sessionError);
+            throw sessionError;
+          }
+
         case 'verificationtoken':
           // Validate verification token data format
-          if (!params.data.identifier || !params.data.token || !params.data.expiresAt) {
+          if (
+            !params.data.identifier ||
+            !params.data.token ||
+            !params.data.expiresAt
+          ) {
             throw new AdapterError(
               AdapterErrorCode.VALIDATION_ERROR,
               'VerificationToken creation requires identifier, token, and expiresAt',
@@ -193,28 +239,71 @@ export class ApsoAdapter implements IApsoAdapter {
               400
             );
           }
-          const tokenResult = await this.verificationTokenOperations.createVerificationToken({
-            identifier: params.data.identifier,
-            token: params.data.token,
-            expiresAt: new Date(params.data.expiresAt)
-          });
+          const tokenResult =
+            await this.verificationTokenOperations.createVerificationToken({
+              identifier: params.data.identifier,
+              token: params.data.token,
+              expiresAt: new Date(params.data.expiresAt),
+            });
           this.updateSuccessMetrics(performance.now() - startTime);
           return tokenResult as T;
+
+        case 'account':
+          // Handle account creation - this is where Better Auth stores password hashes
+          console.log('🔍 [SIGN-IN DEBUG] Account creation - storing password hash');
           
+          // Transform account data to API format and create it
+          const accountTransformedData = this.entityMapper.transformOutbound(
+            params.model,
+            params.data
+          );
+          const accountApiPath = this.entityMapper.getApiPath(params.model);
+          const accountUrl = `${this.config.baseUrl}/${accountApiPath}`;
+
+          console.log('🔍 [SIGN-IN DEBUG] Creating account at:', accountUrl);
+          console.log('🔍 [SIGN-IN DEBUG] Account data:', accountTransformedData);
+
+          const accountResponse = await this.httpClient.post<any>(accountUrl, accountTransformedData, {
+            headers: this.buildHeaders(),
+            ...(this.config.timeout && { timeout: this.config.timeout }),
+          });
+
+          console.log('🔍 [SIGN-IN DEBUG] Account creation response:', accountResponse);
+
+          const accountNormalizedResponse =
+            this.responseNormalizer.normalizeSingleResponse(accountResponse);
+          const accountResult = this.entityMapper.transformInbound(
+            params.model,
+            accountNormalizedResponse
+          );
+
+          this.updateSuccessMetrics(performance.now() - startTime);
+          return accountResult as T;
+
         default:
           // Fall back to generic implementation for unsupported models
-          const transformedData = this.entityMapper.transformOutbound(params.model, params.data);
+          const transformedData = this.entityMapper.transformOutbound(
+            params.model,
+            params.data
+          );
           const apiPath = this.entityMapper.getApiPath(params.model);
           const url = `${this.config.baseUrl}/${apiPath}`;
-          
+
           const response = await this.httpClient.post<T>(url, transformedData, {
             headers: this.buildHeaders(),
             ...(this.config.timeout && { timeout: this.config.timeout }),
           });
-          
-          const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response);
-          const finalResult = this.entityMapper.transformInbound(params.model, normalizedResponse);
-          
+
+          const normalizedResponse =
+            this.responseNormalizer.normalizeSingleResponse(response);
+          console.log('🔍 [SESSION DEBUG] Normalized response:', JSON.stringify(normalizedResponse, null, 2));
+
+          const finalResult = this.entityMapper.transformInbound(
+            params.model,
+            normalizedResponse
+          );
+          console.log('🔍 [SESSION DEBUG] Final result returned to Better Auth:', JSON.stringify(finalResult, null, 2));
+
           this.updateSuccessMetrics(performance.now() - startTime);
           return finalResult;
       }
@@ -226,20 +315,29 @@ export class ApsoAdapter implements IApsoAdapter {
 
   async update<T>(params: UpdateParams): Promise<T> {
     const startTime = performance.now();
-    
+
     try {
       this.updateModelMetrics(params.model);
-      
+
       // Route to specialized operations for supported models
       switch (params.model.toLowerCase()) {
         case 'user':
           // Handle user-specific updates
           if (params.where.id && typeof params.where.id === 'string') {
-            const userResult = await this.userOperations.updateUser(params.where.id, params.update);
+            const userResult = await this.userOperations.updateUser(
+              params.where.id,
+              params.update
+            );
             this.updateSuccessMetrics(performance.now() - startTime);
             return userResult as T;
-          } else if (params.where.email && typeof params.where.email === 'string') {
-            const userResult = await this.userOperations.updateUserByEmail(params.where.email, params.update);
+          } else if (
+            params.where.email &&
+            typeof params.where.email === 'string'
+          ) {
+            const userResult = await this.userOperations.updateUserByEmail(
+              params.where.email,
+              params.update
+            );
             this.updateSuccessMetrics(performance.now() - startTime);
             return userResult as T;
           } else {
@@ -249,7 +347,7 @@ export class ApsoAdapter implements IApsoAdapter {
               where: params.where,
               ...(params.select && { select: params.select }),
             });
-            
+
             if (!existing) {
               throw new AdapterError(
                 AdapterErrorCode.NOT_FOUND,
@@ -259,21 +357,34 @@ export class ApsoAdapter implements IApsoAdapter {
                 404
               );
             }
-            
+
             const recordWithId = existing as any;
-            const userResult = await this.userOperations.updateUser(recordWithId.id, params.update);
+            const userResult = await this.userOperations.updateUser(
+              recordWithId.id,
+              params.update
+            );
             this.updateSuccessMetrics(performance.now() - startTime);
             return userResult as T;
           }
-          
+
         case 'session':
           // Handle session-specific updates
           if (params.where.id && typeof params.where.id === 'string') {
-            const sessionResult = await this.sessionOperations.updateSession(params.where.id, params.update);
+            const sessionResult = await this.sessionOperations.updateSession(
+              params.where.id,
+              params.update
+            );
             this.updateSuccessMetrics(performance.now() - startTime);
             return sessionResult as T;
-          } else if (params.where.sessionToken && typeof params.where.sessionToken === 'string') {
-            const sessionResult = await this.sessionOperations.updateSessionByToken(params.where.sessionToken, params.update);
+          } else if (
+            params.where.sessionToken &&
+            typeof params.where.sessionToken === 'string'
+          ) {
+            const sessionResult =
+              await this.sessionOperations.updateSessionByToken(
+                params.where.sessionToken,
+                params.update
+              );
             this.updateSuccessMetrics(performance.now() - startTime);
             return sessionResult as T;
           } else {
@@ -283,7 +394,7 @@ export class ApsoAdapter implements IApsoAdapter {
               where: params.where,
               ...(params.select && { select: params.select }),
             });
-            
+
             if (!existing) {
               throw new AdapterError(
                 AdapterErrorCode.NOT_FOUND,
@@ -293,19 +404,25 @@ export class ApsoAdapter implements IApsoAdapter {
                 404
               );
             }
-            
+
             const recordWithId = existing as any;
-            const sessionResult = await this.sessionOperations.updateSession(recordWithId.id, params.update);
+            const sessionResult = await this.sessionOperations.updateSession(
+              recordWithId.id,
+              params.update
+            );
             this.updateSuccessMetrics(performance.now() - startTime);
             return sessionResult as T;
           }
-          
+
         case 'verificationtoken':
           // VerificationTokens are typically not updated but consumed/deleted
           // For Better Auth compatibility, we allow updates but recommend using consume operations
           if (params.where.token && typeof params.where.token === 'string') {
             // Find the token first to get its current data
-            const existingToken = await this.verificationTokenOperations.findVerificationTokenByToken(params.where.token);
+            const existingToken =
+              await this.verificationTokenOperations.findVerificationTokenByToken(
+                params.where.token
+              );
             if (!existingToken) {
               throw new AdapterError(
                 AdapterErrorCode.NOT_FOUND,
@@ -315,26 +432,34 @@ export class ApsoAdapter implements IApsoAdapter {
                 404
               );
             }
-            
+
             // Delete the old token and create a new one with updates
-            await this.verificationTokenOperations.deleteVerificationToken(params.where.token);
+            await this.verificationTokenOperations.deleteVerificationToken(
+              params.where.token
+            );
             const updatedTokenData = {
               ...existingToken,
               ...params.update,
-              expiresAt: params.update.expiresAt ? new Date(params.update.expiresAt) : existingToken.expiresAt
+              expiresAt: params.update.expiresAt
+                ? new Date(params.update.expiresAt)
+                : existingToken.expiresAt,
             };
-            const tokenResult = await this.verificationTokenOperations.createVerificationToken({
-              identifier: updatedTokenData.identifier || existingToken!.identifier,
-              token: updatedTokenData.token || existingToken!.token,
-              expiresAt: updatedTokenData.expiresAt
-            });
+            const tokenResult =
+              await this.verificationTokenOperations.createVerificationToken({
+                identifier:
+                  updatedTokenData.identifier || existingToken!.identifier,
+                token: updatedTokenData.token || existingToken!.token,
+                expiresAt: updatedTokenData.expiresAt,
+              });
             this.updateSuccessMetrics(performance.now() - startTime);
             return tokenResult as T;
           } else {
             // Find token first using other criteria
-            const existingTokens = await this.verificationTokenOperations.findVerificationTokensByIdentifier(
-              params.where.identifier || '', { activeOnly: false, limit: 1 }
-            );
+            const existingTokens =
+              await this.verificationTokenOperations.findVerificationTokensByIdentifier(
+                params.where.identifier || '',
+                { activeOnly: false, limit: 1 }
+              );
             if (existingTokens.length === 0) {
               throw new AdapterError(
                 AdapterErrorCode.NOT_FOUND,
@@ -344,50 +469,67 @@ export class ApsoAdapter implements IApsoAdapter {
                 404
               );
             }
-            
+
             const existingToken = existingTokens[0];
-            await this.verificationTokenOperations.deleteVerificationToken(existingToken!.token);
+            await this.verificationTokenOperations.deleteVerificationToken(
+              existingToken!.token
+            );
             const updatedTokenData = {
               ...existingToken,
               ...params.update,
-              expiresAt: params.update.expiresAt ? new Date(params.update.expiresAt) : existingToken!.expiresAt
+              expiresAt: params.update.expiresAt
+                ? new Date(params.update.expiresAt)
+                : existingToken!.expiresAt,
             };
-            const tokenResult = await this.verificationTokenOperations.createVerificationToken({
-              identifier: updatedTokenData.identifier || existingToken!.identifier,
-              token: updatedTokenData.token || existingToken!.token,
-              expiresAt: updatedTokenData.expiresAt
-            });
+            const tokenResult =
+              await this.verificationTokenOperations.createVerificationToken({
+                identifier:
+                  updatedTokenData.identifier || existingToken!.identifier,
+                token: updatedTokenData.token || existingToken!.token,
+                expiresAt: updatedTokenData.expiresAt,
+              });
             this.updateSuccessMetrics(performance.now() - startTime);
             return tokenResult as T;
           }
-          
+
         default:
           // Fall back to generic implementation for unsupported models
-          const transformedData = this.entityMapper.transformOutbound(params.model, params.update);
-          
+          const transformedData = this.entityMapper.transformOutbound(
+            params.model,
+            params.update
+          );
+
           if (params.where.id && typeof params.where.id === 'string') {
             const apiPath = this.entityMapper.getApiPath(params.model);
             const url = `${this.config.baseUrl}/${apiPath}/${params.where.id}`;
-            
-            const response = await this.httpClient.patch<T>(url, transformedData, {
-              headers: this.buildHeaders(),
-              ...(this.config.timeout && { timeout: this.config.timeout }),
-            });
-            
-            const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response);
-            const result = this.entityMapper.transformInbound(params.model, normalizedResponse);
-            
+
+            const response = await this.httpClient.patch<T>(
+              url,
+              transformedData,
+              {
+                headers: this.buildHeaders(),
+                ...(this.config.timeout && { timeout: this.config.timeout }),
+              }
+            );
+
+            const normalizedResponse =
+              this.responseNormalizer.normalizeSingleResponse(response);
+            const result = this.entityMapper.transformInbound(
+              params.model,
+              normalizedResponse
+            );
+
             this.updateSuccessMetrics(performance.now() - startTime);
             return result;
           }
-          
+
           // For query-based updates, find the record first
           const existing = await this.findOne<T>({
             model: params.model,
             where: params.where,
             ...(params.select && { select: params.select }),
           });
-          
+
           if (!existing) {
             throw new AdapterError(
               AdapterErrorCode.NOT_FOUND,
@@ -397,7 +539,7 @@ export class ApsoAdapter implements IApsoAdapter {
               404
             );
           }
-          
+
           const recordWithId = existing as any;
           return this.update({
             ...params,
@@ -412,35 +554,38 @@ export class ApsoAdapter implements IApsoAdapter {
 
   async updateMany(params: UpdateManyParams): Promise<number> {
     const startTime = performance.now();
-    
+
     try {
       this.updateModelMetrics(params.model);
-      
+
       // Convert model name to EntityType enum
       const entityType = this.getEntityType(params.model);
-      
+
       // Use BulkOperations for efficient batch processing
       const updateManyOptions = {
         model: entityType,
         where: params.where || {},
         update: params.update,
       } as any;
-      
+
       if (this.config.batchConfig?.batchSize) {
         updateManyOptions.batchSize = this.config.batchConfig.batchSize;
       }
-      
+
       if (this.config.batchConfig?.concurrency) {
         updateManyOptions.maxConcurrency = this.config.batchConfig.concurrency;
       }
-      
+
       const result = await this.bulkOperations.updateMany(updateManyOptions);
-      
+
       // Update adapter metrics
       this.updateSuccessMetrics(performance.now() - startTime);
-      
+
       // Log bulk operation results
-      if (this.config.logger && (result.failures > 0 || result.errors.length > 0)) {
+      if (
+        this.config.logger &&
+        (result.failures > 0 || result.errors.length > 0)
+      ) {
         this.config.logger.warn('Bulk update completed with some failures', {
           model: params.model,
           success: result.success,
@@ -448,7 +593,7 @@ export class ApsoAdapter implements IApsoAdapter {
           errorCount: result.errors.length,
         });
       }
-      
+
       return result.success;
     } catch (error) {
       this.updateErrorMetrics(error, performance.now() - startTime);
@@ -458,23 +603,30 @@ export class ApsoAdapter implements IApsoAdapter {
 
   async delete<T>(params: DeleteParams): Promise<T> {
     const startTime = performance.now();
-    
+
     try {
       this.updateModelMetrics(params.model);
-      
+
       // Handle verification token deletion specially
       if (params.model.toLowerCase() === 'verificationtoken') {
         if (params.where.token && typeof params.where.token === 'string') {
           // Direct token deletion
-          const deletedToken = await this.verificationTokenOperations.deleteVerificationToken(params.where.token);
+          const deletedToken =
+            await this.verificationTokenOperations.deleteVerificationToken(
+              params.where.token
+            );
           this.updateSuccessMetrics(performance.now() - startTime);
           return deletedToken as T;
-        } else if (params.where.identifier && typeof params.where.identifier === 'string') {
+        } else if (
+          params.where.identifier &&
+          typeof params.where.identifier === 'string'
+        ) {
           // Find token by identifier and delete
-          const tokens = await this.verificationTokenOperations.findVerificationTokensByIdentifier(
-            params.where.identifier, 
-            { activeOnly: false, limit: 1 }
-          );
+          const tokens =
+            await this.verificationTokenOperations.findVerificationTokensByIdentifier(
+              params.where.identifier,
+              { activeOnly: false, limit: 1 }
+            );
           if (tokens.length === 0) {
             throw new AdapterError(
               AdapterErrorCode.NOT_FOUND,
@@ -485,7 +637,10 @@ export class ApsoAdapter implements IApsoAdapter {
             );
           }
           if (tokens[0]) {
-            const deletedToken = await this.verificationTokenOperations.deleteVerificationToken(tokens[0].token);
+            const deletedToken =
+              await this.verificationTokenOperations.deleteVerificationToken(
+                tokens[0].token
+              );
             this.updateSuccessMetrics(performance.now() - startTime);
             return deletedToken as T;
           } else {
@@ -507,7 +662,7 @@ export class ApsoAdapter implements IApsoAdapter {
           );
         }
       }
-      
+
       // For other models, use the standard deletion flow
       // Find the record first to return it
       const existing = await this.findOne<T>({
@@ -515,7 +670,7 @@ export class ApsoAdapter implements IApsoAdapter {
         where: params.where,
         ...(params.select && { select: params.select }),
       });
-      
+
       if (!existing) {
         throw new AdapterError(
           AdapterErrorCode.NOT_FOUND,
@@ -525,17 +680,17 @@ export class ApsoAdapter implements IApsoAdapter {
           404
         );
       }
-      
+
       // Delete using ID
       const recordWithId = existing as any;
       const apiPath = this.entityMapper.getApiPath(params.model);
       const url = `${this.config.baseUrl}/${apiPath}/${recordWithId.id}`;
-      
+
       await this.httpClient.delete(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-      
+
       this.updateSuccessMetrics(performance.now() - startTime);
       return existing;
     } catch (error) {
@@ -546,13 +701,13 @@ export class ApsoAdapter implements IApsoAdapter {
 
   async deleteMany(params: DeleteManyParams): Promise<number> {
     const startTime = performance.now();
-    
+
     try {
       this.updateModelMetrics(params.model);
-      
+
       // Convert model name to EntityType enum
       const entityType = this.getEntityType(params.model);
-      
+
       // Use BulkOperations for efficient batch processing
       // Enable cascade deletion for users by default for data integrity
       const deleteManyOptions = {
@@ -560,22 +715,25 @@ export class ApsoAdapter implements IApsoAdapter {
         where: params.where || {},
         cascadeDelete: entityType === EntityType.USER, // Enable cascade for users
       } as any;
-      
+
       if (this.config.batchConfig?.batchSize) {
         deleteManyOptions.batchSize = this.config.batchConfig.batchSize;
       }
-      
+
       if (this.config.batchConfig?.concurrency) {
         deleteManyOptions.maxConcurrency = this.config.batchConfig.concurrency;
       }
-      
+
       const result = await this.bulkOperations.deleteMany(deleteManyOptions);
-      
+
       // Update adapter metrics
       this.updateSuccessMetrics(performance.now() - startTime);
-      
+
       // Log bulk operation results
-      if (this.config.logger && (result.failures > 0 || result.errors.length > 0)) {
+      if (
+        this.config.logger &&
+        (result.failures > 0 || result.errors.length > 0)
+      ) {
         this.config.logger.warn('Bulk delete completed with some failures', {
           model: params.model,
           success: result.success,
@@ -583,7 +741,7 @@ export class ApsoAdapter implements IApsoAdapter {
           errorCount: result.errors.length,
         });
       }
-      
+
       return result.success;
     } catch (error) {
       this.updateErrorMetrics(error, performance.now() - startTime);
@@ -594,103 +752,176 @@ export class ApsoAdapter implements IApsoAdapter {
   async findOne<T>(params: FindOneParams): Promise<T | null> {
     const startTime = performance.now();
     
+    console.log('🔍 [SIGN-IN DEBUG] ApsoAdapter.findOne called with model:', params.model, 'where:', JSON.stringify(params.where, null, 2));
+
     try {
       // Track request
       this.updateModelMetrics(params.model);
-      
+
       // Route to specialized operations for supported models
       switch (params.model.toLowerCase()) {
         case 'user':
-          // Handle user-specific lookups
-          if (params.where.id && typeof params.where.id === 'string') {
-            const userResult = await this.userOperations.findUserById(params.where.id);
+          // Parse where clause using the new parser
+          const userWhere = this.parseWhereClause(params.where);
+
+          if (userWhere.id) {
+            console.log('🔍 [USER DEBUG] Looking up user by ID:', userWhere.id);
+            // For UUID lookups, use findManyUsers with filtering since direct ID lookup expects numeric
+            const users = await this.userOperations.findManyUsers({
+              where: { id: userWhere.id },
+              pagination: { limit: 1 },
+            });
+            const userResult = users.length > 0 ? users[0] : null;
+            console.log('🔍 [USER DEBUG] User lookup result:', userResult ? 'FOUND' : 'NULL');
             this.updateSuccessMetrics(performance.now() - startTime);
             return userResult as T;
-          } else if (params.where.email && typeof params.where.email === 'string') {
-            const userResult = await this.userOperations.findUserByEmail(params.where.email);
+          } else if (userWhere.email) {
+            const userResult = await this.userOperations.findUserByEmail(userWhere.email);
             this.updateSuccessMetrics(performance.now() - startTime);
             return userResult as T;
           } else {
             // For other user filters, use findManyUsers with limit 1
             const users = await this.userOperations.findManyUsers({
               where: params.where,
-              pagination: { limit: 1 }
+              pagination: { limit: 1 },
             });
             this.updateSuccessMetrics(performance.now() - startTime);
-            return users.length > 0 ? users[0] as T : null;
+            return users.length > 0 ? (users[0] as T) : null;
           }
-          
+
         case 'session':
-          // Handle session-specific lookups
-          if (params.where.id && typeof params.where.id === 'string') {
-            const sessionResult = await this.sessionOperations.findSessionById(params.where.id);
+          console.log('🔍 [SESSION LOOKUP DEBUG] Session findOne called with where:', JSON.stringify(params.where, null, 2));
+
+          // Parse where clause using the new parser
+          const sessionWhere = this.parseWhereClause(params.where);
+          console.log('🔍 [SESSION LOOKUP DEBUG] Parsed session where:', JSON.stringify(sessionWhere, null, 2));
+
+          if (sessionWhere.id) {
+            console.log('🔍 [SESSION LOOKUP DEBUG] Using findSessionById with ID:', sessionWhere.id);
+            const sessionResult = await this.sessionOperations.findSessionById(sessionWhere.id);
             this.updateSuccessMetrics(performance.now() - startTime);
             return sessionResult as T;
-          } else if (params.where.sessionToken && typeof params.where.sessionToken === 'string') {
-            const sessionResult = await this.sessionOperations.findSessionByToken(params.where.sessionToken);
+          } else if (sessionWhere.sessionToken) {
+            console.log('🔍 [SESSION LOOKUP DEBUG] Using findSessionByToken with sessionToken:', sessionWhere.sessionToken);
+            const sessionResult = await this.sessionOperations.findSessionByToken(sessionWhere.sessionToken);
+            console.log('🔍 [SESSION LOOKUP DEBUG] findSessionByToken result:', sessionResult ? 'FOUND' : 'NULL');
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return sessionResult as T;
+          } else if (sessionWhere.token) {
+            console.log('🔍 [SESSION LOOKUP DEBUG] Using findSessionByToken with token:', sessionWhere.token);
+            // Handle both sessionToken and token field names
+            const sessionResult = await this.sessionOperations.findSessionByToken(sessionWhere.token);
+            console.log('🔍 [SESSION LOOKUP DEBUG] findSessionByToken result:', sessionResult ? 'FOUND' : 'NULL');
             this.updateSuccessMetrics(performance.now() - startTime);
             return sessionResult as T;
           } else {
             // For other session filters, use findManySessions with limit 1
             const sessions = await this.sessionOperations.findManySessions({
-              where: params.where,
-              pagination: { limit: 1 }
+              where: sessionWhere,
+              pagination: { limit: 1 },
             });
             this.updateSuccessMetrics(performance.now() - startTime);
-            return sessions.length > 0 ? sessions[0] as T : null;
+            return sessions.length > 0 ? (sessions[0] as T) : null;
           }
-          
+
+        case 'account':
+          console.log('🔍 [SIGN-IN DEBUG] Account findOne - params.where:', JSON.stringify(params.where, null, 2));
+
+          // Parse where clause using the new parser
+          const accountWhere = this.parseWhereClause(params.where);
+          console.log('🔍 [SIGN-IN DEBUG] Account findOne - parsed where:', JSON.stringify(accountWhere, null, 2));
+
+          if (accountWhere.id) {
+            // Find account by ID
+            const accountResult = await this.accountOperations.findAccountById(accountWhere.id);
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return accountResult as T;
+          } else if (accountWhere.userId) {
+            // Find account by user ID
+            const accountResult = await this.accountOperations.findAccountByUserId(accountWhere.userId);
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return accountResult as T;
+          } else {
+            // For other account filters, use findManyAccounts with limit 1
+            const accounts = await this.accountOperations.findManyAccounts({
+              where: params.where,
+              pagination: { limit: 1 },
+            });
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return accounts.length > 0 ? (accounts[0] as T) : null;
+          }
+
         case 'verificationtoken':
           // Handle verification token-specific lookups
           if (params.where.token && typeof params.where.token === 'string') {
-            const tokenResult = await this.verificationTokenOperations.findVerificationTokenByToken(params.where.token);
+            const tokenResult =
+              await this.verificationTokenOperations.findVerificationTokenByToken(
+                params.where.token
+              );
             this.updateSuccessMetrics(performance.now() - startTime);
             return tokenResult as T;
-          } else if (params.where.identifier && typeof params.where.identifier === 'string') {
-            const tokens = await this.verificationTokenOperations.findVerificationTokensByIdentifier(
-              params.where.identifier, 
-              { activeOnly: true, limit: 1 }
-            );
+          } else if (
+            params.where.identifier &&
+            typeof params.where.identifier === 'string'
+          ) {
+            const tokens =
+              await this.verificationTokenOperations.findVerificationTokensByIdentifier(
+                params.where.identifier,
+                { activeOnly: true, limit: 1 }
+              );
             this.updateSuccessMetrics(performance.now() - startTime);
-            return tokens.length > 0 ? tokens[0] as T : null;
+            return tokens.length > 0 ? (tokens[0] as T) : null;
           } else {
             // For other token filters, find by identifier or return null
             const identifier = params.where.identifier;
             if (identifier) {
-              const tokens = await this.verificationTokenOperations.findVerificationTokensByIdentifier(
-                identifier, 
-                { activeOnly: true, limit: 1 }
-              );
+              const tokens =
+                await this.verificationTokenOperations.findVerificationTokensByIdentifier(
+                  identifier,
+                  { activeOnly: true, limit: 1 }
+                );
               this.updateSuccessMetrics(performance.now() - startTime);
-              return tokens.length > 0 ? tokens[0] as T : null;
+              return tokens.length > 0 ? (tokens[0] as T) : null;
             }
             this.updateSuccessMetrics(performance.now() - startTime);
             return null;
           }
-          
+
         default:
+          console.log('🔍 [ADAPTER DEBUG] findOne DEFAULT case - unsupported model:', params.model);
+          console.log('🔍 [ADAPTER DEBUG] findOne DEFAULT case - where:', JSON.stringify(params.where, null, 2));
+
+          // Parse where clause for generic handling
+          const genericWhere = this.parseWhereClause(params.where);
+          console.log('🔍 [ADAPTER DEBUG] findOne DEFAULT case - parsed where:', JSON.stringify(genericWhere, null, 2));
+
           // Fall back to generic implementation for unsupported models
-          if (params.where.id && typeof params.where.id === 'string') {
-            return this.findById<T>(params.model, params.where.id);
+          if (genericWhere.id && typeof genericWhere.id === 'string') {
+            console.log('🔍 [ADAPTER DEBUG] findOne DEFAULT case - using findById with ID:', genericWhere.id);
+            return this.findById<T>(params.model, genericWhere.id);
           }
-          
+
           this.queryTranslator.buildFindQuery(params.where, { limit: 1 });
           const apiPath = this.entityMapper.getApiPath(params.model);
           const url = `${this.config.baseUrl}/${apiPath}`;
-          
+
           const response = await this.httpClient.get<T[]>(url, {
             headers: this.buildHeaders(),
             ...(this.config.timeout && { timeout: this.config.timeout }),
           });
-          
-          const normalizedResults = this.responseNormalizer.normalizeArrayResponse(response);
-          
+
+          const normalizedResults =
+            this.responseNormalizer.normalizeArrayResponse(response);
+
           if (!normalizedResults || normalizedResults.length === 0) {
             this.updateSuccessMetrics(performance.now() - startTime);
             return null;
           }
-          
-          const result = this.entityMapper.transformInbound(params.model, normalizedResults[0]);
+
+          const result = this.entityMapper.transformInbound(
+            params.model,
+            normalizedResults[0]
+          );
           this.updateSuccessMetrics(performance.now() - startTime);
           return result;
       }
@@ -702,36 +933,62 @@ export class ApsoAdapter implements IApsoAdapter {
 
   async findMany<T>(params: FindManyParams): Promise<T[]> {
     const startTime = performance.now();
-    
+
+    console.log('🔍 [ADAPTER DEBUG] findMany called with model:', params.model);
+    console.log('🔍 [ADAPTER DEBUG] findMany where:', JSON.stringify(params.where, null, 2));
+
     try {
       this.updateModelMetrics(params.model);
-      
+
+      // Parse where clause for filtering
+      const whereClause = this.parseWhereClause(params.where || {});
+      console.log('🔍 [ADAPTER DEBUG] findMany parsed where:', JSON.stringify(whereClause, null, 2));
+
       // Build query parameters (for potential future use with query string)
       this.queryTranslator.buildFindQuery(
-        params.where || {},
+        whereClause,
         params.pagination,
         params.orderBy
       );
-      
+
       // Get API path
       const apiPath = this.entityMapper.getApiPath(params.model);
       const url = `${this.config.baseUrl}/${apiPath}`;
-      
+
       // Execute request
       const response = await this.httpClient.get<T[]>(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
-        // TODO: Add query params to URL
+        // TODO: Add query params to URL for filtering
       });
-      
+
       // Normalize response (handle both array and paginated responses)
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(response);
-      
+      const normalizedResults =
+        this.responseNormalizer.normalizeArrayResponse(response);
+
+      console.log('🔍 [ADAPTER DEBUG] findMany raw results count:', normalizedResults.length);
+
+      // Client-side filtering since we don't have query params yet
+      let filteredResults = normalizedResults;
+      if (whereClause && Object.keys(whereClause).length > 0) {
+        filteredResults = normalizedResults.filter(item => {
+          for (const [field, value] of Object.entries(whereClause)) {
+            if (item[field] !== value) {
+              return false;
+            }
+          }
+          return true;
+        });
+        console.log('🔍 [ADAPTER DEBUG] findMany filtered results count:', filteredResults.length);
+      }
+
       // Transform each result
-      const transformedResults = normalizedResults.map(item => 
+      const transformedResults = filteredResults.map(item =>
         this.entityMapper.transformInbound(params.model, item)
       );
-      
+
+      console.log('🔍 [ADAPTER DEBUG] findMany transformed results:', JSON.stringify(transformedResults, null, 2));
+
       this.updateSuccessMetrics(performance.now() - startTime);
       return transformedResults;
     } catch (error) {
@@ -742,30 +999,31 @@ export class ApsoAdapter implements IApsoAdapter {
 
   async count(params: CountParams): Promise<number> {
     const startTime = performance.now();
-    
+
     try {
       this.updateModelMetrics(params.model);
-      
+
       // Build query parameters (for potential future use with query string)
       this.queryTranslator.buildFindQuery(
         params.where || {},
         { limit: 1 } // We only need count, not the data
       );
-      
+
       // Get API path
       const apiPath = this.entityMapper.getApiPath(params.model);
       const url = `${this.config.baseUrl}/${apiPath}`;
-      
+
       // Execute request
       const response = await this.httpClient.get(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
         // TODO: Add query params to URL
       });
-      
+
       // Try to get count from response metadata
-      const normalizedResponse = this.responseNormalizer.normalizeCountResponse(response);
-      
+      const normalizedResponse =
+        this.responseNormalizer.normalizeCountResponse(response);
+
       this.updateSuccessMetrics(performance.now() - startTime);
       return normalizedResponse;
     } catch (error) {
@@ -775,7 +1033,7 @@ export class ApsoAdapter implements IApsoAdapter {
           model: params.model,
           ...(params.where && { where: params.where }),
         });
-        
+
         this.updateSuccessMetrics(performance.now() - startTime);
         return allRecords.length;
       } catch (fallbackError) {
@@ -791,18 +1049,18 @@ export class ApsoAdapter implements IApsoAdapter {
 
   async createMany<T>(params: CreateManyParams): Promise<T[]> {
     const startTime = performance.now();
-    
+
     try {
       this.updateModelMetrics(params.model);
-      
+
       if (!params.data || params.data.length === 0) {
         this.updateSuccessMetrics(performance.now() - startTime);
         return [];
       }
-      
+
       // Convert model name to EntityType enum
       const entityType = this.getEntityType(params.model);
-      
+
       // Use BulkOperations for efficient batch processing
       const createManyOptions = {
         model: entityType,
@@ -810,22 +1068,25 @@ export class ApsoAdapter implements IApsoAdapter {
         skipDuplicates: true, // Skip duplicates by default for safety
         validateBeforeInsert: true, // Validate data by default
       } as any;
-      
+
       if (this.config.batchConfig?.batchSize) {
         createManyOptions.batchSize = this.config.batchConfig.batchSize;
       }
-      
+
       if (this.config.batchConfig?.concurrency) {
         createManyOptions.maxConcurrency = this.config.batchConfig.concurrency;
       }
-      
+
       const result = await this.bulkOperations.createMany(createManyOptions);
-      
+
       // Update adapter metrics
       this.updateSuccessMetrics(performance.now() - startTime);
-      
+
       // Log bulk operation results
-      if (this.config.logger && (result.failures > 0 || result.errors.length > 0)) {
+      if (
+        this.config.logger &&
+        (result.failures > 0 || result.errors.length > 0)
+      ) {
         this.config.logger.warn('Bulk create completed with some failures', {
           model: params.model,
           success: result.success,
@@ -833,7 +1094,7 @@ export class ApsoAdapter implements IApsoAdapter {
           errorCount: result.errors.length,
         });
       }
-      
+
       return result.results || [];
     } catch (error) {
       this.updateErrorMetrics(error, performance.now() - startTime);
@@ -860,7 +1121,7 @@ export class ApsoAdapter implements IApsoAdapter {
 
   resetMetrics(): void {
     this.metrics = this.initializeMetrics();
-    
+
     if (this.config.logger) {
       this.config.logger.info('Adapter metrics reset');
     }
@@ -875,7 +1136,7 @@ export class ApsoAdapter implements IApsoAdapter {
 
   setTenantContext(tenantId: string): void {
     this.tenantContext = tenantId;
-    
+
     if (this.config.logger) {
       this.config.logger.debug('Tenant context set', { tenantId });
     }
@@ -888,13 +1149,16 @@ export class ApsoAdapter implements IApsoAdapter {
   async close(): Promise<void> {
     try {
       // Close HTTP client connections if supported
-      if ('close' in this.httpClient && typeof this.httpClient.close === 'function') {
+      if (
+        'close' in this.httpClient &&
+        typeof this.httpClient.close === 'function'
+      ) {
         await this.httpClient.close();
       }
-      
+
       // Clear any remaining caches
       this.clearCache();
-      
+
       if (this.config.logger) {
         this.config.logger.info('ApsoAdapter closed successfully');
       }
@@ -911,23 +1175,74 @@ export class ApsoAdapter implements IApsoAdapter {
   // =============================================================================
 
   /**
+   * Parse Better Auth where clause array format to our API format
+   */
+  private parseWhereClause(where: any): Record<string, any> {
+    if (Array.isArray(where)) {
+      const result: Record<string, any> = {};
+      for (const condition of where) {
+        const { field, value, operator = 'eq' } = condition;
+
+        switch (operator) {
+          case 'eq':
+            result[field] = value;
+            break;
+          case 'ne':
+            result[field] = { $ne: value };
+            break;
+          case 'lt':
+            result[field] = { $lt: value };
+            break;
+          case 'lte':
+            result[field] = { $lte: value };
+            break;
+          case 'gt':
+            result[field] = { $gt: value };
+            break;
+          case 'gte':
+            result[field] = { $gte: value };
+            break;
+          case 'in':
+            result[field] = { $in: value };
+            break;
+          case 'contains':
+            result[field] = { $contains: value };
+            break;
+          default:
+            result[field] = value;
+        }
+      }
+      return result;
+    }
+
+    // If not array, assume it's already in correct format
+    return where as Record<string, any>;
+  }
+
+  /**
    * Find a record by its ID using direct API call
    */
   private async findById<T>(model: string, id: string): Promise<T | null> {
     try {
       const apiPath = this.entityMapper.getApiPath(model);
       const url = `${this.config.baseUrl}/${apiPath}/${id}`;
-      
+
       const response = await this.httpClient.get<T>(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-      
-      const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response);
+
+      const normalizedResponse =
+        this.responseNormalizer.normalizeSingleResponse(response);
       return this.entityMapper.transformInbound(model, normalizedResponse);
     } catch (error) {
       // If it's a 404, return null instead of throwing
-      if (error && typeof error === 'object' && 'statusCode' in error && error.statusCode === 404) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'statusCode' in error &&
+        error.statusCode === 404
+      ) {
         return null;
       }
       throw error;
@@ -940,7 +1255,7 @@ export class ApsoAdapter implements IApsoAdapter {
   private buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      Accept: 'application/json',
     };
 
     // Add API key if configured
@@ -972,8 +1287,9 @@ export class ApsoAdapter implements IApsoAdapter {
   private updateSuccessMetrics(duration: number): void {
     this.metrics.successfulRequests++;
     // TODO: Update latency percentiles when we add proper tracking
-    this.metrics.averageLatency = 
-      (this.metrics.averageLatency * (this.metrics.successfulRequests - 1) + duration) / 
+    this.metrics.averageLatency =
+      (this.metrics.averageLatency * (this.metrics.successfulRequests - 1) +
+        duration) /
       this.metrics.successfulRequests;
   }
 
@@ -982,7 +1298,7 @@ export class ApsoAdapter implements IApsoAdapter {
    */
   private updateErrorMetrics(error: any, _duration: number): void {
     this.metrics.failedRequests++;
-    
+
     // Track error by type
     const errorCode = this.getErrorCode(error);
     const current = this.metrics.errorsByType.get(errorCode) || 0;
@@ -992,18 +1308,25 @@ export class ApsoAdapter implements IApsoAdapter {
   /**
    * Handle and normalize errors
    */
-  private handleError(error: any, operation: string, model: string): AdapterError {
+  private handleError(
+    error: any,
+    operation: string,
+    model: string
+  ): AdapterError {
     // If it's already an AdapterError with a specific message, preserve it
     if (error instanceof AdapterError) {
       if (this.config.logger) {
-        this.config.logger.error(`${operation} operation failed for model ${model}`, { error, operation, model });
+        this.config.logger.error(
+          `${operation} operation failed for model ${model}`,
+          { error, operation, model }
+        );
       }
       return error;
     }
 
     const errorCode = this.getErrorCode(error);
     const message = `${operation} operation failed for model ${model}`;
-    
+
     if (this.config.logger) {
       this.config.logger.error(message, { error, operation, model });
     }
@@ -1024,29 +1347,38 @@ export class ApsoAdapter implements IApsoAdapter {
     if (error && typeof error === 'object') {
       if ('statusCode' in error) {
         switch (error.statusCode) {
-          case 400: return AdapterErrorCode.VALIDATION_ERROR;
-          case 401: return AdapterErrorCode.UNAUTHORIZED;
-          case 403: return AdapterErrorCode.FORBIDDEN;
-          case 404: return AdapterErrorCode.NOT_FOUND;
-          case 409: return AdapterErrorCode.CONFLICT;
-          case 429: return AdapterErrorCode.RATE_LIMIT;
+          case 400:
+            return AdapterErrorCode.VALIDATION_ERROR;
+          case 401:
+            return AdapterErrorCode.UNAUTHORIZED;
+          case 403:
+            return AdapterErrorCode.FORBIDDEN;
+          case 404:
+            return AdapterErrorCode.NOT_FOUND;
+          case 409:
+            return AdapterErrorCode.CONFLICT;
+          case 429:
+            return AdapterErrorCode.RATE_LIMIT;
           case 500:
           case 502:
           case 503:
-          case 504: return AdapterErrorCode.SERVER_ERROR;
+          case 504:
+            return AdapterErrorCode.SERVER_ERROR;
         }
       }
-      
+
       if ('code' in error) {
         switch (error.code) {
           case 'ECONNREFUSED':
           case 'ENOTFOUND':
-          case 'ECONNRESET': return AdapterErrorCode.NETWORK_ERROR;
-          case 'ETIMEDOUT': return AdapterErrorCode.TIMEOUT;
+          case 'ECONNRESET':
+            return AdapterErrorCode.NETWORK_ERROR;
+          case 'ETIMEDOUT':
+            return AdapterErrorCode.TIMEOUT;
         }
       }
     }
-    
+
     return AdapterErrorCode.UNKNOWN;
   }
 
@@ -1056,7 +1388,10 @@ export class ApsoAdapter implements IApsoAdapter {
   private isRetryableError(error: any): boolean {
     const statusCode = this.getStatusCode(error);
     if (statusCode) {
-      return this.config.retryConfig?.retryableStatuses?.includes(statusCode) ?? false;
+      return (
+        this.config.retryConfig?.retryableStatuses?.includes(statusCode) ??
+        false
+      );
     }
     return false;
   }
@@ -1077,7 +1412,7 @@ export class ApsoAdapter implements IApsoAdapter {
    */
   private getEntityType(model: string): EntityType {
     const normalizedModel = model.toLowerCase();
-    
+
     switch (normalizedModel) {
       case 'user':
         return EntityType.USER;

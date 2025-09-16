@@ -1,6 +1,6 @@
 /**
  * HTTP Client Implementation with Retry Logic
- * 
+ *
  * This class provides a robust HTTP client with built-in retry logic,
  * timeout handling, error mapping, and request/response logging.
  * It serves as the foundation for all HTTP communication with the Apso API.
@@ -26,14 +26,14 @@ export class HttpClient implements IHttpClient {
   private readonly logger: Logger | undefined;
   private readonly interceptors: HttpInterceptors;
   // private readonly observability: HttpObservabilityConfig;
-  
+
   // Metrics properties
   private requestCount = 0;
   private successCount = 0;
   private errorCount = 0;
   private totalLatency = 0;
   private latencyBuckets: number[] = [];
-  
+
   // Mock circuit breaker and connection pool for now
   private circuitBreaker = {
     getStats: (): CircuitBreakerStats => ({
@@ -42,9 +42,9 @@ export class HttpClient implements IHttpClient {
       successes: 0,
       requests: 0,
     }),
-    reset: () => {}
+    reset: () => {},
   };
-  
+
   private connectionPool = {
     getStats: (): ConnectionPoolStats => ({
       activeConnections: 0,
@@ -54,7 +54,7 @@ export class HttpClient implements IHttpClient {
       connectionTimeouts: 0,
       requestsWaiting: 0,
     }),
-    destroy: () => {}
+    destroy: () => {},
   };
 
   constructor(config?: HttpClientConfig) {
@@ -69,7 +69,7 @@ export class HttpClient implements IHttpClient {
       },
       ...config,
     };
-    
+
     this.logger = this.config.logger || undefined;
     this.interceptors = this.config.interceptors || {};
     // this.observability = this.config.observability || {
@@ -80,15 +80,80 @@ export class HttpClient implements IHttpClient {
     // };
   }
 
-  async request<T>(_config: RequestConfig): Promise<T> {
-    // TODO: Implement core request method with retry logic
+  async request<T>(config: RequestConfig): Promise<T> {
     // 1. Validate request configuration
+    if (!config.url) {
+      throw new Error('URL is required for HTTP request');
+    }
+
     // 2. Apply default timeout if not specified
-    // 3. Execute request with retry handler
-    // 4. Parse and validate response
-    // 5. Map HTTP errors to AdapterErrors
-    // 6. Log request/response for debugging
-    throw new Error('Method not implemented');
+    const timeout = config.timeout || this.config.timeout || 30000;
+
+    // 3. Prepare fetch options
+    const fetchOptions: RequestInit = {
+      method: config.method || 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...config.headers,
+      },
+    };
+
+    if (config.body) {
+      fetchOptions.body = typeof config.body === 'string' ? config.body : JSON.stringify(config.body);
+    }
+
+    // 4. Execute request with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(config.url, {
+        ...fetchOptions,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      // 5. Parse and validate response
+      if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+
+        // Try to get more detailed error info from response body
+        try {
+          const errorBody = await response.text();
+          if (errorBody) {
+            const parsed = JSON.parse(errorBody);
+            if (parsed.message) {
+              errorMessage = parsed.message;
+            } else if (parsed.error) {
+              errorMessage = parsed.error;
+            }
+          }
+        } catch (e) {
+          // Ignore parsing errors, use default message
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        return await response.json() as T;
+      } else {
+        return await response.text() as unknown as T;
+      }
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      // 6. Map HTTP errors to appropriate error types
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          throw new Error(`Request timeout after ${timeout}ms`);
+        }
+        throw error;
+      }
+      throw new Error('Unknown error occurred during HTTP request');
+    }
   }
 
   async get<T>(
@@ -184,34 +249,36 @@ export class HttpClient implements IHttpClient {
   // =============================================================================
   // Interceptors - Implementation will be added when needed
   // =============================================================================
-  
+
   // =============================================================================
   // Validation and Utilities - Implementation will be added when needed
   // =============================================================================
-  
+
   // =============================================================================
   // Metrics and Observability - Implementation will be added when needed
   // =============================================================================
-  
+
   // =============================================================================
   // Public Management Methods
   // =============================================================================
-  
+
   /**
    * Get HTTP client metrics
    */
   getMetrics() {
     const latencySorted = [...this.latencyBuckets].sort((a, b) => a - b);
-    
+
     return {
       requests: {
         total: this.requestCount,
         successful: this.successCount,
         failed: this.errorCount,
-        successRate: this.requestCount > 0 ? this.successCount / this.requestCount : 0,
+        successRate:
+          this.requestCount > 0 ? this.successCount / this.requestCount : 0,
       },
       latency: {
-        average: this.requestCount > 0 ? this.totalLatency / this.requestCount : 0,
+        average:
+          this.requestCount > 0 ? this.totalLatency / this.requestCount : 0,
         p50: this.getPercentile(latencySorted, 0.5),
         p95: this.getPercentile(latencySorted, 0.95),
         p99: this.getPercentile(latencySorted, 0.99),
@@ -220,14 +287,14 @@ export class HttpClient implements IHttpClient {
       connectionPool: this.connectionPool.getStats(),
     };
   }
-  
+
   private getPercentile(sortedArray: number[], percentile: number): number {
     if (sortedArray.length === 0) return 0;
     const index = Math.ceil(sortedArray.length * percentile) - 1;
     const clampedIndex = Math.max(0, Math.min(index, sortedArray.length - 1));
     return sortedArray[clampedIndex] || 0;
   }
-  
+
   /**
    * Reset all metrics
    */
@@ -240,7 +307,7 @@ export class HttpClient implements IHttpClient {
     this.circuitBreaker.reset();
     this.logger?.info('HttpClient metrics reset');
   }
-  
+
   /**
    * Add request interceptor
    */
@@ -250,7 +317,7 @@ export class HttpClient implements IHttpClient {
     }
     this.interceptors.request.push(interceptor);
   }
-  
+
   /**
    * Add response interceptor
    */
@@ -260,7 +327,7 @@ export class HttpClient implements IHttpClient {
     }
     this.interceptors.response.push(interceptor);
   }
-  
+
   /**
    * Add error interceptor
    */
@@ -270,7 +337,7 @@ export class HttpClient implements IHttpClient {
     }
     this.interceptors.error.push(interceptor);
   }
-  
+
   /**
    * Gracefully close the HTTP client
    */
@@ -278,7 +345,7 @@ export class HttpClient implements IHttpClient {
     this.connectionPool.destroy();
     this.logger?.info('HttpClient closed');
   }
-  
+
   // =============================================================================
   // Private Helper Methods
   // =============================================================================
@@ -298,7 +365,9 @@ export function createHttpClient(config?: HttpClientConfig): HttpClient {
 /**
  * Create HttpClient optimized for high-throughput scenarios
  */
-export function createHighThroughputHttpClient(config?: HttpClientConfig): HttpClient {
+export function createHighThroughputHttpClient(
+  config?: HttpClientConfig
+): HttpClient {
   const defaultConfig: HttpClientConfig = {
     backend: 'fetch',
     timeout: 15000,
@@ -331,14 +400,16 @@ export function createHighThroughputHttpClient(config?: HttpClientConfig): HttpC
     },
     ...config,
   };
-  
+
   return new HttpClient(defaultConfig);
 }
 
 /**
  * Create HttpClient optimized for reliability over performance
  */
-export function createReliableHttpClient(config?: HttpClientConfig): HttpClient {
+export function createReliableHttpClient(
+  config?: HttpClientConfig
+): HttpClient {
   const defaultConfig: HttpClientConfig = {
     backend: 'fetch',
     timeout: 60000,
@@ -372,6 +443,6 @@ export function createReliableHttpClient(config?: HttpClientConfig): HttpClient 
     },
     ...config,
   };
-  
+
   return new HttpClient(defaultConfig);
 }

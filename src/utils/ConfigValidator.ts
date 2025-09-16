@@ -3,11 +3,11 @@
  * Provides comprehensive runtime validation, normalization, and health checks
  */
 
-import { 
-  ApsoAdapterConfig, 
+import {
+  ApsoAdapterConfig,
   LogLevel,
   AdapterError,
-  AdapterErrorCode 
+  AdapterErrorCode,
 } from '../types';
 
 // =============================================================================
@@ -41,7 +41,7 @@ export enum ConfigErrorCode {
   INVALID_VALUE = 'INVALID_VALUE',
   INVALID_TYPE = 'INVALID_TYPE',
   CONFLICTING_OPTIONS = 'CONFLICTING_OPTIONS',
-  SECURITY_RISK = 'SECURITY_RISK'
+  SECURITY_RISK = 'SECURITY_RISK',
 }
 
 // =============================================================================
@@ -52,53 +52,53 @@ export enum ConfigErrorCode {
  * Configuration validation limits with security and performance considerations
  */
 const VALIDATION_LIMITS = {
-  /** 
+  /**
    * HTTP timeout limits: 1s minimum to prevent very fast timeouts that could cause cascading failures.
    * 5min maximum to prevent indefinitely hanging requests that consume resources.
    */
   timeout: { min: 1000, max: 300000 },
-  
-  /** 
+
+  /**
    * Retry attempt limits: 0 minimum allows disabling retries for critical operations.
    * 10 maximum prevents excessive API load and potential DoS scenarios.
    */
   retryAttempts: { min: 0, max: 10 },
-  
-  /** 
+
+  /**
    * Retry delay limits: 100ms minimum prevents tight retry loops that could overwhelm servers.
    * 1min maximum balances user experience with avoiding indefinite delays.
    */
   retryDelay: { min: 100, max: 60000 },
-  
-  /** 
+
+  /**
    * Cache TTL limits: 1s minimum ensures some caching benefit.
    * 24h maximum prevents stale data issues in dynamic environments.
    */
   cacheTtl: { min: 1000, max: 24 * 60 * 60 * 1000 },
-  
-  /** 
+
+  /**
    * Cache size limits: Minimum 1 entry for functionality.
    * 10,000 maximum prevents excessive memory usage (assuming ~1KB per entry = ~10MB max).
    */
   cacheMaxSize: { min: 1, max: 10000 },
-  
-  /** 
+
+  /**
    * Batch size limits: Minimum 1 for functionality.
    * 1000 maximum prevents oversized requests that could timeout or be rejected by APIs.
    */
   batchSize: { min: 1, max: 1000 },
-  
-  /** 
+
+  /**
    * Batch concurrency limits: Minimum 1 for functionality.
    * 50 maximum prevents overwhelming target systems with too many concurrent requests.
    */
   batchConcurrency: { min: 1, max: 50 },
-  
-  /** 
+
+  /**
    * Batch delay limits: 0 minimum allows continuous batching when appropriate.
    * 10s maximum prevents excessively slow batch processing.
    */
-  batchDelay: { min: 0, max: 10000 }
+  batchDelay: { min: 0, max: 10000 },
 } as const;
 
 const RETRYABLE_STATUS_CODES = [408, 429, 500, 502, 503, 504];
@@ -117,7 +117,7 @@ const PRIVATE_IP_RANGES = [
   /^localhost$/i,
   /^0\.0\.0\.0$/,
   /^::1$/,
-  /^fe80:/i
+  /^fe80:/i,
 ];
 
 /**
@@ -137,7 +137,10 @@ function isProductionEnvironment(): boolean {
  * Cache for validation results to improve performance
  */
 class ValidationCache {
-  private cache = new Map<string, { result: ConfigValidationResult; timestamp: number }>();
+  private cache = new Map<
+    string,
+    { result: ConfigValidationResult; timestamp: number }
+  >();
   private readonly TTL = 5 * 60 * 1000; // 5 minutes
 
   get(key: string): ConfigValidationResult | null {
@@ -182,7 +185,7 @@ export class ConfigValidator {
     options: { useCache?: boolean; disableHealthCheck?: boolean } = {}
   ): ConfigValidationResult {
     const { useCache = true } = options;
-    
+
     // Check cache first if enabled
     if (useCache) {
       const cacheKey = validationCache.generateKey(config);
@@ -226,15 +229,15 @@ export class ConfigValidator {
       valid,
       errors,
       warnings,
-      ...(valid ? { normalizedConfig } : {})
+      ...(valid ? { normalizedConfig } : {}),
     };
-    
+
     // Cache the result if enabled
     if (options.useCache !== false && valid) {
       const cacheKey = validationCache.generateKey(config);
       validationCache.set(cacheKey, result);
     }
-    
+
     return result;
   }
 
@@ -244,9 +247,11 @@ export class ConfigValidator {
    * @returns Normalized configuration
    * @throws AdapterError if validation fails
    */
-  public static validateAndThrow(config: Partial<ApsoAdapterConfig>): ApsoAdapterConfig {
+  public static validateAndThrow(
+    config: Partial<ApsoAdapterConfig>
+  ): ApsoAdapterConfig {
     const result = this.validateConfig(config);
-    
+
     if (!result.valid) {
       const errorMessage = this.formatValidationErrors(result.errors);
       throw new AdapterError(
@@ -270,9 +275,9 @@ export class ConfigValidator {
    * @returns Promise resolving to health check result
    */
   public static async validateHealthCheck(
-    config: ApsoAdapterConfig, 
-    options: { 
-      allowPrivateIPs?: boolean; 
+    config: ApsoAdapterConfig,
+    options: {
+      allowPrivateIPs?: boolean;
       skipHealthCheck?: boolean;
       maxRedirects?: number;
     } = {}
@@ -282,7 +287,11 @@ export class ConfigValidator {
     latency?: number;
     skipped?: boolean;
   }> {
-    const { allowPrivateIPs = false, skipHealthCheck = false, maxRedirects = 0 } = options;
+    const {
+      allowPrivateIPs = false,
+      skipHealthCheck = false,
+      maxRedirects = 0,
+    } = options;
     const errors: string[] = [];
     let latency: number | undefined;
 
@@ -291,44 +300,51 @@ export class ConfigValidator {
       return {
         healthy: true,
         errors: [],
-        skipped: true
+        skipped: true,
       };
     }
 
     try {
       // SSRF Protection: Validate the URL before making the request
       const url = new URL(config.baseUrl);
-      
+
       // Block private/internal addresses unless explicitly allowed
       if (!allowPrivateIPs && this.isPrivateOrLoopbackAddress(url.hostname)) {
-        errors.push('Health check blocked: Target URL points to private/internal address (SSRF protection)');
+        errors.push(
+          'Health check blocked: Target URL points to private/internal address (SSRF protection)'
+        );
         return {
           healthy: false,
-          errors
+          errors,
         };
       }
-      
+
       // Block non-standard ports that might indicate internal services
       if (url.port && !allowPrivateIPs) {
         const port = parseInt(url.port, 10);
         const commonWebPorts = [80, 443, 8080, 8443];
         if (!commonWebPorts.includes(port)) {
-          errors.push(`Health check blocked: Non-standard port ${port} may indicate internal service (SSRF protection)`);
+          errors.push(
+            `Health check blocked: Non-standard port ${port} may indicate internal service (SSRF protection)`
+          );
           return {
             healthy: false,
-            errors
+            errors,
           };
         }
       }
 
       const startTime = Date.now();
-      
+
       // Attempt a simple HTTP request to baseUrl
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), config.timeout || 10000);
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        config.timeout || 10000
+      );
 
       const headers: Record<string, string> = {
-        'User-Agent': 'Apso-Adapter-HealthCheck/1.0'
+        'User-Agent': 'Apso-Adapter-HealthCheck/1.0',
       };
 
       if (config.apiKey) {
@@ -345,7 +361,7 @@ export class ConfigValidator {
           method: 'HEAD',
           headers,
           signal: controller.signal,
-          redirect: maxRedirects > 0 ? 'follow' : 'manual'
+          redirect: maxRedirects > 0 ? 'follow' : 'manual',
         });
 
         clearTimeout(timeoutId);
@@ -353,22 +369,25 @@ export class ConfigValidator {
 
         if (!response.ok && response.status !== 404) {
           // 404 is acceptable for health check - means endpoint is reachable
-          const statusText = isProductionEnvironment() ? 'HTTP Error' : response.statusText;
+          const statusText = isProductionEnvironment()
+            ? 'HTTP Error'
+            : response.statusText;
           errors.push(`HTTP ${response.status}: ${statusText}`);
         }
       } catch (fetchError: any) {
         clearTimeout(timeoutId);
         if (fetchError.name === 'AbortError') {
-          errors.push(`Health check timeout after ${config.timeout || 10000}ms`);
+          errors.push(
+            `Health check timeout after ${config.timeout || 10000}ms`
+          );
         } else {
           // Sanitize error messages in production
-          const errorMsg = isProductionEnvironment() 
-            ? 'Network connectivity issue' 
+          const errorMsg = isProductionEnvironment()
+            ? 'Network connectivity issue'
             : `Network error: ${fetchError.message}`;
           errors.push(errorMsg);
         }
       }
-
     } catch (error: any) {
       const errorMsg = isProductionEnvironment()
         ? 'Health check configuration error'
@@ -376,15 +395,20 @@ export class ConfigValidator {
       errors.push(errorMsg);
     }
 
-    const result: { healthy: boolean; errors: string[]; latency?: number; skipped?: boolean } = {
+    const result: {
+      healthy: boolean;
+      errors: string[];
+      latency?: number;
+      skipped?: boolean;
+    } = {
       healthy: errors.length === 0,
-      errors
+      errors,
     };
-    
+
     if (latency !== undefined) {
       result.latency = latency;
     }
-    
+
     return result;
   }
 
@@ -393,14 +417,14 @@ export class ConfigValidator {
   // =============================================================================
 
   private static validateRequiredFields(
-    config: Partial<ApsoAdapterConfig>, 
+    config: Partial<ApsoAdapterConfig>,
     errors: ConfigValidationError[]
   ): void {
     if (!config.baseUrl) {
       errors.push({
         field: 'baseUrl',
         message: 'baseUrl is required',
-        code: ConfigErrorCode.REQUIRED_FIELD
+        code: ConfigErrorCode.REQUIRED_FIELD,
       });
     }
   }
@@ -419,20 +443,25 @@ export class ConfigValidator {
     if (!isProductionEnvironment()) {
       return details;
     }
-    
+
     // In production, remove potentially sensitive information
     if (typeof details === 'object' && details !== null) {
       const sanitized: any = {};
       for (const [key, value] of Object.entries(details)) {
         if (key === 'error' && typeof value === 'string') {
           sanitized[key] = 'Error details hidden in production';
-        } else if (typeof value !== 'string' || !value.includes('password') && !value.includes('token') && !value.includes('key')) {
+        } else if (
+          typeof value !== 'string' ||
+          (!value.includes('password') &&
+            !value.includes('token') &&
+            !value.includes('key'))
+        ) {
           sanitized[key] = value;
         }
       }
       return sanitized;
     }
-    
+
     return details;
   }
 
@@ -449,45 +478,55 @@ export class ConfigValidator {
         field: 'baseUrl',
         message: 'baseUrl must start with http:// or https://',
         code: ConfigErrorCode.INVALID_FORMAT,
-        details: this.sanitizeErrorDetails({ suggestion: 'Use https://your-api-domain.com format' })
+        details: this.sanitizeErrorDetails({
+          suggestion: 'Use https://your-api-domain.com format',
+        }),
       });
       return;
     }
 
     try {
       const url = new URL(config.baseUrl);
-      
+
       // CRITICAL: HTTP URLs are errors in production, warnings in development
-      if (url.protocol === 'http:' && !this.isPrivateOrLoopbackAddress(url.hostname)) {
-        const message = 'HTTP URLs are not allowed in production environments for security';
-        const suggestion = 'Use HTTPS instead. HTTP is only acceptable for localhost/private IPs in development';
-        
+      if (
+        url.protocol === 'http:' &&
+        !this.isPrivateOrLoopbackAddress(url.hostname)
+      ) {
+        const message =
+          'HTTP URLs are not allowed in production environments for security';
+        const suggestion =
+          'Use HTTPS instead. HTTP is only acceptable for localhost/private IPs in development';
+
         if (isProductionEnvironment()) {
           errors.push({
             field: 'baseUrl',
             message,
             code: ConfigErrorCode.SECURITY_RISK,
-            details: this.sanitizeErrorDetails({ suggestion })
+            details: this.sanitizeErrorDetails({ suggestion }),
           });
         } else {
           warnings.push({
             field: 'baseUrl',
             message: 'Using HTTP instead of HTTPS may pose security risks',
-            suggestion
+            suggestion,
           });
         }
       }
-      
+
       // SSRF Protection: Check for private IP ranges in URLs
       if (this.isPrivateOrLoopbackAddress(url.hostname)) {
-        const message = 'URLs pointing to private/internal addresses may pose SSRF risks';
-        const suggestion = 'Ensure this is intentional and the target service is trusted';
-        
+        const message =
+          'URLs pointing to private/internal addresses may pose SSRF risks';
+        const suggestion =
+          'Ensure this is intentional and the target service is trusted';
+
         if (isProductionEnvironment()) {
           warnings.push({
             field: 'baseUrl',
             message,
-            suggestion: suggestion + '. Consider using allowPrivateIPs option if needed.'
+            suggestion:
+              suggestion + '. Consider using allowPrivateIPs option if needed.',
           });
         }
       }
@@ -498,7 +537,7 @@ export class ConfigValidator {
         warnings.push({
           field: 'baseUrl',
           message: 'Removed trailing slash from baseUrl',
-          suggestion: 'Avoid trailing slashes in baseUrl'
+          suggestion: 'Avoid trailing slashes in baseUrl',
         });
       }
 
@@ -510,23 +549,24 @@ export class ConfigValidator {
             field: 'baseUrl',
             message: 'Invalid port number in baseUrl (must be 1-65535)',
             code: ConfigErrorCode.OUT_OF_RANGE,
-            details: this.sanitizeErrorDetails({ 
-              port, 
-              suggestion: 'Use a valid port number between 1 and 65535' 
-            })
+            details: this.sanitizeErrorDetails({
+              port,
+              suggestion: 'Use a valid port number between 1 and 65535',
+            }),
           });
         }
       }
-
     } catch (urlError) {
       errors.push({
         field: 'baseUrl',
         message: 'Invalid URL format - unable to parse the provided URL',
         code: ConfigErrorCode.INVALID_FORMAT,
-        details: this.sanitizeErrorDetails({ 
-          error: urlError instanceof Error ? urlError.message : String(urlError),
-          suggestion: 'Ensure URL follows the format: https://your-api-domain.com'
-        })
+        details: this.sanitizeErrorDetails({
+          error:
+            urlError instanceof Error ? urlError.message : String(urlError),
+          suggestion:
+            'Ensure URL follows the format: https://your-api-domain.com',
+        }),
       });
     }
   }
@@ -540,7 +580,8 @@ export class ConfigValidator {
       warnings.push({
         field: 'authentication',
         message: 'No authentication configured - API requests may fail',
-        suggestion: 'Set apiKey for Bearer token auth or authHeader for custom authentication'
+        suggestion:
+          'Set apiKey for Bearer token auth or authHeader for custom authentication',
       });
     }
 
@@ -549,61 +590,67 @@ export class ConfigValidator {
         field: 'apiKey',
         message: 'apiKey must be a non-empty string',
         code: ConfigErrorCode.INVALID_TYPE,
-        details: this.sanitizeErrorDetails({ 
-          suggestion: 'Provide a valid API key as a string value' 
-        })
+        details: this.sanitizeErrorDetails({
+          suggestion: 'Provide a valid API key as a string value',
+        }),
       });
     }
 
     // Enhanced API key validation based on environment
     if (config.apiKey && typeof config.apiKey === 'string') {
       const isProduction = isProductionEnvironment();
-      const minLength = isProduction ? PRODUCTION_API_KEY_MIN_LENGTH : DEVELOPMENT_API_KEY_MIN_LENGTH;
-      
+      const minLength = isProduction
+        ? PRODUCTION_API_KEY_MIN_LENGTH
+        : DEVELOPMENT_API_KEY_MIN_LENGTH;
+
       if (config.apiKey.length < minLength) {
         const message = `API key is too short (${config.apiKey.length} chars, minimum ${minLength} required${isProduction ? ' in production' : ''})`;
-        const suggestion = isProduction 
+        const suggestion = isProduction
           ? 'Use a production-grade API key with at least 32 characters for security'
           : 'Use a longer API key. Production requires at least 32 characters.';
-        
+
         if (isProduction) {
           errors.push({
             field: 'apiKey',
             message,
             code: ConfigErrorCode.SECURITY_RISK,
-            details: this.sanitizeErrorDetails({ 
+            details: this.sanitizeErrorDetails({
               currentLength: config.apiKey.length,
               requiredMinLength: minLength,
-              suggestion 
-            })
+              suggestion,
+            }),
           });
         } else {
           warnings.push({
             field: 'apiKey',
             message,
-            suggestion
+            suggestion,
           });
         }
       }
-      
+
       // Check for obviously weak API keys
-      const weakPatterns = [/^(test|demo|example|sample)/i, /^(123|abc|password)/i];
+      const weakPatterns = [
+        /^(test|demo|example|sample)/i,
+        /^(123|abc|password)/i,
+      ];
       if (weakPatterns.some(pattern => pattern.test(config.apiKey!))) {
         const message = 'API key appears to be a placeholder or test value';
-        const suggestion = 'Replace with a proper API key from your service provider';
-        
+        const suggestion =
+          'Replace with a proper API key from your service provider';
+
         if (isProduction) {
           errors.push({
             field: 'apiKey',
             message,
             code: ConfigErrorCode.SECURITY_RISK,
-            details: this.sanitizeErrorDetails({ suggestion })
+            details: this.sanitizeErrorDetails({ suggestion }),
           });
         } else {
           warnings.push({
             field: 'apiKey',
             message,
-            suggestion
+            suggestion,
           });
         }
       }
@@ -614,18 +661,19 @@ export class ConfigValidator {
         field: 'authHeader',
         message: 'authHeader must be a non-empty string',
         code: ConfigErrorCode.INVALID_TYPE,
-        details: this.sanitizeErrorDetails({ 
-          suggestion: 'Provide a valid HTTP header name (e.g., "X-API-Key", "Authorization")' 
-        })
+        details: this.sanitizeErrorDetails({
+          suggestion:
+            'Provide a valid HTTP header name (e.g., "X-API-Key", "Authorization")',
+        }),
       });
     } else if (config.authHeader && !config.authHeader.trim()) {
       errors.push({
         field: 'authHeader',
         message: 'authHeader cannot be empty or whitespace',
         code: ConfigErrorCode.INVALID_VALUE,
-        details: this.sanitizeErrorDetails({ 
-          suggestion: 'Provide a valid HTTP header name' 
-        })
+        details: this.sanitizeErrorDetails({
+          suggestion: 'Provide a valid HTTP header name',
+        }),
       });
     }
   }
@@ -640,14 +688,20 @@ export class ConfigValidator {
         errors.push({
           field: 'timeout',
           message: 'timeout must be a positive number',
-          code: ConfigErrorCode.INVALID_VALUE
+          code: ConfigErrorCode.INVALID_VALUE,
         });
-      } else if (config.timeout < VALIDATION_LIMITS.timeout.min || config.timeout > VALIDATION_LIMITS.timeout.max) {
+      } else if (
+        config.timeout < VALIDATION_LIMITS.timeout.min ||
+        config.timeout > VALIDATION_LIMITS.timeout.max
+      ) {
         errors.push({
           field: 'timeout',
           message: `timeout must be between ${VALIDATION_LIMITS.timeout.min} and ${VALIDATION_LIMITS.timeout.max} milliseconds`,
           code: ConfigErrorCode.OUT_OF_RANGE,
-          details: { min: VALIDATION_LIMITS.timeout.min, max: VALIDATION_LIMITS.timeout.max }
+          details: {
+            min: VALIDATION_LIMITS.timeout.min,
+            max: VALIDATION_LIMITS.timeout.max,
+          },
         });
       }
     } else {
@@ -667,7 +721,7 @@ export class ConfigValidator {
         maxRetries: 3,
         initialDelayMs: 1000,
         maxDelayMs: 10000,
-        retryableStatuses: [...RETRYABLE_STATUS_CODES]
+        retryableStatuses: [...RETRYABLE_STATUS_CODES],
       };
       return;
     }
@@ -675,30 +729,45 @@ export class ConfigValidator {
     const retry = config.retryConfig;
 
     // Validate maxRetries
-    if (typeof retry.maxRetries !== 'number' || retry.maxRetries < VALIDATION_LIMITS.retryAttempts.min || retry.maxRetries > VALIDATION_LIMITS.retryAttempts.max) {
+    if (
+      typeof retry.maxRetries !== 'number' ||
+      retry.maxRetries < VALIDATION_LIMITS.retryAttempts.min ||
+      retry.maxRetries > VALIDATION_LIMITS.retryAttempts.max
+    ) {
       errors.push({
         field: 'retryConfig.maxRetries',
         message: `maxRetries must be between ${VALIDATION_LIMITS.retryAttempts.min} and ${VALIDATION_LIMITS.retryAttempts.max}`,
         code: ConfigErrorCode.OUT_OF_RANGE,
-        details: { min: VALIDATION_LIMITS.retryAttempts.min, max: VALIDATION_LIMITS.retryAttempts.max }
+        details: {
+          min: VALIDATION_LIMITS.retryAttempts.min,
+          max: VALIDATION_LIMITS.retryAttempts.max,
+        },
       });
     }
 
     // Validate initialDelayMs
-    if (typeof retry.initialDelayMs !== 'number' || retry.initialDelayMs < VALIDATION_LIMITS.retryDelay.min || retry.initialDelayMs > VALIDATION_LIMITS.retryDelay.max) {
+    if (
+      typeof retry.initialDelayMs !== 'number' ||
+      retry.initialDelayMs < VALIDATION_LIMITS.retryDelay.min ||
+      retry.initialDelayMs > VALIDATION_LIMITS.retryDelay.max
+    ) {
       errors.push({
         field: 'retryConfig.initialDelayMs',
         message: `initialDelayMs must be between ${VALIDATION_LIMITS.retryDelay.min} and ${VALIDATION_LIMITS.retryDelay.max}`,
-        code: ConfigErrorCode.OUT_OF_RANGE
+        code: ConfigErrorCode.OUT_OF_RANGE,
       });
     }
 
     // Validate maxDelayMs
-    if (typeof retry.maxDelayMs !== 'number' || retry.maxDelayMs < VALIDATION_LIMITS.retryDelay.min || retry.maxDelayMs > VALIDATION_LIMITS.retryDelay.max) {
+    if (
+      typeof retry.maxDelayMs !== 'number' ||
+      retry.maxDelayMs < VALIDATION_LIMITS.retryDelay.min ||
+      retry.maxDelayMs > VALIDATION_LIMITS.retryDelay.max
+    ) {
       errors.push({
         field: 'retryConfig.maxDelayMs',
         message: `maxDelayMs must be between ${VALIDATION_LIMITS.retryDelay.min} and ${VALIDATION_LIMITS.retryDelay.max}`,
-        code: ConfigErrorCode.OUT_OF_RANGE
+        code: ConfigErrorCode.OUT_OF_RANGE,
       });
     }
 
@@ -707,7 +776,7 @@ export class ConfigValidator {
       errors.push({
         field: 'retryConfig.maxDelayMs',
         message: 'maxDelayMs must be greater than or equal to initialDelayMs',
-        code: ConfigErrorCode.INVALID_VALUE
+        code: ConfigErrorCode.INVALID_VALUE,
       });
     }
 
@@ -716,18 +785,19 @@ export class ConfigValidator {
       errors.push({
         field: 'retryConfig.retryableStatuses',
         message: 'retryableStatuses must be an array of HTTP status codes',
-        code: ConfigErrorCode.INVALID_TYPE
+        code: ConfigErrorCode.INVALID_TYPE,
       });
     } else {
-      const invalidStatuses = retry.retryableStatuses.filter(status => 
-        typeof status !== 'number' || status < 100 || status > 599
+      const invalidStatuses = retry.retryableStatuses.filter(
+        status => typeof status !== 'number' || status < 100 || status > 599
       );
       if (invalidStatuses.length > 0) {
         errors.push({
           field: 'retryConfig.retryableStatuses',
-          message: 'retryableStatuses must contain valid HTTP status codes (100-599)',
+          message:
+            'retryableStatuses must contain valid HTTP status codes (100-599)',
           code: ConfigErrorCode.INVALID_VALUE,
-          details: { invalidStatuses }
+          details: { invalidStatuses },
         });
       }
     }
@@ -746,23 +816,31 @@ export class ConfigValidator {
       errors.push({
         field: 'cacheConfig.enabled',
         message: 'enabled must be a boolean',
-        code: ConfigErrorCode.INVALID_TYPE
+        code: ConfigErrorCode.INVALID_TYPE,
       });
     }
 
-    if (typeof cache.ttlMs !== 'number' || cache.ttlMs < VALIDATION_LIMITS.cacheTtl.min || cache.ttlMs > VALIDATION_LIMITS.cacheTtl.max) {
+    if (
+      typeof cache.ttlMs !== 'number' ||
+      cache.ttlMs < VALIDATION_LIMITS.cacheTtl.min ||
+      cache.ttlMs > VALIDATION_LIMITS.cacheTtl.max
+    ) {
       errors.push({
         field: 'cacheConfig.ttlMs',
         message: `ttlMs must be between ${VALIDATION_LIMITS.cacheTtl.min} and ${VALIDATION_LIMITS.cacheTtl.max} milliseconds`,
-        code: ConfigErrorCode.OUT_OF_RANGE
+        code: ConfigErrorCode.OUT_OF_RANGE,
       });
     }
 
-    if (typeof cache.maxSize !== 'number' || cache.maxSize < VALIDATION_LIMITS.cacheMaxSize.min || cache.maxSize > VALIDATION_LIMITS.cacheMaxSize.max) {
+    if (
+      typeof cache.maxSize !== 'number' ||
+      cache.maxSize < VALIDATION_LIMITS.cacheMaxSize.min ||
+      cache.maxSize > VALIDATION_LIMITS.cacheMaxSize.max
+    ) {
       errors.push({
         field: 'cacheConfig.maxSize',
         message: `maxSize must be between ${VALIDATION_LIMITS.cacheMaxSize.min} and ${VALIDATION_LIMITS.cacheMaxSize.max}`,
-        code: ConfigErrorCode.OUT_OF_RANGE
+        code: ConfigErrorCode.OUT_OF_RANGE,
       });
     }
   }
@@ -776,28 +854,40 @@ export class ConfigValidator {
 
     const batch = config.batchConfig;
 
-    if (typeof batch.batchSize !== 'number' || batch.batchSize < VALIDATION_LIMITS.batchSize.min || batch.batchSize > VALIDATION_LIMITS.batchSize.max) {
+    if (
+      typeof batch.batchSize !== 'number' ||
+      batch.batchSize < VALIDATION_LIMITS.batchSize.min ||
+      batch.batchSize > VALIDATION_LIMITS.batchSize.max
+    ) {
       errors.push({
         field: 'batchConfig.batchSize',
         message: `batchSize must be between ${VALIDATION_LIMITS.batchSize.min} and ${VALIDATION_LIMITS.batchSize.max}`,
-        code: ConfigErrorCode.OUT_OF_RANGE
+        code: ConfigErrorCode.OUT_OF_RANGE,
       });
     }
 
-    if (typeof batch.concurrency !== 'number' || batch.concurrency < VALIDATION_LIMITS.batchConcurrency.min || batch.concurrency > VALIDATION_LIMITS.batchConcurrency.max) {
+    if (
+      typeof batch.concurrency !== 'number' ||
+      batch.concurrency < VALIDATION_LIMITS.batchConcurrency.min ||
+      batch.concurrency > VALIDATION_LIMITS.batchConcurrency.max
+    ) {
       errors.push({
         field: 'batchConfig.concurrency',
         message: `concurrency must be between ${VALIDATION_LIMITS.batchConcurrency.min} and ${VALIDATION_LIMITS.batchConcurrency.max}`,
-        code: ConfigErrorCode.OUT_OF_RANGE
+        code: ConfigErrorCode.OUT_OF_RANGE,
       });
     }
 
     if (batch.delayBetweenBatches !== undefined) {
-      if (typeof batch.delayBetweenBatches !== 'number' || batch.delayBetweenBatches < VALIDATION_LIMITS.batchDelay.min || batch.delayBetweenBatches > VALIDATION_LIMITS.batchDelay.max) {
+      if (
+        typeof batch.delayBetweenBatches !== 'number' ||
+        batch.delayBetweenBatches < VALIDATION_LIMITS.batchDelay.min ||
+        batch.delayBetweenBatches > VALIDATION_LIMITS.batchDelay.max
+      ) {
         errors.push({
           field: 'batchConfig.delayBetweenBatches',
           message: `delayBetweenBatches must be between ${VALIDATION_LIMITS.batchDelay.min} and ${VALIDATION_LIMITS.batchDelay.max}`,
-          code: ConfigErrorCode.OUT_OF_RANGE
+          code: ConfigErrorCode.OUT_OF_RANGE,
         });
       }
     }
@@ -816,21 +906,25 @@ export class ConfigValidator {
       errors.push({
         field: 'multiTenancy.enabled',
         message: 'enabled must be a boolean',
-        code: ConfigErrorCode.INVALID_TYPE
+        code: ConfigErrorCode.INVALID_TYPE,
       });
     }
 
-    if (typeof multiTenancy.scopeField !== 'string' || !multiTenancy.scopeField.trim()) {
+    if (
+      typeof multiTenancy.scopeField !== 'string' ||
+      !multiTenancy.scopeField.trim()
+    ) {
       errors.push({
         field: 'multiTenancy.scopeField',
         message: 'scopeField must be a non-empty string',
-        code: ConfigErrorCode.INVALID_VALUE
+        code: ConfigErrorCode.INVALID_VALUE,
       });
     } else if (!TENANT_SCOPE_REGEX.test(multiTenancy.scopeField)) {
       errors.push({
         field: 'multiTenancy.scopeField',
-        message: 'scopeField must contain only alphanumeric characters, underscores, and hyphens, starting with a letter',
-        code: ConfigErrorCode.INVALID_FORMAT
+        message:
+          'scopeField must contain only alphanumeric characters, underscores, and hyphens, starting with a letter',
+        code: ConfigErrorCode.INVALID_FORMAT,
       });
     }
 
@@ -838,7 +932,7 @@ export class ConfigValidator {
       errors.push({
         field: 'multiTenancy.getScopeValue',
         message: 'getScopeValue must be a function',
-        code: ConfigErrorCode.INVALID_TYPE
+        code: ConfigErrorCode.INVALID_TYPE,
       });
     }
   }
@@ -856,7 +950,7 @@ export class ConfigValidator {
       errors.push({
         field: 'observability.metricsEnabled',
         message: 'metricsEnabled must be a boolean',
-        code: ConfigErrorCode.INVALID_TYPE
+        code: ConfigErrorCode.INVALID_TYPE,
       });
     }
 
@@ -864,7 +958,7 @@ export class ConfigValidator {
       errors.push({
         field: 'observability.tracingEnabled',
         message: 'tracingEnabled must be a boolean',
-        code: ConfigErrorCode.INVALID_TYPE
+        code: ConfigErrorCode.INVALID_TYPE,
       });
     }
 
@@ -873,7 +967,7 @@ export class ConfigValidator {
         field: 'observability.logLevel',
         message: `logLevel must be one of: ${LOG_LEVELS.join(', ')}`,
         code: ConfigErrorCode.INVALID_VALUE,
-        details: { validLevels: LOG_LEVELS }
+        details: { validLevels: LOG_LEVELS },
       });
     }
   }
@@ -883,15 +977,21 @@ export class ConfigValidator {
     errors: ConfigValidationError[],
     warnings: ConfigValidationWarning[]
   ): void {
-    const booleanFields = ['usePlural', 'emailNormalization', 'softDeletes', 'debugMode', 'dryRun'];
-    
+    const booleanFields = [
+      'usePlural',
+      'emailNormalization',
+      'softDeletes',
+      'debugMode',
+      'dryRun',
+    ];
+
     booleanFields.forEach(field => {
       const value = (config as any)[field];
       if (value !== undefined && typeof value !== 'boolean') {
         errors.push({
           field,
           message: `${field} must be a boolean`,
-          code: ConfigErrorCode.INVALID_TYPE
+          code: ConfigErrorCode.INVALID_TYPE,
         });
       }
     });
@@ -901,7 +1001,7 @@ export class ConfigValidator {
       warnings.push({
         field: 'dryRun',
         message: 'Dry run mode is enabled - no actual API calls will be made',
-        suggestion: 'Disable dry run mode for production use'
+        suggestion: 'Disable dry run mode for production use',
       });
     }
   }
@@ -916,7 +1016,7 @@ export class ConfigValidator {
       warnings.push({
         field: 'authentication',
         message: 'Both apiKey and custom fetchImpl provided',
-        suggestion: 'Ensure custom fetchImpl handles authentication properly'
+        suggestion: 'Ensure custom fetchImpl handles authentication properly',
       });
     }
 
@@ -925,7 +1025,7 @@ export class ConfigValidator {
       errors.push({
         field: 'cacheConfig',
         message: 'Cache is enabled but ttlMs is not specified',
-        code: ConfigErrorCode.REQUIRED_FIELD
+        code: ConfigErrorCode.REQUIRED_FIELD,
       });
     }
   }
@@ -936,11 +1036,12 @@ export class ConfigValidator {
     warnings: ConfigValidationWarning[]
   ): void {
     // Check for insecure timeout values
-    if (config.timeout && config.timeout > 120000) { // > 2 minutes
+    if (config.timeout && config.timeout > 120000) {
+      // > 2 minutes
       warnings.push({
         field: 'timeout',
         message: 'Very high timeout value may cause performance issues',
-        suggestion: 'Consider reducing timeout for better responsiveness'
+        suggestion: 'Consider reducing timeout for better responsiveness',
       });
     }
 
@@ -949,7 +1050,7 @@ export class ConfigValidator {
       warnings.push({
         field: 'retryConfig.maxRetries',
         message: 'High retry count may cause excessive API load',
-        suggestion: 'Consider reducing retry attempts'
+        suggestion: 'Consider reducing retry attempts',
       });
     }
 
@@ -958,7 +1059,7 @@ export class ConfigValidator {
       warnings.push({
         field: 'debugMode',
         message: 'Debug mode is enabled - sensitive information may be logged',
-        suggestion: 'Disable debug mode in production environments'
+        suggestion: 'Disable debug mode in production environments',
       });
     }
   }
@@ -970,8 +1071,9 @@ export class ConfigValidator {
   private static deepClone<T>(obj: T): T {
     if (obj === null || typeof obj !== 'object') return obj;
     if (obj instanceof Date) return new Date(obj.getTime()) as unknown as T;
-    if (Array.isArray(obj)) return obj.map(item => this.deepClone(item)) as unknown as T;
-    
+    if (Array.isArray(obj))
+      return obj.map(item => this.deepClone(item)) as unknown as T;
+
     const cloned = {} as T;
     for (const key in obj) {
       if (Object.prototype.hasOwnProperty.call(obj, key)) {
@@ -981,10 +1083,10 @@ export class ConfigValidator {
     return cloned;
   }
 
-  private static formatValidationErrors(errors: ConfigValidationError[]): string {
-    return errors
-      .map(error => `${error.field}: ${error.message}`)
-      .join('; ');
+  private static formatValidationErrors(
+    errors: ConfigValidationError[]
+  ): string {
+    return errors.map(error => `${error.field}: ${error.message}`).join('; ');
   }
 }
 

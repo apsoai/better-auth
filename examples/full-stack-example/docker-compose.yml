@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: better-auth-postgres
+    environment:
+      POSTGRES_DB: better_auth_example
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d better_auth_example"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Apso Backend
+  backend:
+    build:
+      context: ./apso-backend
+      dockerfile: Dockerfile
+    container_name: better-auth-backend
+    environment:
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: password
+      DB_DATABASE: better_auth_example
+      PORT: 3001
+      ALLOWED_ORIGINS: http://localhost:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./apso-backend:/app
+      - /app/node_modules
+    command: npm run start:dev
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./nextjs-frontend
+      dockerfile: Dockerfile
+    container_name: better-auth-frontend
+    environment:
+      NODE_ENV: development
+      BETTER_AUTH_SECRET: your-secret-key-here-should-be-at-least-32-characters
+      BETTER_AUTH_URL: http://localhost:3000
+      APSO_BASE_URL: http://backend:3001
+      NEXT_PUBLIC_BETTER_AUTH_URL: http://localhost:3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./nextjs-frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
+
+volumes:
+  postgres_data:

@@ -1,10 +1,10 @@
 /**
  * VerificationToken Operations Implementation
- * 
+ *
  * This class provides comprehensive CRUD operations for the VerificationToken entity,
  * integrating with the Apso SDK and supporting all Better Auth verification flows
  * (email verification, password reset, magic links, two-factor authentication).
- * 
+ *
  * Features:
  * - Token-based lookups (primary access pattern)
  * - Automatic expiration handling and cleanup
@@ -21,7 +21,7 @@ import type {
   ApsoVerificationToken,
   ApsoAdapterConfig,
   CrudPagination,
-  ValidationError
+  ValidationError,
 } from '../types/index';
 import { AdapterError, AdapterErrorCode } from '../types/index';
 import { HttpClient } from '../client/HttpClient';
@@ -108,7 +108,7 @@ interface TokenValidationRules {
 
 /**
  * VerificationTokenOperations class providing comprehensive CRUD operations for VerificationToken entities
- * 
+ *
  * This class handles all verification token operations for Better Auth flows including
  * email verification, password reset, magic links, and two-factor authentication.
  * It provides secure token handling, expiration management, and atomic consumption.
@@ -126,7 +126,7 @@ export class VerificationTokenOperations {
     minLength: 8,
     maxLength: 512,
     allowedPattern: /^[a-zA-Z0-9\-_\.]+$/,
-    caseSensitive: true
+    caseSensitive: true,
   };
 
   // Note: maxTokenAge could be used for automatic cleanup scheduling
@@ -146,11 +146,11 @@ export class VerificationTokenOperations {
 
   /**
    * Create a new verification token with validation and security checks
-   * 
+   *
    * @param tokenData - Token data for creation
    * @returns Promise resolving to the created verification token
    * @throws {AdapterError} If validation fails, token conflicts, or API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const token = await verificationTokenOps.createVerificationToken({
@@ -166,16 +166,18 @@ export class VerificationTokenOperations {
     expiresAt: Date;
   }): Promise<BetterAuthVerificationToken> {
     const startTime = performance.now();
-    
+
     try {
       // Validate input data
       this.validateCreateTokenData(tokenData);
-      
+
       // Normalize identifier (email) if applicable
       let normalizedIdentifier = tokenData.identifier;
       if (this.isEmailIdentifier(tokenData.identifier)) {
         try {
-          normalizedIdentifier = EmailNormalizer.normalize(tokenData.identifier);
+          normalizedIdentifier = EmailNormalizer.normalize(
+            tokenData.identifier
+          );
         } catch (error) {
           throw new AdapterError(
             AdapterErrorCode.VALIDATION_ERROR,
@@ -197,34 +199,53 @@ export class VerificationTokenOperations {
       const verificationToken: BetterAuthVerificationToken = {
         identifier: normalizedIdentifier,
         token: tokenData.token,
-        expiresAt: new Date(tokenData.expiresAt)
+        expiresAt: new Date(tokenData.expiresAt),
       };
 
       // Transform to API format
-      const apiData = this.entityMapper.mapVerificationTokenToApi(verificationToken);
-      
+      const apiData =
+        this.entityMapper.mapVerificationTokenToApi(verificationToken);
+
       // Execute HTTP request
       const url = `${this.config.baseUrl}/${this.apiPath}`;
-      const response = await this.httpClient.post<ApsoVerificationToken>(url, apiData, {
-        headers: this.buildHeaders(),
-        ...(this.config.timeout && { timeout: this.config.timeout }),
-      });
-      
+      const response = await this.httpClient.post<ApsoVerificationToken>(
+        url,
+        apiData,
+        {
+          headers: this.buildHeaders(),
+          ...(this.config.timeout && { timeout: this.config.timeout }),
+        }
+      );
+
       // Normalize and transform response
-      const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response) as ApsoVerificationToken;
-      const result = this.entityMapper.mapVerificationTokenFromApi(normalizedResponse);
-      
-      this.logOperation('createVerificationToken', performance.now() - startTime, true, {
-        identifier: this.sanitizeIdentifierForLogging(normalizedIdentifier),
-        expiresAt: tokenData.expiresAt
-      });
-      
+      const normalizedResponse =
+        this.responseNormalizer.normalizeSingleResponse(
+          response
+        ) as ApsoVerificationToken;
+      const result =
+        this.entityMapper.mapVerificationTokenFromApi(normalizedResponse);
+
+      this.logOperation(
+        'createVerificationToken',
+        performance.now() - startTime,
+        true,
+        {
+          identifier: this.sanitizeIdentifierForLogging(normalizedIdentifier),
+          expiresAt: tokenData.expiresAt,
+        }
+      );
+
       return result;
-      
     } catch (error) {
-      this.logOperation('createVerificationToken', performance.now() - startTime, false, error, {
-        identifier: this.sanitizeIdentifierForLogging(tokenData.identifier)
-      });
+      this.logOperation(
+        'createVerificationToken',
+        performance.now() - startTime,
+        false,
+        error,
+        {
+          identifier: this.sanitizeIdentifierForLogging(tokenData.identifier),
+        }
+      );
       throw this.handleError(error, 'createVerificationToken');
     }
   }
@@ -235,11 +256,11 @@ export class VerificationTokenOperations {
 
   /**
    * Find a verification token by its token value (primary lookup)
-   * 
+   *
    * @param token - Token value to search for
    * @returns Promise resolving to the verification token or null if not found/expired
    * @throws {AdapterError} If validation fails or API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const token = await verificationTokenOps.findVerificationTokenByToken('secure-token-123');
@@ -248,9 +269,11 @@ export class VerificationTokenOperations {
    * }
    * ```
    */
-  async findVerificationTokenByToken(token: string): Promise<BetterAuthVerificationToken | null> {
+  async findVerificationTokenByToken(
+    token: string
+  ): Promise<BetterAuthVerificationToken | null> {
     const startTime = performance.now();
-    
+
     try {
       if (!token || typeof token !== 'string') {
         throw new AdapterError(
@@ -266,67 +289,88 @@ export class VerificationTokenOperations {
       this.validateTokenFormat(token);
 
       // Build query to find token (for future query parameter implementation)
-      this.queryTranslator.buildFindQuery(
-        { token: token }, 
-        { limit: 1 }
-      );
-      
+      this.queryTranslator.buildFindQuery({ token: token }, { limit: 1 });
+
       const url = `${this.config.baseUrl}/${this.apiPath}`;
-      
+
       // For now, get all tokens and filter client-side
       // In production, this would use query parameters
       const response = await this.httpClient.get<ApsoVerificationToken[]>(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-      
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(response) as ApsoVerificationToken[];
-      
+
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
+        response
+      ) as ApsoVerificationToken[];
+
       // Find token by exact match
-      const matchingToken = normalizedResults.find((t: ApsoVerificationToken) => t.token === token);
-      
+      const matchingToken = normalizedResults.find(
+        (t: ApsoVerificationToken) => t.token === token
+      );
+
       if (!matchingToken) {
-        this.logOperation('findVerificationTokenByToken', performance.now() - startTime, true, {
-          found: false
-        });
+        this.logOperation(
+          'findVerificationTokenByToken',
+          performance.now() - startTime,
+          true,
+          {
+            found: false,
+          }
+        );
         return null;
       }
-      
+
       // Transform to Better Auth format
-      const result = this.entityMapper.mapVerificationTokenFromApi(matchingToken);
-      
+      const result =
+        this.entityMapper.mapVerificationTokenFromApi(matchingToken);
+
       // Check if token has expired
       if (this.isTokenExpired(result.expiresAt)) {
-        this.logOperation('findVerificationTokenByToken', performance.now() - startTime, true, {
-          found: true,
-          expired: true,
-          identifier: this.sanitizeIdentifierForLogging(result.identifier)
-        });
+        this.logOperation(
+          'findVerificationTokenByToken',
+          performance.now() - startTime,
+          true,
+          {
+            found: true,
+            expired: true,
+            identifier: this.sanitizeIdentifierForLogging(result.identifier),
+          }
+        );
         return null; // Return null for expired tokens
       }
-      
-      this.logOperation('findVerificationTokenByToken', performance.now() - startTime, true, {
-        found: true,
-        expired: false,
-        identifier: this.sanitizeIdentifierForLogging(result.identifier)
-      });
-      
+
+      this.logOperation(
+        'findVerificationTokenByToken',
+        performance.now() - startTime,
+        true,
+        {
+          found: true,
+          expired: false,
+          identifier: this.sanitizeIdentifierForLogging(result.identifier),
+        }
+      );
+
       return result;
-      
     } catch (error) {
-      this.logOperation('findVerificationTokenByToken', performance.now() - startTime, false, error);
+      this.logOperation(
+        'findVerificationTokenByToken',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'findVerificationTokenByToken');
     }
   }
 
   /**
    * Find verification tokens by identifier (email, phone, etc.)
-   * 
+   *
    * @param identifier - Identifier to search for (will be normalized if email)
    * @param options - Search options including activeOnly and limit
    * @returns Promise resolving to an array of matching verification tokens
    * @throws {AdapterError} If validation fails or API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const tokens = await verificationTokenOps.findVerificationTokensByIdentifier(
@@ -340,7 +384,7 @@ export class VerificationTokenOperations {
     options: { activeOnly?: boolean; limit?: number } = {}
   ): Promise<BetterAuthVerificationToken[]> {
     const startTime = performance.now();
-    
+
     try {
       if (!identifier || typeof identifier !== 'string') {
         throw new AdapterError(
@@ -370,57 +414,76 @@ export class VerificationTokenOperations {
 
       // Build query with identifier filter (for future query parameter implementation)
       this.queryTranslator.buildFindQuery(
-        { identifier: normalizedIdentifier }, 
+        { identifier: normalizedIdentifier },
         { limit: options.limit || 100 }
       );
-      
+
       const url = `${this.config.baseUrl}/${this.apiPath}`;
-      
+
       // Execute request
       const response = await this.httpClient.get<ApsoVerificationToken[]>(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-      
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(response) as ApsoVerificationToken[];
-      
+
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
+        response
+      ) as ApsoVerificationToken[];
+
       // Filter by identifier (case-insensitive for emails)
-      let matchingTokens = normalizedResults.filter((token: ApsoVerificationToken) => {
-        if (this.isEmailIdentifier(token.identifier)) {
-          return token.identifier.toLowerCase() === normalizedIdentifier.toLowerCase();
+      let matchingTokens = normalizedResults.filter(
+        (token: ApsoVerificationToken) => {
+          if (this.isEmailIdentifier(token.identifier)) {
+            return (
+              token.identifier.toLowerCase() ===
+              normalizedIdentifier.toLowerCase()
+            );
+          }
+          return token.identifier === normalizedIdentifier;
         }
-        return token.identifier === normalizedIdentifier;
-      });
-      
+      );
+
       // Filter out expired tokens if activeOnly is true
       if (options.activeOnly) {
-        matchingTokens = matchingTokens.filter((token: ApsoVerificationToken) => 
-          !this.isTokenExpired(new Date(token.expiresAt))
+        matchingTokens = matchingTokens.filter(
+          (token: ApsoVerificationToken) =>
+            !this.isTokenExpired(new Date(token.expiresAt))
         );
       }
-      
+
       // Apply limit
       if (options.limit && options.limit > 0) {
         matchingTokens = matchingTokens.slice(0, options.limit);
       }
-      
+
       // Transform results
-      const transformedResults = matchingTokens.map((token: ApsoVerificationToken) => 
-        this.entityMapper.mapVerificationTokenFromApi(token)
+      const transformedResults = matchingTokens.map(
+        (token: ApsoVerificationToken) =>
+          this.entityMapper.mapVerificationTokenFromApi(token)
       );
-      
-      this.logOperation('findVerificationTokensByIdentifier', performance.now() - startTime, true, {
-        identifier: this.sanitizeIdentifierForLogging(normalizedIdentifier),
-        found: transformedResults.length,
-        activeOnly: options.activeOnly
-      });
-      
+
+      this.logOperation(
+        'findVerificationTokensByIdentifier',
+        performance.now() - startTime,
+        true,
+        {
+          identifier: this.sanitizeIdentifierForLogging(normalizedIdentifier),
+          found: transformedResults.length,
+          activeOnly: options.activeOnly,
+        }
+      );
+
       return transformedResults;
-      
     } catch (error) {
-      this.logOperation('findVerificationTokensByIdentifier', performance.now() - startTime, false, error, {
-        identifier: this.sanitizeIdentifierForLogging(identifier)
-      });
+      this.logOperation(
+        'findVerificationTokensByIdentifier',
+        performance.now() - startTime,
+        false,
+        error,
+        {
+          identifier: this.sanitizeIdentifierForLogging(identifier),
+        }
+      );
       throw this.handleError(error, 'findVerificationTokensByIdentifier');
     }
   }
@@ -431,11 +494,11 @@ export class VerificationTokenOperations {
 
   /**
    * Validate a verification token without consuming it
-   * 
+   *
    * @param token - Token value to validate
    * @returns Promise resolving to validation result with detailed information
    * @throws {AdapterError} If validation fails or API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const validation = await verificationTokenOps.validateVerificationToken('token-123');
@@ -444,9 +507,11 @@ export class VerificationTokenOperations {
    * }
    * ```
    */
-  async validateVerificationToken(token: string): Promise<TokenValidationResult> {
+  async validateVerificationToken(
+    token: string
+  ): Promise<TokenValidationResult> {
     const startTime = performance.now();
-    
+
     try {
       if (!token || typeof token !== 'string') {
         const result: TokenValidationResult = {
@@ -454,25 +519,30 @@ export class VerificationTokenOperations {
           isValid: false,
           isExpired: false,
           validationDetails: {
-            foundButExpired: false
-          }
+            foundButExpired: false,
+          },
         };
-        
-        this.logOperation('validateVerificationToken', performance.now() - startTime, true, {
-          valid: false,
-          reason: 'invalid_token_format'
-        });
-        
+
+        this.logOperation(
+          'validateVerificationToken',
+          performance.now() - startTime,
+          true,
+          {
+            valid: false,
+            reason: 'invalid_token_format',
+          }
+        );
+
         return result;
       }
 
       // Find the token
       const foundToken = await this.findVerificationTokenByToken(token);
-      
+
       if (!foundToken) {
         // Check if token exists but is expired
         const expiredToken = await this.findExpiredToken(token);
-        
+
         const result: TokenValidationResult = {
           token: null,
           isValid: false,
@@ -480,24 +550,31 @@ export class VerificationTokenOperations {
           validationDetails: {
             foundButExpired: expiredToken !== null,
             ...(expiredToken && {
-              normalizedIdentifier: this.sanitizeIdentifierForLogging(expiredToken.identifier)
-            })
-          }
+              normalizedIdentifier: this.sanitizeIdentifierForLogging(
+                expiredToken.identifier
+              ),
+            }),
+          },
         };
-        
-        this.logOperation('validateVerificationToken', performance.now() - startTime, true, {
-          valid: false,
-          expired: expiredToken !== null,
-          reason: expiredToken ? 'token_expired' : 'token_not_found'
-        });
-        
+
+        this.logOperation(
+          'validateVerificationToken',
+          performance.now() - startTime,
+          true,
+          {
+            valid: false,
+            expired: expiredToken !== null,
+            reason: expiredToken ? 'token_expired' : 'token_not_found',
+          }
+        );
+
         return result;
       }
-      
+
       // Check expiration
       const isExpired = this.isTokenExpired(foundToken.expiresAt);
       const timeUntilExpiry = foundToken.expiresAt.getTime() - Date.now();
-      
+
       const result: TokenValidationResult = {
         token: foundToken,
         isValid: !isExpired,
@@ -505,21 +582,32 @@ export class VerificationTokenOperations {
         validationDetails: {
           timeUntilExpiry: Math.max(0, timeUntilExpiry),
           foundButExpired: false,
-          normalizedIdentifier: this.sanitizeIdentifierForLogging(foundToken.identifier)
-        }
+          normalizedIdentifier: this.sanitizeIdentifierForLogging(
+            foundToken.identifier
+          ),
+        },
       };
-      
-      this.logOperation('validateVerificationToken', performance.now() - startTime, true, {
-        valid: !isExpired,
-        expired: isExpired,
-        identifier: this.sanitizeIdentifierForLogging(foundToken.identifier),
-        timeUntilExpiry: timeUntilExpiry
-      });
-      
+
+      this.logOperation(
+        'validateVerificationToken',
+        performance.now() - startTime,
+        true,
+        {
+          valid: !isExpired,
+          expired: isExpired,
+          identifier: this.sanitizeIdentifierForLogging(foundToken.identifier),
+          timeUntilExpiry: timeUntilExpiry,
+        }
+      );
+
       return result;
-      
     } catch (error) {
-      this.logOperation('validateVerificationToken', performance.now() - startTime, false, error);
+      this.logOperation(
+        'validateVerificationToken',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'validateVerificationToken');
     }
   }
@@ -530,11 +618,11 @@ export class VerificationTokenOperations {
 
   /**
    * Consume a verification token (validate and delete atomically)
-   * 
+   *
    * @param token - Token value to consume
    * @returns Promise resolving to consumption result
    * @throws {AdapterError} If API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const result = await verificationTokenOps.consumeVerificationToken('token-123');
@@ -545,64 +633,84 @@ export class VerificationTokenOperations {
    * }
    * ```
    */
-  async consumeVerificationToken(token: string): Promise<TokenConsumptionResult> {
+  async consumeVerificationToken(
+    token: string
+  ): Promise<TokenConsumptionResult> {
     const startTime = performance.now();
-    
+
     try {
       // First validate the token
       const validation = await this.validateVerificationToken(token);
-      
+
       if (!validation.token) {
         const result: TokenConsumptionResult = {
           token: null,
           isValid: false,
           isExpired: validation.isExpired,
-          alreadyConsumed: false
+          alreadyConsumed: false,
         };
-        
-        this.logOperation('consumeVerificationToken', performance.now() - startTime, true, {
-          consumed: false,
-          reason: validation.isExpired ? 'token_expired' : 'token_not_found'
-        });
-        
+
+        this.logOperation(
+          'consumeVerificationToken',
+          performance.now() - startTime,
+          true,
+          {
+            consumed: false,
+            reason: validation.isExpired ? 'token_expired' : 'token_not_found',
+          }
+        );
+
         return result;
       }
-      
+
       if (validation.isExpired) {
         const result: TokenConsumptionResult = {
           token: validation.token,
           isValid: false,
           isExpired: true,
-          alreadyConsumed: false
+          alreadyConsumed: false,
         };
-        
-        this.logOperation('consumeVerificationToken', performance.now() - startTime, true, {
-          consumed: false,
-          reason: 'token_expired',
-          identifier: this.sanitizeIdentifierForLogging(validation.token.identifier)
-        });
-        
+
+        this.logOperation(
+          'consumeVerificationToken',
+          performance.now() - startTime,
+          true,
+          {
+            consumed: false,
+            reason: 'token_expired',
+            identifier: this.sanitizeIdentifierForLogging(
+              validation.token.identifier
+            ),
+          }
+        );
+
         return result;
       }
-      
+
       // Token is valid, attempt to delete it (consume)
       try {
         const deletedToken = await this.deleteVerificationToken(token);
-        
+
         const result: TokenConsumptionResult = {
           token: deletedToken,
           isValid: true,
           isExpired: false,
-          alreadyConsumed: false
+          alreadyConsumed: false,
         };
-        
-        this.logOperation('consumeVerificationToken', performance.now() - startTime, true, {
-          consumed: true,
-          identifier: this.sanitizeIdentifierForLogging(deletedToken.identifier)
-        });
-        
+
+        this.logOperation(
+          'consumeVerificationToken',
+          performance.now() - startTime,
+          true,
+          {
+            consumed: true,
+            identifier: this.sanitizeIdentifierForLogging(
+              deletedToken.identifier
+            ),
+          }
+        );
+
         return result;
-        
       } catch (error) {
         // Handle race condition where token was already consumed
         if (this.isNotFoundError(error)) {
@@ -610,23 +718,34 @@ export class VerificationTokenOperations {
             token: validation.token,
             isValid: false,
             isExpired: false,
-            alreadyConsumed: true
+            alreadyConsumed: true,
           };
-          
-          this.logOperation('consumeVerificationToken', performance.now() - startTime, true, {
-            consumed: false,
-            reason: 'already_consumed',
-            identifier: this.sanitizeIdentifierForLogging(validation.token.identifier)
-          });
-          
+
+          this.logOperation(
+            'consumeVerificationToken',
+            performance.now() - startTime,
+            true,
+            {
+              consumed: false,
+              reason: 'already_consumed',
+              identifier: this.sanitizeIdentifierForLogging(
+                validation.token.identifier
+              ),
+            }
+          );
+
           return result;
         }
-        
+
         throw error;
       }
-      
     } catch (error) {
-      this.logOperation('consumeVerificationToken', performance.now() - startTime, false, error);
+      this.logOperation(
+        'consumeVerificationToken',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'consumeVerificationToken');
     }
   }
@@ -637,20 +756,22 @@ export class VerificationTokenOperations {
 
   /**
    * Delete a verification token by token value
-   * 
+   *
    * @param token - Token value to delete
    * @returns Promise resolving to the deleted verification token
    * @throws {AdapterError} If token not found or API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const deletedToken = await verificationTokenOps.deleteVerificationToken('token-123');
    * console.log('Deleted token for:', deletedToken.identifier);
    * ```
    */
-  async deleteVerificationToken(token: string): Promise<BetterAuthVerificationToken> {
+  async deleteVerificationToken(
+    token: string
+  ): Promise<BetterAuthVerificationToken> {
     const startTime = performance.now();
-    
+
     try {
       if (!token || typeof token !== 'string') {
         throw new AdapterError(
@@ -677,34 +798,47 @@ export class VerificationTokenOperations {
       // Delete using API path with token as identifier
       // Note: In a real implementation, you might need the internal ID
       const url = `${this.config.baseUrl}/${this.apiPath}/${encodeURIComponent(token)}`;
-      
+
       await this.httpClient.delete(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-      
-      this.logOperation('deleteVerificationToken', performance.now() - startTime, true, {
-        identifier: this.sanitizeIdentifierForLogging(existingToken.identifier)
-      });
-      
+
+      this.logOperation(
+        'deleteVerificationToken',
+        performance.now() - startTime,
+        true,
+        {
+          identifier: this.sanitizeIdentifierForLogging(
+            existingToken.identifier
+          ),
+        }
+      );
+
       return existingToken;
-      
     } catch (error) {
-      this.logOperation('deleteVerificationToken', performance.now() - startTime, false, error);
+      this.logOperation(
+        'deleteVerificationToken',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'deleteVerificationToken');
     }
   }
 
   /**
    * Delete a verification token by internal ID
-   * 
+   *
    * @param id - Internal ID of the token to delete
    * @returns Promise resolving to the deleted verification token
    * @throws {AdapterError} If token not found or API errors occur
    */
-  async deleteVerificationTokenById(id: string): Promise<BetterAuthVerificationToken> {
+  async deleteVerificationTokenById(
+    id: string
+  ): Promise<BetterAuthVerificationToken> {
     const startTime = performance.now();
-    
+
     try {
       if (!id || typeof id !== 'string') {
         throw new AdapterError(
@@ -734,16 +868,27 @@ export class VerificationTokenOperations {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-      
-      this.logOperation('deleteVerificationTokenById', performance.now() - startTime, true, {
-        id,
-        identifier: this.sanitizeIdentifierForLogging(existingToken.identifier)
-      });
-      
+
+      this.logOperation(
+        'deleteVerificationTokenById',
+        performance.now() - startTime,
+        true,
+        {
+          id,
+          identifier: this.sanitizeIdentifierForLogging(
+            existingToken.identifier
+          ),
+        }
+      );
+
       return existingToken;
-      
     } catch (error) {
-      this.logOperation('deleteVerificationTokenById', performance.now() - startTime, false, error);
+      this.logOperation(
+        'deleteVerificationTokenById',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'deleteVerificationTokenById');
     }
   }
@@ -754,10 +899,10 @@ export class VerificationTokenOperations {
 
   /**
    * Delete all expired verification tokens
-   * 
+   *
    * @returns Promise resolving to the number of deleted tokens
    * @throws {AdapterError} If API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const deletedCount = await verificationTokenOps.deleteExpiredTokens();
@@ -766,21 +911,26 @@ export class VerificationTokenOperations {
    */
   async deleteExpiredTokens(): Promise<number> {
     const startTime = performance.now();
-    
+
     try {
       // Get all tokens and filter expired ones
       const allTokens = await this.getAllTokens();
-      const expiredTokens = allTokens.filter(token => 
+      const expiredTokens = allTokens.filter(token =>
         this.isTokenExpired(new Date(token.expiresAt))
       );
-      
+
       if (expiredTokens.length === 0) {
-        this.logOperation('deleteExpiredTokens', performance.now() - startTime, true, {
-          deletedCount: 0
-        });
+        this.logOperation(
+          'deleteExpiredTokens',
+          performance.now() - startTime,
+          true,
+          {
+            deletedCount: 0,
+          }
+        );
         return 0;
       }
-      
+
       // Delete each expired token
       let deletedCount = 0;
       for (const token of expiredTokens) {
@@ -790,35 +940,44 @@ export class VerificationTokenOperations {
         } catch (error) {
           // Log individual errors but continue
           if (this.config.logger) {
-            this.config.logger.warn('Failed to delete expired token', { 
-              error, 
+            this.config.logger.warn('Failed to delete expired token', {
+              error,
               token: this.sanitizeTokenForLogging(token.token),
-              identifier: this.sanitizeIdentifierForLogging(token.identifier)
+              identifier: this.sanitizeIdentifierForLogging(token.identifier),
             });
           }
         }
       }
-      
-      this.logOperation('deleteExpiredTokens', performance.now() - startTime, true, {
-        deletedCount,
-        totalFound: expiredTokens.length
-      });
-      
+
+      this.logOperation(
+        'deleteExpiredTokens',
+        performance.now() - startTime,
+        true,
+        {
+          deletedCount,
+          totalFound: expiredTokens.length,
+        }
+      );
+
       return deletedCount;
-      
     } catch (error) {
-      this.logOperation('deleteExpiredTokens', performance.now() - startTime, false, error);
+      this.logOperation(
+        'deleteExpiredTokens',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'deleteExpiredTokens');
     }
   }
 
   /**
    * Delete all verification tokens for a specific identifier
-   * 
+   *
    * @param identifier - Identifier (email, phone, etc.) to delete tokens for
    * @returns Promise resolving to the number of deleted tokens
    * @throws {AdapterError} If validation fails or API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const deletedCount = await verificationTokenOps.deleteTokensByIdentifier('user@example.com');
@@ -827,21 +986,26 @@ export class VerificationTokenOperations {
    */
   async deleteTokensByIdentifier(identifier: string): Promise<number> {
     const startTime = performance.now();
-    
+
     try {
       // Find all tokens for this identifier
       const tokens = await this.findVerificationTokensByIdentifier(identifier, {
-        activeOnly: false // Include expired tokens for cleanup
+        activeOnly: false, // Include expired tokens for cleanup
       });
-      
+
       if (tokens.length === 0) {
-        this.logOperation('deleteTokensByIdentifier', performance.now() - startTime, true, {
-          identifier: this.sanitizeIdentifierForLogging(identifier),
-          deletedCount: 0
-        });
+        this.logOperation(
+          'deleteTokensByIdentifier',
+          performance.now() - startTime,
+          true,
+          {
+            identifier: this.sanitizeIdentifierForLogging(identifier),
+            deletedCount: 0,
+          }
+        );
         return 0;
       }
-      
+
       // Delete each token
       let deletedCount = 0;
       for (const token of tokens) {
@@ -851,27 +1015,37 @@ export class VerificationTokenOperations {
         } catch (error) {
           // Log individual errors but continue
           if (this.config.logger) {
-            this.config.logger.warn('Failed to delete token for identifier', { 
-              error, 
+            this.config.logger.warn('Failed to delete token for identifier', {
+              error,
               identifier: this.sanitizeIdentifierForLogging(identifier),
-              token: this.sanitizeTokenForLogging(token.token)
+              token: this.sanitizeTokenForLogging(token.token),
             });
           }
         }
       }
-      
-      this.logOperation('deleteTokensByIdentifier', performance.now() - startTime, true, {
-        identifier: this.sanitizeIdentifierForLogging(identifier),
-        deletedCount,
-        totalFound: tokens.length
-      });
-      
+
+      this.logOperation(
+        'deleteTokensByIdentifier',
+        performance.now() - startTime,
+        true,
+        {
+          identifier: this.sanitizeIdentifierForLogging(identifier),
+          deletedCount,
+          totalFound: tokens.length,
+        }
+      );
+
       return deletedCount;
-      
     } catch (error) {
-      this.logOperation('deleteTokensByIdentifier', performance.now() - startTime, false, error, {
-        identifier: this.sanitizeIdentifierForLogging(identifier)
-      });
+      this.logOperation(
+        'deleteTokensByIdentifier',
+        performance.now() - startTime,
+        false,
+        error,
+        {
+          identifier: this.sanitizeIdentifierForLogging(identifier),
+        }
+      );
       throw this.handleError(error, 'deleteTokensByIdentifier');
     }
   }
@@ -882,11 +1056,11 @@ export class VerificationTokenOperations {
 
   /**
    * Count verification tokens matching optional filter criteria
-   * 
+   *
    * @param where - Optional filter criteria
    * @returns Promise resolving to the count of matching tokens
    * @throws {AdapterError} If API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const count = await verificationTokenOps.countVerificationTokens({
@@ -895,29 +1069,35 @@ export class VerificationTokenOperations {
    * console.log(`${count} tokens found`);
    * ```
    */
-  async countVerificationTokens(where?: Partial<BetterAuthVerificationToken>): Promise<number> {
+  async countVerificationTokens(
+    where?: Partial<BetterAuthVerificationToken>
+  ): Promise<number> {
     const startTime = performance.now();
-    
+
     try {
       // Build query with filters (for future query parameter implementation)
       this.queryTranslator.buildFindQuery(where || {});
-      
+
       const url = `${this.config.baseUrl}/${this.apiPath}`;
-      
+
       try {
         // Try to get count from response metadata
         const response = await this.httpClient.get(url, {
           headers: this.buildHeaders(),
           ...(this.config.timeout && { timeout: this.config.timeout }),
         });
-        
+
         const count = this.responseNormalizer.normalizeCountResponse(response);
-        this.logOperation('countVerificationTokens', performance.now() - startTime, true, {
-          count,
-          hasFilters: !!where
-        });
+        this.logOperation(
+          'countVerificationTokens',
+          performance.now() - startTime,
+          true,
+          {
+            count,
+            hasFilters: !!where,
+          }
+        );
         return count;
-        
       } catch (error) {
         // Fallback: get all tokens and count them
         const tokens = await this.findVerificationTokensByIdentifier(
@@ -925,17 +1105,26 @@ export class VerificationTokenOperations {
           { activeOnly: false }
         );
         const count = tokens.length;
-        
-        this.logOperation('countVerificationTokens', performance.now() - startTime, true, {
-          count,
-          hasFilters: !!where,
-          fallbackUsed: true
-        });
+
+        this.logOperation(
+          'countVerificationTokens',
+          performance.now() - startTime,
+          true,
+          {
+            count,
+            hasFilters: !!where,
+            fallbackUsed: true,
+          }
+        );
         return count;
       }
-      
     } catch (error) {
-      this.logOperation('countVerificationTokens', performance.now() - startTime, false, error);
+      this.logOperation(
+        'countVerificationTokens',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'countVerificationTokens');
     }
   }
@@ -955,17 +1144,29 @@ export class VerificationTokenOperations {
     const errors: ValidationError[] = [];
 
     if (!tokenData.identifier || typeof tokenData.identifier !== 'string') {
-      errors.push({ field: 'identifier', message: 'Identifier is required and must be a string' });
+      errors.push({
+        field: 'identifier',
+        message: 'Identifier is required and must be a string',
+      });
     }
 
     if (!tokenData.token || typeof tokenData.token !== 'string') {
-      errors.push({ field: 'token', message: 'Token is required and must be a string' });
+      errors.push({
+        field: 'token',
+        message: 'Token is required and must be a string',
+      });
     }
 
     if (!tokenData.expiresAt || !(tokenData.expiresAt instanceof Date)) {
-      errors.push({ field: 'expiresAt', message: 'ExpiresAt is required and must be a Date' });
+      errors.push({
+        field: 'expiresAt',
+        message: 'ExpiresAt is required and must be a Date',
+      });
     } else if (tokenData.expiresAt <= new Date()) {
-      errors.push({ field: 'expiresAt', message: 'ExpiresAt must be in the future' });
+      errors.push({
+        field: 'expiresAt',
+        message: 'ExpiresAt must be in the future',
+      });
     }
 
     if (errors.length > 0) {
@@ -1043,7 +1244,7 @@ export class VerificationTokenOperations {
    */
   private async checkTokenConflict(token: string): Promise<void> {
     const existingToken = await this.findTokenIncludingExpired(token);
-    
+
     if (existingToken) {
       throw new AdapterError(
         AdapterErrorCode.CONFLICT,
@@ -1058,18 +1259,26 @@ export class VerificationTokenOperations {
   /**
    * Find token including expired ones (for conflict checking)
    */
-  private async findTokenIncludingExpired(token: string): Promise<BetterAuthVerificationToken | null> {
+  private async findTokenIncludingExpired(
+    token: string
+  ): Promise<BetterAuthVerificationToken | null> {
     try {
       const url = `${this.config.baseUrl}/${this.apiPath}`;
       const response = await this.httpClient.get<ApsoVerificationToken[]>(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-      
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(response) as ApsoVerificationToken[];
-      const matchingToken = normalizedResults.find((t: ApsoVerificationToken) => t.token === token);
-      
-      return matchingToken ? this.entityMapper.mapVerificationTokenFromApi(matchingToken) : null;
+
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
+        response
+      ) as ApsoVerificationToken[];
+      const matchingToken = normalizedResults.find(
+        (t: ApsoVerificationToken) => t.token === token
+      );
+
+      return matchingToken
+        ? this.entityMapper.mapVerificationTokenFromApi(matchingToken)
+        : null;
     } catch (error) {
       if (this.isNotFoundError(error)) {
         return null;
@@ -1081,28 +1290,35 @@ export class VerificationTokenOperations {
   /**
    * Find expired token (for validation details)
    */
-  private async findExpiredToken(token: string): Promise<BetterAuthVerificationToken | null> {
+  private async findExpiredToken(
+    token: string
+  ): Promise<BetterAuthVerificationToken | null> {
     const foundToken = await this.findTokenIncludingExpired(token);
-    
+
     if (foundToken && this.isTokenExpired(foundToken.expiresAt)) {
       return foundToken;
     }
-    
+
     return null;
   }
 
   /**
    * Find token by internal ID
    */
-  private async findTokenById(id: string): Promise<BetterAuthVerificationToken | null> {
+  private async findTokenById(
+    id: string
+  ): Promise<BetterAuthVerificationToken | null> {
     try {
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;
       const response = await this.httpClient.get<ApsoVerificationToken>(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-      
-      const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response) as ApsoVerificationToken;
+
+      const normalizedResponse =
+        this.responseNormalizer.normalizeSingleResponse(
+          response
+        ) as ApsoVerificationToken;
       return this.entityMapper.mapVerificationTokenFromApi(normalizedResponse);
     } catch (error) {
       if (this.isNotFoundError(error)) {
@@ -1121,8 +1337,10 @@ export class VerificationTokenOperations {
       headers: this.buildHeaders(),
       ...(this.config.timeout && { timeout: this.config.timeout }),
     });
-    
-    return this.responseNormalizer.normalizeArrayResponse(response) as ApsoVerificationToken[];
+
+    return this.responseNormalizer.normalizeArrayResponse(
+      response
+    ) as ApsoVerificationToken[];
   }
 
   /**
@@ -1131,7 +1349,7 @@ export class VerificationTokenOperations {
   private buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      Accept: 'application/json',
     };
 
     // Add API key if configured
@@ -1150,7 +1368,9 @@ export class VerificationTokenOperations {
       } catch (error) {
         // Log error if logger is available, but don't fail the request
         if (this.config.logger) {
-          this.config.logger.warn('Failed to get tenant scope value', { error });
+          this.config.logger.warn('Failed to get tenant scope value', {
+            error,
+          });
         }
       }
     }
@@ -1163,9 +1383,10 @@ export class VerificationTokenOperations {
    */
   private isNotFoundError(error: any): boolean {
     return (
-      error &&
-      typeof error === 'object' &&
-      ('statusCode' in error && error.statusCode === 404) ||
+      (error &&
+        typeof error === 'object' &&
+        'statusCode' in error &&
+        error.statusCode === 404) ||
       ('status' in error && error.status === 404) ||
       ('code' in error && error.code === 'NOT_FOUND')
     );
@@ -1178,11 +1399,11 @@ export class VerificationTokenOperations {
     if (!token || typeof token !== 'string') {
       return '[INVALID_TOKEN]';
     }
-    
+
     if (token.length <= 8) {
       return '[SHORT_TOKEN]';
     }
-    
+
     return `${token.substring(0, 4)}...${token.substring(token.length - 4)}`;
   }
 
@@ -1193,18 +1414,19 @@ export class VerificationTokenOperations {
     if (!identifier || typeof identifier !== 'string') {
       return '[INVALID_IDENTIFIER]';
     }
-    
+
     if (this.isEmailIdentifier(identifier)) {
       const [localPart, domain] = identifier.split('@');
       if (localPart && domain) {
-        const maskedLocal = localPart.length > 2 
-          ? `${localPart[0]}***${localPart[localPart.length - 1]}`
-          : '***';
+        const maskedLocal =
+          localPart.length > 2
+            ? `${localPart[0]}***${localPart[localPart.length - 1]}`
+            : '***';
         return `${maskedLocal}@${domain}`;
       }
     }
-    
-    return identifier.length > 4 
+
+    return identifier.length > 4
       ? `${identifier.substring(0, 2)}***${identifier.substring(identifier.length - 2)}`
       : '***';
   }
@@ -1252,7 +1474,7 @@ export class VerificationTokenOperations {
             break;
         }
       }
-      
+
       if ('code' in error) {
         switch (error.code) {
           case 'ECONNREFUSED':
@@ -1289,17 +1511,19 @@ export class VerificationTokenOperations {
    */
   private isRetryableError(statusCode?: number): boolean {
     if (!statusCode) return false;
-    return this.config.retryConfig?.retryableStatuses?.includes(statusCode) ?? false;
+    return (
+      this.config.retryConfig?.retryableStatuses?.includes(statusCode) ?? false
+    );
   }
 
   /**
    * Log operation for observability
    */
   private logOperation(
-    operation: string, 
-    duration: number, 
-    success: boolean, 
-    error?: any, 
+    operation: string,
+    duration: number,
+    success: boolean,
+    error?: any,
     metadata?: Record<string, any>
   ): void {
     if (this.config.logger) {
@@ -1308,11 +1532,17 @@ export class VerificationTokenOperations {
         duration: Math.round(duration),
         success,
         ...(metadata && { ...metadata }),
-        ...(error && !success && { error: error instanceof Error ? error.message : String(error) })
+        ...(error &&
+          !success && {
+            error: error instanceof Error ? error.message : String(error),
+          }),
       };
 
       if (success) {
-        this.config.logger.debug('VerificationToken operation completed', logData);
+        this.config.logger.debug(
+          'VerificationToken operation completed',
+          logData
+        );
       } else {
         this.config.logger.error('VerificationToken operation failed', logData);
       }

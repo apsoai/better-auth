@@ -1,10 +1,10 @@
 /**
  * Bulk Operations Implementation
- * 
+ *
  * This class provides efficient bulk operations (updateMany, deleteMany, createMany)
- * with batching, progress tracking, and comprehensive error handling for the 
+ * with batching, progress tracking, and comprehensive error handling for the
  * Better Auth Apso Adapter.
- * 
+ *
  * ## Features
  * - **Batch Processing**: Uses BatchProcessor for efficient concurrent operations
  * - **Memory Management**: Monitors memory usage and prevents memory leaks
@@ -14,9 +14,9 @@
  * - **Cascade Operations**: Automatic cascade deletion for user-related data
  * - **Duplicate Handling**: Smart duplicate detection and skipping
  * - **Data Validation**: Pre-insertion validation for data integrity
- * 
+ *
  * ## Usage Examples
- * 
+ *
  * ### Bulk Update
  * ```typescript
  * const result = await bulkOperations.updateMany({
@@ -28,7 +28,7 @@
  * });
  * console.log(`Updated ${result.success} users, ${result.failures} failures`);
  * ```
- * 
+ *
  * ### Bulk Delete with Cascade
  * ```typescript
  * const result = await bulkOperations.deleteMany({
@@ -38,7 +38,7 @@
  *   batchSize: 25
  * });
  * ```
- * 
+ *
  * ### Bulk Create with Validation
  * ```typescript
  * const result = await bulkOperations.createMany({
@@ -49,28 +49,29 @@
  *   batchSize: 100
  * });
  * ```
- * 
+ *
  * ## Performance Characteristics
  * - Default batch size: 50 records
  * - Default concurrency: 3 concurrent batches
  * - Memory threshold: 100MB (configurable)
  * - Automatic backpressure handling
  * - Network-aware request throttling
- * 
+ *
  * @since Phase 3 - Bulk Operations Implementation
  * @author Better Auth Apso Adapter
  */
 
-import type {
-  ApsoAdapterConfig,
-  Logger,
-} from '../types';
-import { 
+import type { ApsoAdapterConfig, Logger } from '../types';
+import {
   EntityType,
   AdapterErrorCode,
-  AdapterError as AdapterErrorClass 
+  AdapterError as AdapterErrorClass,
 } from '../types';
-import { BatchProcessor, type BatchResult, type BatchProgressCallback } from '../utils/BatchProcessor';
+import {
+  BatchProcessor,
+  type BatchResult,
+  type BatchProgressCallback,
+} from '../utils/BatchProcessor';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper } from '../response/EntityMapper';
 import { HttpClient } from '../client/HttpClient';
@@ -143,7 +144,7 @@ export interface UpdateManyOptions {
 }
 
 /**
- * Options for deleteMany operation  
+ * Options for deleteMany operation
  */
 export interface DeleteManyOptions {
   model: EntityType;
@@ -214,15 +215,15 @@ export class BulkOperations {
   private readonly entityMapper: EntityMapper;
   private readonly config: ApsoAdapterConfig;
   private readonly logger: Logger | undefined;
-  
+
   // Entity-specific operation handlers
   private readonly userOperations: UserOperations;
   private readonly sessionOperations: SessionOperations;
   private readonly verificationTokenOperations: VerificationTokenOperations;
-  
+
   // Batch processor instance
   private readonly batchProcessor: BatchProcessor;
-  
+
   // Operation cancellation support
   private readonly cancelTokens = new Map<string, boolean>();
 
@@ -232,15 +233,16 @@ export class BulkOperations {
     this.entityMapper = dependencies.entityMapper;
     this.config = dependencies.config;
     this.logger = dependencies.config.logger;
-    
+
     this.userOperations = dependencies.userOperations;
     this.sessionOperations = dependencies.sessionOperations;
     this.verificationTokenOperations = dependencies.verificationTokenOperations;
-    
+
     // Initialize batch processor with adapter config
-    const batchConfig = dependencies.config.batchConfig || BatchProcessor.createDefaultConfig();
+    const batchConfig =
+      dependencies.config.batchConfig || BatchProcessor.createDefaultConfig();
     this.batchProcessor = new BatchProcessor(batchConfig, this.logger);
-    
+
     this.logger?.info('BulkOperations initialized', {
       batchSize: batchConfig.batchSize,
       concurrency: batchConfig.concurrency,
@@ -255,7 +257,9 @@ export class BulkOperations {
    * Update multiple records matching criteria
    * Uses query-then-process pattern for accuracy and error handling
    */
-  async updateMany<T = any>(options: UpdateManyOptions): Promise<BulkOperationResult<T>> {
+  async updateMany<T = any>(
+    options: UpdateManyOptions
+  ): Promise<BulkOperationResult<T>> {
     const contextConfig: Partial<BulkOperationConfig> = {};
     if (options.batchSize !== undefined) {
       contextConfig.batchSize = options.batchSize;
@@ -263,9 +267,13 @@ export class BulkOperations {
     if (options.maxConcurrency !== undefined) {
       contextConfig.maxConcurrency = options.maxConcurrency;
     }
-    
-    const context = this.createOperationContext('updateMany', options.model, contextConfig);
-    
+
+    const context = this.createOperationContext(
+      'updateMany',
+      options.model,
+      contextConfig
+    );
+
     try {
       this.logger?.info('Starting bulk update operation', {
         model: options.model,
@@ -274,14 +282,20 @@ export class BulkOperations {
       });
 
       // Step 1: Find all matching records
-      const matchingRecords = await this.findMatchingRecords(options.model, options.where);
-      
+      const matchingRecords = await this.findMatchingRecords(
+        options.model,
+        options.where
+      );
+
       if (matchingRecords.length === 0) {
         return this.createEmptyResult(context);
       }
 
       // Step 2: Process updates in batches
-      const updateProcessor = this.createUpdateProcessor(options.model, options.update);
+      const updateProcessor = this.createUpdateProcessor(
+        options.model,
+        options.update
+      );
       const batchResult = await this.batchProcessor.processBatch(
         matchingRecords,
         updateProcessor,
@@ -289,14 +303,17 @@ export class BulkOperations {
       );
 
       // Step 3: Transform results and create response
-      return this.transformBatchResult<T>(batchResult, context, options.returnResults);
-      
+      return this.transformBatchResult<T>(
+        batchResult,
+        context,
+        options.returnResults
+      );
     } catch (error) {
       this.logger?.error('Bulk update operation failed', {
         error: error instanceof Error ? error.message : String(error),
         model: options.model,
       });
-      
+
       throw this.handleBulkError(error, context);
     }
   }
@@ -305,7 +322,9 @@ export class BulkOperations {
    * Delete multiple records matching criteria
    * Supports cascade deletion and safe deletion patterns
    */
-  async deleteMany<T = any>(options: DeleteManyOptions): Promise<BulkOperationResult<T>> {
+  async deleteMany<T = any>(
+    options: DeleteManyOptions
+  ): Promise<BulkOperationResult<T>> {
     const contextConfig: Partial<BulkOperationConfig> = {};
     if (options.batchSize !== undefined) {
       contextConfig.batchSize = options.batchSize;
@@ -313,8 +332,12 @@ export class BulkOperations {
     if (options.maxConcurrency !== undefined) {
       contextConfig.maxConcurrency = options.maxConcurrency;
     }
-    
-    const context = this.createOperationContext('deleteMany', options.model, contextConfig);
+
+    const context = this.createOperationContext(
+      'deleteMany',
+      options.model,
+      contextConfig
+    );
 
     try {
       this.logger?.info('Starting bulk delete operation', {
@@ -325,8 +348,11 @@ export class BulkOperations {
       });
 
       // Step 1: Find all matching records
-      const matchingRecords = await this.findMatchingRecords(options.model, options.where);
-      
+      const matchingRecords = await this.findMatchingRecords(
+        options.model,
+        options.where
+      );
+
       if (matchingRecords.length === 0) {
         return this.createEmptyResult(context);
       }
@@ -337,7 +363,9 @@ export class BulkOperations {
       }
 
       // Step 3: Store records if we need to return them
-      const recordsToReturn = options.returnDeleted ? [...matchingRecords] : undefined;
+      const recordsToReturn = options.returnDeleted
+        ? [...matchingRecords]
+        : undefined;
 
       // Step 4: Process deletions in batches
       const deleteProcessor = this.createDeleteProcessor(options.model);
@@ -348,20 +376,23 @@ export class BulkOperations {
       );
 
       // Step 5: Transform results and create response
-      const result = this.transformBatchResult<T>(batchResult, context, options.returnDeleted);
-      
+      const result = this.transformBatchResult<T>(
+        batchResult,
+        context,
+        options.returnDeleted
+      );
+
       if (recordsToReturn && result.success > 0) {
         result.results = recordsToReturn.slice(0, result.success) as T[];
       }
 
       return result;
-      
     } catch (error) {
       this.logger?.error('Bulk delete operation failed', {
         error: error instanceof Error ? error.message : String(error),
         model: options.model,
       });
-      
+
       throw this.handleBulkError(error, context);
     }
   }
@@ -370,7 +401,9 @@ export class BulkOperations {
    * Create multiple records with duplicate handling
    * Supports validation and conflict resolution
    */
-  async createMany<T = any>(options: CreateManyOptions): Promise<BulkOperationResult<T>> {
+  async createMany<T = any>(
+    options: CreateManyOptions
+  ): Promise<BulkOperationResult<T>> {
     const contextConfig: Partial<BulkOperationConfig> = {};
     if (options.batchSize !== undefined) {
       contextConfig.batchSize = options.batchSize;
@@ -378,8 +411,12 @@ export class BulkOperations {
     if (options.maxConcurrency !== undefined) {
       contextConfig.maxConcurrency = options.maxConcurrency;
     }
-    
-    const context = this.createOperationContext('createMany', options.model, contextConfig);
+
+    const context = this.createOperationContext(
+      'createMany',
+      options.model,
+      contextConfig
+    );
 
     try {
       this.logger?.info('Starting bulk create operation', {
@@ -397,12 +434,18 @@ export class BulkOperations {
       // Step 1: Validate data if requested
       let validatedData = options.data;
       if (options.validateBeforeInsert) {
-        validatedData = await this.validateCreateData(options.model, options.data);
+        validatedData = await this.validateCreateData(
+          options.model,
+          options.data
+        );
       }
 
       // Step 2: Handle duplicate detection if requested
       if (options.skipDuplicates) {
-        validatedData = await this.filterDuplicates(options.model, validatedData);
+        validatedData = await this.filterDuplicates(
+          options.model,
+          validatedData
+        );
       }
 
       if (validatedData.length === 0) {
@@ -419,13 +462,12 @@ export class BulkOperations {
 
       // Step 4: Transform results and create response
       return this.transformBatchResult<T>(batchResult, context, true);
-      
     } catch (error) {
       this.logger?.error('Bulk create operation failed', {
         error: error instanceof Error ? error.message : String(error),
         model: options.model,
       });
-      
+
       throw this.handleBulkError(error, context);
     }
   }
@@ -456,7 +498,7 @@ export class BulkOperations {
         heapTotal: usage.heapTotal,
       };
     }
-    
+
     // Fallback for non-Node environments
     return {
       used: 0,
@@ -473,8 +515,8 @@ export class BulkOperations {
    * Create operation context with configuration
    */
   private createOperationContext(
-    operation: string, 
-    model: EntityType, 
+    operation: string,
+    model: EntityType,
     config: Partial<BulkOperationConfig>
   ): OperationContext {
     const operationConfig: BulkOperationConfig = {
@@ -482,7 +524,7 @@ export class BulkOperations {
       enableProgress: config.enableProgress ?? true,
       memoryThreshold: config.memoryThreshold || 100 * 1024 * 1024, // 100MB
     };
-    
+
     if (config.batchSize !== undefined) {
       operationConfig.batchSize = config.batchSize;
     } else if (this.config.batchConfig?.batchSize !== undefined) {
@@ -490,7 +532,7 @@ export class BulkOperations {
     } else {
       operationConfig.batchSize = 50;
     }
-    
+
     if (config.maxConcurrency !== undefined) {
       operationConfig.maxConcurrency = config.maxConcurrency;
     } else if (this.config.batchConfig?.concurrency !== undefined) {
@@ -498,7 +540,7 @@ export class BulkOperations {
     } else {
       operationConfig.maxConcurrency = 3;
     }
-    
+
     return {
       operation,
       model,
@@ -511,7 +553,10 @@ export class BulkOperations {
   /**
    * Find all records matching the given criteria
    */
-  private async findMatchingRecords(model: EntityType, where: Record<string, any>): Promise<any[]> {
+  private async findMatchingRecords(
+    model: EntityType,
+    where: Record<string, any>
+  ): Promise<any[]> {
     try {
       // Route to entity-specific operations for optimized queries
       switch (model) {
@@ -528,10 +573,14 @@ export class BulkOperations {
 
         case EntityType.SESSION:
           if (where.id) {
-            const session = await this.sessionOperations.findSessionById(where.id);
+            const session = await this.sessionOperations.findSessionById(
+              where.id
+            );
             return session ? [session] : [];
           } else if (where.sessionToken) {
-            const session = await this.sessionOperations.findSessionByToken(where.sessionToken);
+            const session = await this.sessionOperations.findSessionByToken(
+              where.sessionToken
+            );
             return session ? [session] : [];
           } else {
             return await this.sessionOperations.findManySessions({ where });
@@ -539,11 +588,14 @@ export class BulkOperations {
 
         case EntityType.VERIFICATION_TOKEN:
           if (where.token) {
-            const token = await this.verificationTokenOperations.findVerificationTokenByToken(where.token);
+            const token =
+              await this.verificationTokenOperations.findVerificationTokenByToken(
+                where.token
+              );
             return token ? [token] : [];
           } else if (where.identifier) {
             return await this.verificationTokenOperations.findVerificationTokensByIdentifier(
-              where.identifier, 
+              where.identifier,
               { activeOnly: false }
             );
           } else {
@@ -555,9 +607,12 @@ export class BulkOperations {
           // Generic implementation for unsupported models
           const apiPath = this.entityMapper.getApiPath(model);
           const url = `${this.config.baseUrl}/${apiPath}`;
-          
-          const response = await this.httpClient.get<any[]>(url, this.buildRequestConfig());
-          
+
+          const response = await this.httpClient.get<any[]>(
+            url,
+            this.buildRequestConfig()
+          );
+
           return this.responseNormalizer.normalizeArrayResponse(response);
       }
     } catch (error) {
@@ -573,35 +628,58 @@ export class BulkOperations {
   /**
    * Create processor function for update operations
    */
-  private createUpdateProcessor(model: EntityType, updateData: Record<string, any>) {
+  private createUpdateProcessor(
+    model: EntityType,
+    updateData: Record<string, any>
+  ) {
     return async (record: any, index: number): Promise<any> => {
       try {
         switch (model) {
           case EntityType.USER:
             return await this.userOperations.updateUser(record.id, updateData);
-            
+
           case EntityType.SESSION:
-            return await this.sessionOperations.updateSession(record.id, updateData);
-            
+            return await this.sessionOperations.updateSession(
+              record.id,
+              updateData
+            );
+
           case EntityType.VERIFICATION_TOKEN:
             // VerificationTokens are immutable - create new token with updated data
-            await this.verificationTokenOperations.deleteVerificationToken(record.token);
-            return await this.verificationTokenOperations.createVerificationToken({
-              identifier: updateData.identifier || record.identifier,
-              token: updateData.token || record.token,
-              expiresAt: updateData.expiresAt ? new Date(updateData.expiresAt) : record.expiresAt,
-            });
-            
+            await this.verificationTokenOperations.deleteVerificationToken(
+              record.token
+            );
+            return await this.verificationTokenOperations.createVerificationToken(
+              {
+                identifier: updateData.identifier || record.identifier,
+                token: updateData.token || record.token,
+                expiresAt: updateData.expiresAt
+                  ? new Date(updateData.expiresAt)
+                  : record.expiresAt,
+              }
+            );
+
           default:
             // Generic update implementation
-            const transformedData = this.entityMapper.transformOutbound(model, updateData);
+            const transformedData = this.entityMapper.transformOutbound(
+              model,
+              updateData
+            );
             const apiPath = this.entityMapper.getApiPath(model);
             const url = `${this.config.baseUrl}/${apiPath}/${record.id}`;
-            
-            const response = await this.httpClient.patch(url, transformedData, this.buildRequestConfig());
-            
-            const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response);
-            return this.entityMapper.transformInbound(model, normalizedResponse);
+
+            const response = await this.httpClient.patch(
+              url,
+              transformedData,
+              this.buildRequestConfig()
+            );
+
+            const normalizedResponse =
+              this.responseNormalizer.normalizeSingleResponse(response);
+            return this.entityMapper.transformInbound(
+              model,
+              normalizedResponse
+            );
         }
       } catch (error) {
         this.logger?.debug('Individual update failed', {
@@ -627,30 +705,32 @@ export class BulkOperations {
             // doesn't have a direct delete method
             const userApiPath = this.entityMapper.getApiPath(model);
             const userUrl = `${this.config.baseUrl}/${userApiPath}/${record.id}`;
-            
+
             await this.httpClient.delete(userUrl, this.buildRequestConfig());
-            
+
             return record;
-            
+
           case EntityType.SESSION:
             // Session deletion through generic API
             const sessionApiPath = this.entityMapper.getApiPath(model);
             const sessionUrl = `${this.config.baseUrl}/${sessionApiPath}/${record.id}`;
-            
+
             await this.httpClient.delete(sessionUrl, this.buildRequestConfig());
-            
+
             return record;
-            
+
           case EntityType.VERIFICATION_TOKEN:
-            return await this.verificationTokenOperations.deleteVerificationToken(record.token);
-            
+            return await this.verificationTokenOperations.deleteVerificationToken(
+              record.token
+            );
+
           default:
             // Generic delete implementation
             const apiPath = this.entityMapper.getApiPath(model);
             const url = `${this.config.baseUrl}/${apiPath}/${record.id}`;
-            
+
             await this.httpClient.delete(url, this.buildRequestConfig());
-            
+
             return record;
         }
       } catch (error) {
@@ -674,31 +754,44 @@ export class BulkOperations {
         switch (model) {
           case EntityType.USER:
             return await this.userOperations.createUser(data);
-            
+
           case EntityType.SESSION:
             return await this.sessionOperations.createSession({
               sessionToken: data.sessionToken,
               userId: data.userId,
               expiresAt: new Date(data.expiresAt),
             });
-            
+
           case EntityType.VERIFICATION_TOKEN:
-            return await this.verificationTokenOperations.createVerificationToken({
-              identifier: data.identifier,
-              token: data.token,
-              expiresAt: new Date(data.expiresAt),
-            });
-            
+            return await this.verificationTokenOperations.createVerificationToken(
+              {
+                identifier: data.identifier,
+                token: data.token,
+                expiresAt: new Date(data.expiresAt),
+              }
+            );
+
           default:
             // Generic create implementation
-            const transformedData = this.entityMapper.transformOutbound(model, data);
+            const transformedData = this.entityMapper.transformOutbound(
+              model,
+              data
+            );
             const apiPath = this.entityMapper.getApiPath(model);
             const url = `${this.config.baseUrl}/${apiPath}`;
-            
-            const response = await this.httpClient.post(url, transformedData, this.buildRequestConfig());
-            
-            const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response);
-            return this.entityMapper.transformInbound(model, normalizedResponse);
+
+            const response = await this.httpClient.post(
+              url,
+              transformedData,
+              this.buildRequestConfig()
+            );
+
+            const normalizedResponse =
+              this.responseNormalizer.normalizeSingleResponse(response);
+            return this.entityMapper.transformInbound(
+              model,
+              normalizedResponse
+            );
         }
       } catch (error) {
         this.logger?.debug('Individual create failed', {
@@ -717,7 +810,7 @@ export class BulkOperations {
   private async handleUserCascadeDelete(users: any[]): Promise<void> {
     try {
       const userIds = users.map(user => user.id).filter(id => id);
-      
+
       if (userIds.length === 0) return;
 
       this.logger?.debug('Performing cascade delete for user sessions', {
@@ -759,9 +852,12 @@ export class BulkOperations {
   /**
    * Validate create data before insertion
    */
-  private async validateCreateData(model: EntityType, data: Array<Record<string, any>>): Promise<Array<Record<string, any>>> {
+  private async validateCreateData(
+    model: EntityType,
+    data: Array<Record<string, any>>
+  ): Promise<Array<Record<string, any>>> {
     const validatedData: Array<Record<string, any>> = [];
-    
+
     for (const item of data) {
       try {
         const validation = this.entityMapper.validate(model, item);
@@ -789,9 +885,12 @@ export class BulkOperations {
   /**
    * Filter out duplicate records based on unique constraints
    */
-  private async filterDuplicates(model: EntityType, data: Array<Record<string, any>>): Promise<Array<Record<string, any>>> {
+  private async filterDuplicates(
+    model: EntityType,
+    data: Array<Record<string, any>>
+  ): Promise<Array<Record<string, any>>> {
     const filteredData: Array<Record<string, any>> = [];
-    
+
     for (const item of data) {
       try {
         const isDuplicate = await this.checkForDuplicate(model, item);
@@ -817,31 +916,42 @@ export class BulkOperations {
   /**
    * Check if a record would be a duplicate
    */
-  private async checkForDuplicate(model: EntityType, item: Record<string, any>): Promise<boolean> {
+  private async checkForDuplicate(
+    model: EntityType,
+    item: Record<string, any>
+  ): Promise<boolean> {
     try {
       switch (model) {
         case EntityType.USER:
           if (item.email) {
-            const existingUser = await this.userOperations.findUserByEmail(item.email);
+            const existingUser = await this.userOperations.findUserByEmail(
+              item.email
+            );
             return existingUser !== null;
           }
           break;
-          
+
         case EntityType.SESSION:
           if (item.sessionToken) {
-            const existingSession = await this.sessionOperations.findSessionByToken(item.sessionToken);
+            const existingSession =
+              await this.sessionOperations.findSessionByToken(
+                item.sessionToken
+              );
             return existingSession !== null;
           }
           break;
-          
+
         case EntityType.VERIFICATION_TOKEN:
           if (item.token) {
-            const existingToken = await this.verificationTokenOperations.findVerificationTokenByToken(item.token);
+            const existingToken =
+              await this.verificationTokenOperations.findVerificationTokenByToken(
+                item.token
+              );
             return existingToken !== null;
           }
           break;
       }
-      
+
       return false;
     } catch (error) {
       // If we can't determine if it's a duplicate, assume it's not
@@ -853,12 +963,12 @@ export class BulkOperations {
    * Transform batch processor result to bulk operation result
    */
   private transformBatchResult<T>(
-    batchResult: BatchResult<T>, 
+    batchResult: BatchResult<T>,
     context: OperationContext,
     includeResults: boolean = false
   ): BulkOperationResult<T> {
     const duration = performance.now() - context.startTime;
-    
+
     const errors: BulkOperationError[] = batchResult.failed.map(failure => ({
       index: failure.index,
       item: failure.item,
@@ -895,9 +1005,11 @@ export class BulkOperations {
   /**
    * Create empty result for operations with no matching records
    */
-  private createEmptyResult<T>(context: OperationContext): BulkOperationResult<T> {
+  private createEmptyResult<T>(
+    context: OperationContext
+  ): BulkOperationResult<T> {
     const duration = performance.now() - context.startTime;
-    
+
     return {
       count: 0,
       success: 0,
@@ -914,7 +1026,7 @@ export class BulkOperations {
   private buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      Accept: 'application/json',
     };
 
     if (this.config.apiKey) {
@@ -948,18 +1060,30 @@ export class BulkOperations {
     // Check if error has status code information
     const errorWithStatus = error as any;
     if (errorWithStatus.statusCode) {
-      return this.config.retryConfig?.retryableStatuses?.includes(errorWithStatus.statusCode) ?? false;
+      return (
+        this.config.retryConfig?.retryableStatuses?.includes(
+          errorWithStatus.statusCode
+        ) ?? false
+      );
     }
-    
+
     // Check for network errors
-    const networkErrorCodes = ['ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNRESET'];
+    const networkErrorCodes = [
+      'ECONNREFUSED',
+      'ENOTFOUND',
+      'ETIMEDOUT',
+      'ECONNRESET',
+    ];
     return networkErrorCodes.some(code => error.message.includes(code));
   }
 
   /**
    * Handle and normalize bulk operation errors
    */
-  private handleBulkError(error: any, context: OperationContext): AdapterErrorClass {
+  private handleBulkError(
+    error: any,
+    context: OperationContext
+  ): AdapterErrorClass {
     let errorCode: AdapterErrorCode = AdapterErrorCode.UNKNOWN;
     let retryable = false;
 
@@ -994,7 +1118,7 @@ export class BulkOperations {
             break;
         }
       }
-      
+
       if ('code' in error) {
         switch (error.code) {
           case 'ECONNREFUSED':
@@ -1012,7 +1136,7 @@ export class BulkOperations {
     }
 
     const message = `Bulk ${context.operation} operation failed for model ${context.model}`;
-    
+
     return new AdapterErrorClass(
       errorCode,
       message,

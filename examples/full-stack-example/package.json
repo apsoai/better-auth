@@ -1,0 +1,83 @@
+{
+  "name": "better-auth-apso-full-stack-example",
+  "version": "1.0.0",
+  "description": "Complete full-stack authentication example using Better Auth with Apso adapter",
+  "private": true,
+  "scripts": {
+    "install": "npm run install:backend && npm run install:frontend",
+    "install:backend": "cd apso-backend && npm install",
+    "install:frontend": "cd nextjs-frontend && npm install",
+    
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" --names \"backend,frontend\" --prefix-colors \"blue,green\"",
+    "dev:backend": "cd apso-backend && npm run start:dev",
+    "dev:frontend": "cd nextjs-frontend && npm run dev",
+    
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "cd apso-backend && npm run build",
+    "build:frontend": "cd nextjs-frontend && npm run build",
+    
+    "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\" --names \"backend,frontend\" --prefix-colors \"blue,green\"",
+    "start:backend": "cd apso-backend && npm run start:prod",
+    "start:frontend": "cd nextjs-frontend && npm run start",
+    
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "cd apso-backend && npm run test",
+    "test:frontend": "cd nextjs-frontend && npm run test",
+    
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "lint:backend": "cd apso-backend && npm run lint",
+    "lint:frontend": "cd nextjs-frontend && npm run lint",
+    
+    "type-check": "npm run type-check:backend && npm run type-check:frontend",
+    "type-check:backend": "cd apso-backend && npm run typecheck",
+    "type-check:frontend": "cd nextjs-frontend && npm run type-check",
+    
+    "db:migrate": "cd apso-backend && npm run migration:run",
+    "db:migrate:generate": "cd apso-backend && npm run migration:generate",
+    "db:migrate:revert": "cd apso-backend && npm run migration:revert",
+    "db:seed": "cd apso-backend && npm run db:seed",
+    "db:reset": "npm run db:migrate:revert && npm run db:migrate && npm run db:seed",
+    
+    "apso:generate": "cd apso-backend && apso generate",
+    "apso:clean": "cd apso-backend && apso clean",
+    
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:build": "docker-compose build",
+    "docker:logs": "docker-compose logs -f",
+    "docker:logs:backend": "docker-compose logs -f backend",
+    "docker:logs:frontend": "docker-compose logs -f frontend",
+    "docker:logs:postgres": "docker-compose logs -f postgres",
+    
+    "setup": "npm run setup:local",
+    "setup:local": "npm install && npm run apso:generate && npm run db:migrate",
+    "setup:docker": "docker-compose up --build -d && echo 'Waiting for services to start...' && sleep 30 && docker-compose exec backend npm run migration:run",
+    
+    "clean": "npm run clean:backend && npm run clean:frontend && npm run clean:docker",
+    "clean:backend": "cd apso-backend && rm -rf dist node_modules",
+    "clean:frontend": "cd nextjs-frontend && rm -rf .next node_modules",
+    "clean:docker": "docker-compose down --volumes --remove-orphans && docker system prune -f",
+    
+    "health-check": "npm run health-check:backend && npm run health-check:frontend",
+    "health-check:backend": "curl -f http://localhost:3001/health || exit 1",
+    "health-check:frontend": "curl -f http://localhost:3000 || exit 1"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "better-auth",
+    "apso",
+    "nextjs",
+    "nestjs",
+    "typescript",
+    "authentication",
+    "full-stack",
+    "example"
+  ],
+  "author": "Mavric Team",
+  "license": "MIT"
+}

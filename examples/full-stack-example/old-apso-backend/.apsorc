@@ -1,0 +1,187 @@
+{
+  "version": 2,
+  "entities": [
+    {
+      "name": "User",
+      "created_at": true,
+      "updated_at": true,
+      "fields": [
+        {
+          "name": "email",
+          "type": "text",
+          "length": 255,
+          "is_email": true,
+          "unique": true
+        },
+        {
+          "name": "emailVerified",
+          "type": "bool",
+          "default": false
+        },
+        {
+          "name": "hashedPassword",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "image",
+          "type": "text",
+          "nullable": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_user_email",
+          "unique": true,
+          "on": ["email"]
+        }
+      ]
+    },
+    {
+      "name": "Session",
+      "created_at": true,
+      "updated_at": true,
+      "fields": [
+        {
+          "name": "sessionToken",
+          "type": "text",
+          "unique": true
+        },
+        {
+          "name": "userId",
+          "type": "uuid"
+        },
+        {
+          "name": "expiresAt",
+          "type": "date"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_session_token",
+          "unique": true,
+          "on": ["sessionToken"]
+        },
+        {
+          "name": "idx_session_user",
+          "on": ["userId"]
+        }
+      ]
+    },
+    {
+      "name": "VerificationToken",
+      "created_at": true,
+      "fields": [
+        {
+          "name": "identifier",
+          "type": "text"
+        },
+        {
+          "name": "token",
+          "type": "text",
+          "unique": true
+        },
+        {
+          "name": "expiresAt",
+          "type": "date"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_vt_token",
+          "unique": true,
+          "on": ["token"]
+        }
+      ]
+    },
+    {
+      "name": "Account",
+      "created_at": true,
+      "updated_at": true,
+      "fields": [
+        {
+          "name": "userId",
+          "type": "uuid"
+        },
+        {
+          "name": "type",
+          "type": "text"
+        },
+        {
+          "name": "provider",
+          "type": "text"
+        },
+        {
+          "name": "providerAccountId",
+          "type": "text"
+        },
+        {
+          "name": "refresh_token",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "access_token",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "expires_at",
+          "type": "integer",
+          "nullable": true
+        },
+        {
+          "name": "token_type",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "scope",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "id_token",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "session_state",
+          "type": "text",
+          "nullable": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_account_user",
+          "on": ["userId"]
+        },
+        {
+          "name": "idx_account_provider",
+          "unique": true,
+          "on": ["provider", "providerAccountId"]
+        }
+      ]
+    }
+  ],
+  "database": {
+    "type": "postgresql",
+    "host": "localhost",
+    "port": 5432,
+    "database": "better_auth_example",
+    "username": "postgres",
+    "password": "password"
+  },
+  "server": {
+    "port": 3001,
+    "cors": {
+      "origin": ["http://localhost:3000"],
+      "credentials": true
+    }
+  }
+}

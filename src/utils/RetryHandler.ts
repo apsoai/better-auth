@@ -1,6 +1,6 @@
 /**
  * Retry Handler Utility
- * 
+ *
  * This utility provides retry logic with exponential backoff
  * for handling transient failures in HTTP requests.
  */
@@ -34,13 +34,13 @@ export class RetryHandler {
     // 3. Apply exponential backoff with jitter
     // 4. Retry up to maxRetries
     // 5. Throw final error if all attempts fail
-    
+
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
       try {
         const result = await fn();
-        
+
         if (attempt > 0) {
           this.logger?.info('Retry succeeded', {
             attempt,
@@ -64,7 +64,7 @@ export class RetryHandler {
 
         if (attempt < this.config.maxRetries) {
           const delay = this.calculateDelay(attempt);
-          
+
           this.logger?.debug('Retrying after error', {
             error: error instanceof Error ? error.message : String(error),
             attempt,
@@ -84,7 +84,9 @@ export class RetryHandler {
       ...context,
     });
 
-    throw lastError || new Error('All retry attempts failed with unknown error');
+    throw (
+      lastError || new Error('All retry attempts failed with unknown error')
+    );
   }
 
   /**
@@ -107,7 +109,10 @@ export class RetryHandler {
       }
 
       // Check status code against retryable statuses
-      if (error.statusCode && !this.config.retryableStatuses.includes(error.statusCode)) {
+      if (
+        error.statusCode &&
+        !this.config.retryableStatuses.includes(error.statusCode)
+      ) {
         return false;
       }
 
@@ -138,9 +143,9 @@ export class RetryHandler {
     // 1. Apply exponential backoff
     // 2. Add jitter to prevent thundering herd
     // 3. Cap at maxDelayMs
-    
+
     const exponentialDelay = this.config.initialDelayMs * Math.pow(2, attempt);
-    
+
     // Add jitter (±25% of the delay)
     const jitterFactor = 0.25;
     const jitter = exponentialDelay * jitterFactor * (Math.random() - 0.5);
@@ -179,7 +184,7 @@ export class RetryHandler {
       'fetch failed',
     ];
 
-    return networkErrorPatterns.some(pattern => 
+    return networkErrorPatterns.some(pattern =>
       error.message.toLowerCase().includes(pattern.toLowerCase())
     );
   }
@@ -223,7 +228,9 @@ export class RetryHandler {
       maxRetries: 5,
       initialDelayMs: 50,
       maxDelayMs: 10000,
-      retryableStatuses: [408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524],
+      retryableStatuses: [
+        408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524,
+      ],
     };
   }
 

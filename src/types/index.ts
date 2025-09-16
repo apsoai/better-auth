@@ -156,11 +156,29 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface HttpClient {
   request<T>(config: RequestConfig): Promise<T>;
-  get<T>(url: string, config?: Omit<RequestConfig, 'method' | 'url'>): Promise<T>;
-  post<T>(url: string, data?: any, config?: Omit<RequestConfig, 'method' | 'url' | 'body'>): Promise<T>;
-  put<T>(url: string, data?: any, config?: Omit<RequestConfig, 'method' | 'url' | 'body'>): Promise<T>;
-  patch<T>(url: string, data?: any, config?: Omit<RequestConfig, 'method' | 'url' | 'body'>): Promise<T>;
-  delete<T>(url: string, config?: Omit<RequestConfig, 'method' | 'url'>): Promise<T>;
+  get<T>(
+    url: string,
+    config?: Omit<RequestConfig, 'method' | 'url'>
+  ): Promise<T>;
+  post<T>(
+    url: string,
+    data?: any,
+    config?: Omit<RequestConfig, 'method' | 'url' | 'body'>
+  ): Promise<T>;
+  put<T>(
+    url: string,
+    data?: any,
+    config?: Omit<RequestConfig, 'method' | 'url' | 'body'>
+  ): Promise<T>;
+  patch<T>(
+    url: string,
+    data?: any,
+    config?: Omit<RequestConfig, 'method' | 'url' | 'body'>
+  ): Promise<T>;
+  delete<T>(
+    url: string,
+    config?: Omit<RequestConfig, 'method' | 'url'>
+  ): Promise<T>;
 }
 
 export interface RequestConfig {
@@ -232,8 +250,12 @@ export interface SslConfig {
   secureProtocol?: string;
 }
 
-export type RequestInterceptor = (config: RequestConfig) => RequestConfig | Promise<RequestConfig>;
-export type ResponseInterceptor = <T>(response: HttpResponse<T>) => HttpResponse<T> | Promise<HttpResponse<T>>;
+export type RequestInterceptor = (
+  config: RequestConfig
+) => RequestConfig | Promise<RequestConfig>;
+export type ResponseInterceptor = <T>(
+  response: HttpResponse<T>
+) => HttpResponse<T> | Promise<HttpResponse<T>>;
 export type ErrorInterceptor = (error: Error) => Error | Promise<Error>;
 
 export interface HttpResponse<T> {
@@ -275,7 +297,7 @@ export interface ErrorMetrics {
 export enum CircuitState {
   CLOSED = 'CLOSED',
   OPEN = 'OPEN',
-  HALF_OPEN = 'HALF_OPEN'
+  HALF_OPEN = 'HALF_OPEN',
 }
 
 export interface CircuitBreakerStats {
@@ -300,7 +322,7 @@ export interface CrudFilter {
   not?: boolean;
 }
 
-export type CrudOperator = 
+export type CrudOperator =
   | 'equals'
   | 'not'
   | 'in'
@@ -429,7 +451,7 @@ export interface ValidationRule {
   custom?: (value: any) => boolean | string;
 }
 
-export type ValidationRuleType = 
+export type ValidationRuleType =
   | 'string'
   | 'number'
   | 'boolean'
@@ -523,7 +545,7 @@ export interface ApsoAdapter extends BetterAuthAdapter {
 
   // Batch operations
   createMany<T>(params: CreateManyParams): Promise<T[]>;
-  
+
   // Connection management
   close(): Promise<void>;
 }
@@ -596,14 +618,12 @@ export interface HealthCheckResult {
 // =============================================================================
 
 export const isApiResponse = <T>(value: any): value is ApiResponse<T> => {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'data' in value
-  );
+  return typeof value === 'object' && value !== null && 'data' in value;
 };
 
-export const isPaginatedResponse = <T>(value: any): value is PaginatedResponse<T> => {
+export const isPaginatedResponse = <T>(
+  value: any
+): value is PaginatedResponse<T> => {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -628,7 +648,8 @@ export type DeepPartial<T> = {
 
 export type RequiredFields<T, K extends keyof T> = T & Required<Pick<T, K>>;
 
-export type OptionalFields<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
+export type OptionalFields<T, K extends keyof T> = Omit<T, K> &
+  Partial<Pick<T, K>>;
 
 export type NonNullable<T> = T extends null | undefined ? never : T;
 
@@ -643,6 +664,7 @@ export interface BetterAuthUser {
   id: string;
   email: string;
   emailVerified: boolean;
+  hashedPassword?: string;
   name?: string;
   image?: string;
 }
@@ -682,6 +704,16 @@ export interface BetterAuthAccount {
   scope?: string;
   id_token?: string;
   session_state?: string;
+}
+
+/**
+ * Extended Better Auth account interface that includes additional fields
+ * that Better Auth may pass during account creation
+ */
+export interface BetterAuthAccountWithPassword extends BetterAuthAccount {
+  password?: string;
+  providerId?: string;
+  accountId?: string;
 }
 
 /**
@@ -730,6 +762,7 @@ export interface ApsoAccount {
   type: string;
   provider: string;
   providerAccountId: string;
+  password?: string;
   refresh_token?: string;
   access_token?: string;
   expires_at?: number;
@@ -748,7 +781,7 @@ export enum EntityType {
   USER = 'user',
   SESSION = 'session',
   VERIFICATION_TOKEN = 'verificationToken',
-  ACCOUNT = 'account'
+  ACCOUNT = 'account',
 }
 
 /**
@@ -759,9 +792,17 @@ export type TransformationDirection = 'toApi' | 'fromApi';
 /**
  * Union type for Better Auth entities
  */
-export type BetterAuthEntity = BetterAuthUser | BetterAuthSession | BetterAuthVerificationToken | BetterAuthAccount;
+export type BetterAuthEntity =
+  | BetterAuthUser
+  | BetterAuthSession
+  | BetterAuthVerificationToken
+  | BetterAuthAccount;
 
 /**
  * Union type for Apso API entities
  */
-export type ApsoEntity = ApsoUser | ApsoSession | ApsoVerificationToken | ApsoAccount;
+export type ApsoEntity =
+  | ApsoUser
+  | ApsoSession
+  | ApsoVerificationToken
+  | ApsoAccount;

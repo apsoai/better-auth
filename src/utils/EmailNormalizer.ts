@@ -1,6 +1,6 @@
 /**
  * Email Normalizer Utility
- * 
+ *
  * This utility handles email address normalization for consistent
  * email handling across the adapter.
  */
@@ -19,7 +19,7 @@ export class EmailNormalizer {
     // 2. Trim whitespace
     // 3. Validate format
     // 4. Apply domain-specific normalization rules
-    
+
     if (!email || typeof email !== 'string') {
       throw new Error('Invalid email: must be a non-empty string');
     }
@@ -57,9 +57,9 @@ export class EmailNormalizer {
     // 1. Handle Gmail dot and plus rules
     // 2. Handle other common email providers
     // 3. Return normalized email
-    
+
     const [localPart, domain] = email.split('@');
-    
+
     if (!localPart || !domain) {
       return email;
     }
@@ -93,7 +93,7 @@ export class EmailNormalizer {
     // 1. Remove dots from local part
     // 2. Remove everything after + (plus addressing)
     // 3. Convert googlemail.com to gmail.com
-    
+
     let normalized = localPart;
 
     // Remove plus addressing (everything after +)
@@ -106,9 +106,10 @@ export class EmailNormalizer {
     normalized = normalized.replace(/\./g, '');
 
     // Normalize domain to gmail.com
-    const normalizedDomain = domain.toLowerCase() === 'googlemail.com' 
-      ? 'gmail.com' 
-      : domain.toLowerCase();
+    const normalizedDomain =
+      domain.toLowerCase() === 'googlemail.com'
+        ? 'gmail.com'
+        : domain.toLowerCase();
 
     return `${normalized}@${normalizedDomain}`;
   }

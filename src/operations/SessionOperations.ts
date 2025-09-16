@@ -1,9 +1,9 @@
 /**
  * Session Operations Implementation
- * 
+ *
  * This class provides comprehensive CRUD operations for the Session entity with
  * advanced token handling, expiration management, and security features.
- * 
+ *
  * Key Features:
  * - Session token-based operations (primary lookup method)
  * - Automatic expiration checking and cleanup
@@ -12,7 +12,7 @@
  * - Performance-optimized frequent lookups
  * - Comprehensive error handling
  * - Multi-tenant session isolation
- * 
+ *
  * Session tokens are the primary means of session identification in Better Auth,
  * making token-based operations the most critical for performance and reliability.
  */
@@ -23,7 +23,7 @@ import type {
   ApsoAdapterConfig,
   AdapterError,
   CrudPagination,
-  ValidationError
+  ValidationError,
 } from '../types';
 import { AdapterError as AdapterErrorClass, AdapterErrorCode } from '../types';
 import { HttpClient } from '../client/HttpClient';
@@ -74,7 +74,7 @@ export interface SessionOperationsDependencies {
 
 /**
  * SessionOperations class providing comprehensive CRUD operations for Session entities
- * 
+ *
  * This class handles all session-related database operations with emphasis on
  * token-based authentication flows, session security, and expiration management.
  * Sessions are frequently accessed during authentication, so performance is critical.
@@ -106,11 +106,11 @@ export class SessionOperations {
 
   /**
    * Create a new session with validation and token security
-   * 
+   *
    * @param sessionData - Session data for creation
    * @returns Promise resolving to the created session in Better Auth format
    * @throws {AdapterError} If validation fails, token conflicts, or API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const session = await sessionOps.createSession({
@@ -126,52 +126,61 @@ export class SessionOperations {
     expiresAt: Date;
   }): Promise<BetterAuthSession> {
     const startTime = performance.now();
-    
+
     try {
       // Validate required fields
       this.validateCreateSessionData(sessionData);
-      
+
       // Validate session token format and security
       this.validateSessionToken(sessionData.sessionToken);
-      
+
       // Check for token conflicts
       await this.checkTokenConflict(sessionData.sessionToken);
-      
+
       // Validate user exists (if enabled in config)
       if (this.config.debugMode) {
         await this.validateUserExists(sessionData.userId);
       }
 
-      // Generate ID if not provided
-      const sessionId = this.generateSessionId();
-
-      // Create Better Auth session object
-      const betterAuthSession: BetterAuthSession = {
-        id: sessionId,
-        sessionToken: sessionData.sessionToken,
+      // Create API data with session token as ID (per Better Auth schema)
+      const apiData = {
+        id: sessionData.sessionToken, // Session token IS the ID in Better Auth
         userId: sessionData.userId,
-        expiresAt: sessionData.expiresAt
+        expiresAt: sessionData.expiresAt,
+        ipAddress: "", // Default value
+        userAgent: "", // Default value
       };
 
-      // Transform data to API format
-      const apiData = this.entityMapper.mapSessionToApi(betterAuthSession);
-      
+      console.log('🔍 [SESSION DEBUG] Sending to database:', JSON.stringify(apiData, null, 2));
+
       // Execute HTTP request
       const url = `${this.config.baseUrl}/${this.apiPath}`;
       const response = await this.httpClient.post<ApsoSession>(url, apiData, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-      
+
+      console.log('🔍 [SESSION DEBUG] Database response:', JSON.stringify(response, null, 2));
+
       // Normalize and transform response
-      const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response) as ApsoSession;
+      const normalizedResponse =
+        this.responseNormalizer.normalizeSingleResponse(
+          response
+        ) as ApsoSession;
+      console.log('🔍 [SESSION DEBUG] Normalized response:', JSON.stringify(normalizedResponse, null, 2));
+
       const result = this.entityMapper.mapSessionFromApi(normalizedResponse);
-      
+      console.log('🔍 [SESSION DEBUG] Final session result:', JSON.stringify(result, null, 2));
+
       this.logOperation('createSession', performance.now() - startTime, true);
       return result;
-      
     } catch (error) {
-      this.logOperation('createSession', performance.now() - startTime, false, error);
+      this.logOperation(
+        'createSession',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'createSession');
     }
   }
@@ -182,14 +191,14 @@ export class SessionOperations {
 
   /**
    * Find a session by its token (most common operation)
-   * 
+   *
    * This is the primary session lookup method used in authentication flows.
    * Optimized for performance as it's called frequently.
-   * 
+   *
    * @param sessionToken - Session token to search for
    * @returns Promise resolving to the session or null if not found
    * @throws {AdapterError} If validation fails or API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const session = await sessionOps.findSessionByToken('session-token-123');
@@ -198,9 +207,11 @@ export class SessionOperations {
    * }
    * ```
    */
-  async findSessionByToken(sessionToken: string): Promise<BetterAuthSession | null> {
+  async findSessionByToken(
+    sessionToken: string
+  ): Promise<BetterAuthSession | null> {
     const startTime = performance.now();
-    
+
     try {
       if (!sessionToken || typeof sessionToken !== 'string') {
         throw new AdapterErrorClass(
@@ -217,43 +228,78 @@ export class SessionOperations {
 
       // Build query to find by sessionToken
       const url = `${this.config.baseUrl}/${this.apiPath}`;
-      
-      // For now, we'll get all sessions and filter (in a real implementation,
-      // we'd use query parameters or a dedicated endpoint)
-      const response = await this.httpClient.get<ApsoSession[]>(url, {
-        headers: this.buildHeaders(),
-        ...(this.config.timeout && { timeout: this.config.timeout }),
-      });
-      
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(response) as ApsoSession[];
-      
-      // Find session by token (case-sensitive)
-      const matchingSession = normalizedResults.find(session => 
-        session.sessionToken === sessionToken
-      );
-      
+
+      // Search across all pages to find the session by token
+      let matchingSession: ApsoSession | null = null;
+      let currentPage = 1;
+      let hasMorePages = true;
+
+      while (hasMorePages && !matchingSession) {
+        const pageUrl = `${url}?page=${currentPage}`;
+        console.log('🔍 [SESSION DEBUG] Searching page', currentPage, 'for token:', sessionToken);
+
+        const response = await this.httpClient.get<any>(pageUrl, {
+          headers: this.buildHeaders(),
+          ...(this.config.timeout && { timeout: this.config.timeout }),
+        });
+
+        const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
+          response
+        ) as ApsoSession[];
+
+        console.log('🔍 [SESSION DEBUG] Page', currentPage, 'has', normalizedResults.length, 'sessions');
+
+        // Find session by ID (session token is now the ID)
+        matchingSession = normalizedResults.find(
+          session => session.id === sessionToken
+        ) || null;
+
+        // Check if there are more pages
+        if (response.pageCount && currentPage < response.pageCount) {
+          currentPage++;
+        } else {
+          hasMorePages = false;
+        }
+      }
+
+      console.log('🔍 [SESSION DEBUG] Token search result:', matchingSession ? 'FOUND' : 'NOT FOUND');
+
       if (!matchingSession) {
-        this.logOperation('findSessionByToken', performance.now() - startTime, true);
+        this.logOperation(
+          'findSessionByToken',
+          performance.now() - startTime,
+          true
+        );
         return null;
       }
-      
+
       const result = this.entityMapper.mapSessionFromApi(matchingSession);
-      this.logOperation('findSessionByToken', performance.now() - startTime, true);
+      console.log('🔍 [SESSION DEBUG] Returning session to Better Auth:', JSON.stringify(result, null, 2));
+
+      this.logOperation(
+        'findSessionByToken',
+        performance.now() - startTime,
+        true
+      );
       return result;
-      
     } catch (error) {
-      this.logOperation('findSessionByToken', performance.now() - startTime, false, error);
+      this.logOperation(
+        'findSessionByToken',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'findSessionByToken');
     }
   }
 
   /**
    * Find a session by its unique ID
-   * 
+   *
    * @param id - Session ID to search for
    * @returns Promise resolving to the session or null if not found
    * @throws {AdapterError} If validation fails or API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const session = await sessionOps.findSessionById('session_123');
@@ -264,7 +310,7 @@ export class SessionOperations {
    */
   async findSessionById(id: string): Promise<BetterAuthSession | null> {
     const startTime = performance.now();
-    
+
     try {
       if (!id || typeof id !== 'string') {
         throw new AdapterErrorClass(
@@ -277,42 +323,56 @@ export class SessionOperations {
       }
 
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;
-      
+
       try {
         const response = await this.httpClient.get<ApsoSession>(url, {
           headers: this.buildHeaders(),
           ...(this.config.timeout && { timeout: this.config.timeout }),
         });
-        
-        const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response) as ApsoSession;
+
+        const normalizedResponse =
+          this.responseNormalizer.normalizeSingleResponse(
+            response
+          ) as ApsoSession;
         const result = this.entityMapper.mapSessionFromApi(normalizedResponse);
-        
-        this.logOperation('findSessionById', performance.now() - startTime, true);
+
+        this.logOperation(
+          'findSessionById',
+          performance.now() - startTime,
+          true
+        );
         return result;
-        
       } catch (error) {
         // Handle 404 as null result, not an error
         if (this.isNotFoundError(error)) {
-          this.logOperation('findSessionById', performance.now() - startTime, true);
+          this.logOperation(
+            'findSessionById',
+            performance.now() - startTime,
+            true
+          );
           return null;
         }
         throw error;
       }
-      
     } catch (error) {
-      this.logOperation('findSessionById', performance.now() - startTime, false, error);
+      this.logOperation(
+        'findSessionById',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'findSessionById');
     }
   }
 
   /**
    * Find all sessions for a specific user
-   * 
+   *
    * @param userId - User ID to find sessions for
    * @param options - Additional options for filtering and pagination
    * @returns Promise resolving to an array of matching sessions
    * @throws {AdapterError} If validation fails or API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const activeSessions = await sessionOps.findSessionsByUserId('user_123', {
@@ -323,14 +383,14 @@ export class SessionOperations {
    * ```
    */
   async findSessionsByUserId(
-    userId: string, 
+    userId: string,
     options: {
       activeOnly?: boolean;
       limit?: number;
     } = {}
   ): Promise<BetterAuthSession[]> {
     const startTime = performance.now();
-    
+
     try {
       if (!userId || typeof userId !== 'string') {
         throw new AdapterErrorClass(
@@ -344,40 +404,52 @@ export class SessionOperations {
 
       // Build query with user filter
       const url = `${this.config.baseUrl}/${this.apiPath}`;
-      
+
       const response = await this.httpClient.get<ApsoSession[]>(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-      
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(response) as ApsoSession[];
-      
+
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
+        response
+      ) as ApsoSession[];
+
       // Filter sessions by userId
-      let userSessions = normalizedResults.filter(session => session.userId === userId);
-      
+      let userSessions = normalizedResults.filter(
+        session => session.userId === userId
+      );
+
       // Filter out expired sessions if activeOnly is true
       if (options.activeOnly) {
         const now = new Date();
-        userSessions = userSessions.filter(session => 
-          new Date(session.expiresAt) > now
+        userSessions = userSessions.filter(
+          session => new Date(session.expiresAt) > now
         );
       }
-      
+
       // Apply limit if specified
       if (options.limit) {
         userSessions = userSessions.slice(0, options.limit);
       }
-      
+
       // Transform results
-      const transformedResults = userSessions.map(session => 
+      const transformedResults = userSessions.map(session =>
         this.entityMapper.mapSessionFromApi(session)
       );
-      
-      this.logOperation('findSessionsByUserId', performance.now() - startTime, true);
+
+      this.logOperation(
+        'findSessionsByUserId',
+        performance.now() - startTime,
+        true
+      );
       return transformedResults;
-      
     } catch (error) {
-      this.logOperation('findSessionsByUserId', performance.now() - startTime, false, error);
+      this.logOperation(
+        'findSessionsByUserId',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'findSessionsByUserId');
     }
   }
@@ -388,12 +460,12 @@ export class SessionOperations {
 
   /**
    * Update a session by its ID
-   * 
+   *
    * @param id - Session ID to update
    * @param updates - Partial session data with updates
    * @returns Promise resolving to the updated session
    * @throws {AdapterError} If session not found, validation fails, or API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const extendedSession = await sessionOps.updateSession('session_123', {
@@ -401,9 +473,12 @@ export class SessionOperations {
    * });
    * ```
    */
-  async updateSession(id: string, updates: Partial<BetterAuthSession>): Promise<BetterAuthSession> {
+  async updateSession(
+    id: string,
+    updates: Partial<BetterAuthSession>
+  ): Promise<BetterAuthSession> {
     const startTime = performance.now();
-    
+
     try {
       if (!id || typeof id !== 'string') {
         throw new AdapterErrorClass(
@@ -417,7 +492,7 @@ export class SessionOperations {
 
       // Validate update data
       this.validateUpdateSessionData(updates);
-      
+
       // Check for token conflicts if updating sessionToken
       if (updates.sessionToken) {
         this.validateSessionToken(updates.sessionToken);
@@ -445,35 +520,42 @@ export class SessionOperations {
 
       // Transform to API format
       const apiData = this.entityMapper.mapSessionToApi(updatedSession);
-      
+
       // Execute update request
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;
       const response = await this.httpClient.patch<ApsoSession>(url, apiData, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-      
+
       // Normalize and transform response
-      const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response) as ApsoSession;
+      const normalizedResponse =
+        this.responseNormalizer.normalizeSingleResponse(
+          response
+        ) as ApsoSession;
       const result = this.entityMapper.mapSessionFromApi(normalizedResponse);
-      
+
       this.logOperation('updateSession', performance.now() - startTime, true);
       return result;
-      
     } catch (error) {
-      this.logOperation('updateSession', performance.now() - startTime, false, error);
+      this.logOperation(
+        'updateSession',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'updateSession');
     }
   }
 
   /**
    * Update a session by its token
-   * 
+   *
    * @param sessionToken - Session token of the session to update
    * @param updates - Partial session data with updates
    * @returns Promise resolving to the updated session
    * @throws {AdapterError} If session not found, validation fails, or API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const extendedSession = await sessionOps.updateSessionByToken('token_123', {
@@ -481,9 +563,12 @@ export class SessionOperations {
    * });
    * ```
    */
-  async updateSessionByToken(sessionToken: string, updates: Partial<BetterAuthSession>): Promise<BetterAuthSession> {
+  async updateSessionByToken(
+    sessionToken: string,
+    updates: Partial<BetterAuthSession>
+  ): Promise<BetterAuthSession> {
     const startTime = performance.now();
-    
+
     try {
       // Find session by token first
       const existingSession = await this.findSessionByToken(sessionToken);
@@ -499,12 +584,20 @@ export class SessionOperations {
 
       // Use updateSession with the found session's ID
       const result = await this.updateSession(existingSession.id, updates);
-      
-      this.logOperation('updateSessionByToken', performance.now() - startTime, true);
+
+      this.logOperation(
+        'updateSessionByToken',
+        performance.now() - startTime,
+        true
+      );
       return result;
-      
     } catch (error) {
-      this.logOperation('updateSessionByToken', performance.now() - startTime, false, error);
+      this.logOperation(
+        'updateSessionByToken',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'updateSessionByToken');
     }
   }
@@ -515,11 +608,11 @@ export class SessionOperations {
 
   /**
    * Delete a session by its ID (logout)
-   * 
+   *
    * @param id - Session ID to delete
    * @returns Promise resolving to the deleted session
    * @throws {AdapterError} If session not found or API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const deletedSession = await sessionOps.deleteSession('session_123');
@@ -528,7 +621,7 @@ export class SessionOperations {
    */
   async deleteSession(id: string): Promise<BetterAuthSession> {
     const startTime = performance.now();
-    
+
     try {
       if (!id || typeof id !== 'string') {
         throw new AdapterErrorClass(
@@ -558,23 +651,27 @@ export class SessionOperations {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-      
+
       this.logOperation('deleteSession', performance.now() - startTime, true);
       return existingSession;
-      
     } catch (error) {
-      this.logOperation('deleteSession', performance.now() - startTime, false, error);
+      this.logOperation(
+        'deleteSession',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'deleteSession');
     }
   }
 
   /**
    * Delete a session by its token (logout)
-   * 
+   *
    * @param sessionToken - Session token of the session to delete
    * @returns Promise resolving to the deleted session
    * @throws {AdapterError} If session not found, validation fails, or API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const deletedSession = await sessionOps.deleteSessionByToken('token_123');
@@ -583,7 +680,7 @@ export class SessionOperations {
    */
   async deleteSessionByToken(sessionToken: string): Promise<BetterAuthSession> {
     const startTime = performance.now();
-    
+
     try {
       // Find session by token first
       const existingSession = await this.findSessionByToken(sessionToken);
@@ -599,22 +696,30 @@ export class SessionOperations {
 
       // Use deleteSession with the found session's ID
       const result = await this.deleteSession(existingSession.id);
-      
-      this.logOperation('deleteSessionByToken', performance.now() - startTime, true);
+
+      this.logOperation(
+        'deleteSessionByToken',
+        performance.now() - startTime,
+        true
+      );
       return result;
-      
     } catch (error) {
-      this.logOperation('deleteSessionByToken', performance.now() - startTime, false, error);
+      this.logOperation(
+        'deleteSessionByToken',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'deleteSessionByToken');
     }
   }
 
   /**
    * Delete all expired sessions (cleanup operation)
-   * 
+   *
    * @returns Promise resolving to the number of deleted sessions
    * @throws {AdapterError} If API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const deletedCount = await sessionOps.deleteExpiredSessions();
@@ -623,24 +728,28 @@ export class SessionOperations {
    */
   async deleteExpiredSessions(): Promise<number> {
     const startTime = performance.now();
-    
+
     try {
       const now = new Date();
-      
+
       // Find all expired sessions
       const allSessions = await this.findManySessions({
         where: {},
       });
-      
-      const expiredSessions = allSessions.filter(session => 
-        new Date(session.expiresAt) <= now
+
+      const expiredSessions = allSessions.filter(
+        session => new Date(session.expiresAt) <= now
       );
-      
+
       if (expiredSessions.length === 0) {
-        this.logOperation('deleteExpiredSessions', performance.now() - startTime, true);
+        this.logOperation(
+          'deleteExpiredSessions',
+          performance.now() - startTime,
+          true
+        );
         return 0;
       }
-      
+
       // Delete each expired session
       let deletedCount = 0;
       for (const session of expiredSessions) {
@@ -650,30 +759,38 @@ export class SessionOperations {
         } catch (error) {
           // Log individual errors but continue
           if (this.config.logger) {
-            this.config.logger.warn('Failed to delete expired session', { 
-              sessionId: session.id, 
-              error 
+            this.config.logger.warn('Failed to delete expired session', {
+              sessionId: session.id,
+              error,
             });
           }
         }
       }
-      
-      this.logOperation('deleteExpiredSessions', performance.now() - startTime, true);
+
+      this.logOperation(
+        'deleteExpiredSessions',
+        performance.now() - startTime,
+        true
+      );
       return deletedCount;
-      
     } catch (error) {
-      this.logOperation('deleteExpiredSessions', performance.now() - startTime, false, error);
+      this.logOperation(
+        'deleteExpiredSessions',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'deleteExpiredSessions');
     }
   }
 
   /**
    * Delete all sessions for a specific user
-   * 
+   *
    * @param userId - User ID to delete sessions for
    * @returns Promise resolving to the number of deleted sessions
    * @throws {AdapterError} If validation fails or API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const deletedCount = await sessionOps.deleteUserSessions('user_123');
@@ -682,7 +799,7 @@ export class SessionOperations {
    */
   async deleteUserSessions(userId: string): Promise<number> {
     const startTime = performance.now();
-    
+
     try {
       if (!userId || typeof userId !== 'string') {
         throw new AdapterErrorClass(
@@ -696,12 +813,16 @@ export class SessionOperations {
 
       // Find all sessions for the user
       const userSessions = await this.findSessionsByUserId(userId);
-      
+
       if (userSessions.length === 0) {
-        this.logOperation('deleteUserSessions', performance.now() - startTime, true);
+        this.logOperation(
+          'deleteUserSessions',
+          performance.now() - startTime,
+          true
+        );
         return 0;
       }
-      
+
       // Delete each session
       let deletedCount = 0;
       for (const session of userSessions) {
@@ -711,20 +832,28 @@ export class SessionOperations {
         } catch (error) {
           // Log individual errors but continue
           if (this.config.logger) {
-            this.config.logger.warn('Failed to delete user session', { 
-              sessionId: session.id, 
+            this.config.logger.warn('Failed to delete user session', {
+              sessionId: session.id,
               userId,
-              error 
+              error,
             });
           }
         }
       }
-      
-      this.logOperation('deleteUserSessions', performance.now() - startTime, true);
+
+      this.logOperation(
+        'deleteUserSessions',
+        performance.now() - startTime,
+        true
+      );
       return deletedCount;
-      
     } catch (error) {
-      this.logOperation('deleteUserSessions', performance.now() - startTime, false, error);
+      this.logOperation(
+        'deleteUserSessions',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'deleteUserSessions');
     }
   }
@@ -735,11 +864,11 @@ export class SessionOperations {
 
   /**
    * Validate a session token and check expiration
-   * 
+   *
    * @param sessionToken - Session token to validate
    * @returns Promise resolving to detailed validation result
    * @throws {AdapterError} If validation process fails (not if session is invalid)
-   * 
+   *
    * @example
    * ```typescript
    * const validation = await sessionOps.validateSession('token_123');
@@ -752,16 +881,18 @@ export class SessionOperations {
    * }
    * ```
    */
-  async validateSession(sessionToken: string): Promise<SessionValidationResult> {
+  async validateSession(
+    sessionToken: string
+  ): Promise<SessionValidationResult> {
     const startTime = performance.now();
-    
+
     try {
       if (!sessionToken || typeof sessionToken !== 'string') {
         return {
           session: null,
           isValid: false,
           isExpired: false,
-          error: 'Invalid session token format'
+          error: 'Invalid session token format',
         };
       }
 
@@ -771,55 +902,63 @@ export class SessionOperations {
           session: null,
           isValid: false,
           isExpired: false,
-          error: 'Session token format is invalid'
+          error: 'Session token format is invalid',
         };
       }
 
       // Find the session
       const session = await this.findSessionByToken(sessionToken);
-      
+
       if (!session) {
-        this.logOperation('validateSession', performance.now() - startTime, true);
+        this.logOperation(
+          'validateSession',
+          performance.now() - startTime,
+          true
+        );
         return {
           session: null,
           isValid: false,
           isExpired: false,
-          error: 'Session not found'
+          error: 'Session not found',
         };
       }
-      
+
       // Check expiration
       const now = new Date();
       const isExpired = new Date(session.expiresAt) <= now;
-      
+
       const result: SessionValidationResult = {
         session,
         isValid: !isExpired,
         isExpired,
-        ...(isExpired && { error: 'Session has expired' })
+        ...(isExpired && { error: 'Session has expired' }),
       };
-      
+
       this.logOperation('validateSession', performance.now() - startTime, true);
       return result;
-      
     } catch (error) {
-      this.logOperation('validateSession', performance.now() - startTime, false, error);
+      this.logOperation(
+        'validateSession',
+        performance.now() - startTime,
+        false,
+        error
+      );
       return {
         session: null,
         isValid: false,
         isExpired: false,
-        error: `Validation failed: ${error instanceof Error ? error.message : String(error)}`
+        error: `Validation failed: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
   }
 
   /**
    * Find multiple sessions with optional filtering and pagination
-   * 
+   *
    * @param options - Search options including filters, pagination, and sorting
    * @returns Promise resolving to an array of matching sessions
    * @throws {AdapterError} If API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const activeSessions = await sessionOps.findManySessions({
@@ -829,9 +968,11 @@ export class SessionOperations {
    * });
    * ```
    */
-  async findManySessions(options: FindManySessionsOptions = {}): Promise<BetterAuthSession[]> {
+  async findManySessions(
+    options: FindManySessionsOptions = {}
+  ): Promise<BetterAuthSession[]> {
     const startTime = performance.now();
-    
+
     try {
       // Build query with filters and options (for future query parameter implementation)
       this.queryTranslator.buildFindQuery(
@@ -839,58 +980,74 @@ export class SessionOperations {
         options.pagination,
         this.convertSortOptions(options.sort)
       );
-      
+
       const url = `${this.config.baseUrl}/${this.apiPath}`;
-      
+
       // Execute request
       const response = await this.httpClient.get<ApsoSession[]>(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-      
+
       // Normalize and transform results
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(response) as ApsoSession[];
-      
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
+        response
+      ) as ApsoSession[];
+
       // Apply client-side filtering if needed
       let filteredResults = normalizedResults;
       if (options.where) {
-        filteredResults = this.applyClientSideFiltering(normalizedResults, options.where);
+        filteredResults = this.applyClientSideFiltering(
+          normalizedResults,
+          options.where
+        );
       }
-      
+
       // Filter out expired sessions if activeOnly is true
       if (options.activeOnly) {
         const now = new Date();
-        filteredResults = filteredResults.filter(session => 
-          new Date(session.expiresAt) > now
+        filteredResults = filteredResults.filter(
+          session => new Date(session.expiresAt) > now
         );
       }
-      
+
       // Apply client-side pagination if needed
       if (options.pagination) {
-        filteredResults = this.applyClientSidePagination(filteredResults, options.pagination);
+        filteredResults = this.applyClientSidePagination(
+          filteredResults,
+          options.pagination
+        );
       }
-      
+
       // Transform results
-      const transformedResults = filteredResults.map(session => 
+      const transformedResults = filteredResults.map(session =>
         this.entityMapper.mapSessionFromApi(session)
       );
-      
-      this.logOperation('findManySessions', performance.now() - startTime, true);
+
+      this.logOperation(
+        'findManySessions',
+        performance.now() - startTime,
+        true
+      );
       return transformedResults;
-      
     } catch (error) {
-      this.logOperation('findManySessions', performance.now() - startTime, false, error);
+      this.logOperation(
+        'findManySessions',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'findManySessions');
     }
   }
 
   /**
    * Count sessions matching optional filter criteria
-   * 
+   *
    * @param where - Optional filter criteria
    * @returns Promise resolving to the count of matching sessions
    * @throws {AdapterError} If API errors occur
-   * 
+   *
    * @example
    * ```typescript
    * const activeCount = await sessionOps.countSessions();
@@ -900,35 +1057,38 @@ export class SessionOperations {
    */
   async countSessions(where?: Partial<BetterAuthSession>): Promise<number> {
     const startTime = performance.now();
-    
+
     try {
       // Build query with filters (for future query parameter implementation)
       this.queryTranslator.buildFindQuery(where || {});
-      
+
       const url = `${this.config.baseUrl}/${this.apiPath}`;
-      
+
       try {
         // Try to get count from response metadata
         const response = await this.httpClient.get(url, {
           headers: this.buildHeaders(),
           ...(this.config.timeout && { timeout: this.config.timeout }),
         });
-        
+
         const count = this.responseNormalizer.normalizeCountResponse(response);
         this.logOperation('countSessions', performance.now() - startTime, true);
         return count;
-        
       } catch (error) {
         // Fallback: get all records and count them
         const sessions = await this.findManySessions({ where: where || {} });
         const count = sessions.length;
-        
+
         this.logOperation('countSessions', performance.now() - startTime, true);
         return count;
       }
-      
     } catch (error) {
-      this.logOperation('countSessions', performance.now() - startTime, false, error);
+      this.logOperation(
+        'countSessions',
+        performance.now() - startTime,
+        false,
+        error
+      );
       throw this.handleError(error, 'countSessions');
     }
   }
@@ -939,10 +1099,10 @@ export class SessionOperations {
 
   /**
    * Check if a session has expired
-   * 
+   *
    * @param session - Session to check
    * @returns True if the session has expired
-   * 
+   *
    * @example
    * ```typescript
    * const session = await sessionOps.findSessionByToken('token_123');
@@ -957,10 +1117,10 @@ export class SessionOperations {
 
   /**
    * Get time until session expires (in milliseconds)
-   * 
+   *
    * @param session - Session to check
    * @returns Milliseconds until expiration (negative if already expired)
-   * 
+   *
    * @example
    * ```typescript
    * const session = await sessionOps.findSessionByToken('token_123');
@@ -988,18 +1148,33 @@ export class SessionOperations {
   }): void {
     const errors: ValidationError[] = [];
 
-    if (!sessionData.sessionToken || typeof sessionData.sessionToken !== 'string') {
-      errors.push({ field: 'sessionToken', message: 'Session token is required and must be a string' });
+    if (
+      !sessionData.sessionToken ||
+      typeof sessionData.sessionToken !== 'string'
+    ) {
+      errors.push({
+        field: 'sessionToken',
+        message: 'Session token is required and must be a string',
+      });
     }
 
     if (!sessionData.userId || typeof sessionData.userId !== 'string') {
-      errors.push({ field: 'userId', message: 'User ID is required and must be a string' });
+      errors.push({
+        field: 'userId',
+        message: 'User ID is required and must be a string',
+      });
     }
 
     if (!sessionData.expiresAt || !(sessionData.expiresAt instanceof Date)) {
-      errors.push({ field: 'expiresAt', message: 'Expiration date is required and must be a Date' });
+      errors.push({
+        field: 'expiresAt',
+        message: 'Expiration date is required and must be a Date',
+      });
     } else if (sessionData.expiresAt <= new Date()) {
-      errors.push({ field: 'expiresAt', message: 'Expiration date must be in the future' });
+      errors.push({
+        field: 'expiresAt',
+        message: 'Expiration date must be in the future',
+      });
     }
 
     if (errors.length > 0) {
@@ -1019,19 +1194,38 @@ export class SessionOperations {
   private validateUpdateSessionData(updates: Partial<BetterAuthSession>): void {
     const errors: ValidationError[] = [];
 
-    if (updates.sessionToken !== undefined && (typeof updates.sessionToken !== 'string' || updates.sessionToken.trim() === '')) {
-      errors.push({ field: 'sessionToken', message: 'Session token must be a non-empty string if provided' });
+    if (
+      updates.sessionToken !== undefined &&
+      (typeof updates.sessionToken !== 'string' ||
+        updates.sessionToken.trim() === '')
+    ) {
+      errors.push({
+        field: 'sessionToken',
+        message: 'Session token must be a non-empty string if provided',
+      });
     }
 
-    if (updates.userId !== undefined && (typeof updates.userId !== 'string' || updates.userId.trim() === '')) {
-      errors.push({ field: 'userId', message: 'User ID must be a non-empty string if provided' });
+    if (
+      updates.userId !== undefined &&
+      (typeof updates.userId !== 'string' || updates.userId.trim() === '')
+    ) {
+      errors.push({
+        field: 'userId',
+        message: 'User ID must be a non-empty string if provided',
+      });
     }
 
     if (updates.expiresAt !== undefined) {
       if (!(updates.expiresAt instanceof Date)) {
-        errors.push({ field: 'expiresAt', message: 'Expiration date must be a Date if provided' });
+        errors.push({
+          field: 'expiresAt',
+          message: 'Expiration date must be a Date if provided',
+        });
       } else if (updates.expiresAt <= new Date()) {
-        errors.push({ field: 'expiresAt', message: 'Expiration date must be in the future if provided' });
+        errors.push({
+          field: 'expiresAt',
+          message: 'Expiration date must be in the future if provided',
+        });
       }
     }
 
@@ -1053,7 +1247,10 @@ export class SessionOperations {
   /**
    * Validate session token format and security
    */
-  private validateSessionToken(token: string, throwOnInvalid: boolean = true): boolean {
+  private validateSessionToken(
+    token: string,
+    throwOnInvalid: boolean = true
+  ): boolean {
     if (!this.isValidTokenFormat(token)) {
       if (throwOnInvalid) {
         throw new AdapterErrorClass(
@@ -1084,9 +1281,12 @@ export class SessionOperations {
   /**
    * Check for session token conflicts
    */
-  private async checkTokenConflict(sessionToken: string, excludeId?: string): Promise<void> {
+  private async checkTokenConflict(
+    sessionToken: string,
+    excludeId?: string
+  ): Promise<void> {
     const existingSession = await this.findSessionByToken(sessionToken);
-    
+
     if (existingSession && existingSession.id !== excludeId) {
       throw new AdapterErrorClass(
         AdapterErrorCode.CONFLICT,
@@ -1110,12 +1310,31 @@ export class SessionOperations {
   }
 
   /**
+   * Generate a unique numeric session ID for database compatibility
+   */
+  private generateNumericSessionId(): number {
+    // Generate a numeric ID that fits within 32-bit integer range (max: 2,147,483,647)
+    // Use a combination of timestamp modulo and random component
+    const timestamp = Date.now();
+    const randomComponent = Math.floor(Math.random() * 10000); // 0-9999
+    const timestampMod = timestamp % 1000000; // Last 6 digits of timestamp
+    
+    // Combine and ensure it's within 32-bit range
+    const id = timestampMod * 10000 + randomComponent;
+    
+    // Ensure it's within 32-bit integer range
+    return Math.min(id, 2147483647);
+  }
+
+  /**
    * Generate a unique session ID
    */
   private generateSessionId(): string {
     // Simple UUID v4-like generator for demo purposes
     // In production, you might use a proper UUID library or let the API generate IDs
-    return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    return (
+      'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+    );
   }
 
   /**
@@ -1124,7 +1343,7 @@ export class SessionOperations {
   private buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      Accept: 'application/json',
     };
 
     // Add API key if configured
@@ -1143,7 +1362,9 @@ export class SessionOperations {
       } catch (error) {
         // Log error if logger is available, but don't fail the request
         if (this.config.logger) {
-          this.config.logger.warn('Failed to get tenant scope value', { error });
+          this.config.logger.warn('Failed to get tenant scope value', {
+            error,
+          });
         }
       }
     }
@@ -1154,9 +1375,11 @@ export class SessionOperations {
   /**
    * Convert sort options to query translator format
    */
-  private convertSortOptions(sort?: Record<string, 'ASC' | 'DESC'>): Record<string, 'asc' | 'desc'> | undefined {
+  private convertSortOptions(
+    sort?: Record<string, 'ASC' | 'DESC'>
+  ): Record<string, 'asc' | 'desc'> | undefined {
     if (!sort) return undefined;
-    
+
     const converted: Record<string, 'asc' | 'desc'> = {};
     for (const [field, order] of Object.entries(sort)) {
       converted[field] = order.toLowerCase() as 'asc' | 'desc';
@@ -1167,7 +1390,10 @@ export class SessionOperations {
   /**
    * Apply client-side filtering (fallback when API doesn't support advanced filtering)
    */
-  private applyClientSideFiltering(sessions: ApsoSession[], where: Partial<BetterAuthSession>): ApsoSession[] {
+  private applyClientSideFiltering(
+    sessions: ApsoSession[],
+    where: Partial<BetterAuthSession>
+  ): ApsoSession[] {
     return sessions.filter(session => {
       for (const [key, value] of Object.entries(where)) {
         if (key === 'expiresAt' && value instanceof Date) {
@@ -1189,10 +1415,14 @@ export class SessionOperations {
   /**
    * Apply client-side pagination (fallback when API doesn't support pagination)
    */
-  private applyClientSidePagination(sessions: ApsoSession[], pagination: CrudPagination): ApsoSession[] {
+  private applyClientSidePagination(
+    sessions: ApsoSession[],
+    pagination: CrudPagination
+  ): ApsoSession[] {
     if (!pagination.limit) return sessions;
-    
-    const offset = pagination.offset || ((pagination.page || 1) - 1) * pagination.limit;
+
+    const offset =
+      pagination.offset || ((pagination.page || 1) - 1) * pagination.limit;
     return sessions.slice(offset, offset + pagination.limit);
   }
 
@@ -1201,9 +1431,10 @@ export class SessionOperations {
    */
   private isNotFoundError(error: any): boolean {
     return (
-      error &&
-      typeof error === 'object' &&
-      ('statusCode' in error && error.statusCode === 404) ||
+      (error &&
+        typeof error === 'object' &&
+        'statusCode' in error &&
+        error.statusCode === 404) ||
       ('status' in error && error.status === 404) ||
       ('code' in error && error.code === 'NOT_FOUND')
     );
@@ -1252,7 +1483,7 @@ export class SessionOperations {
             break;
         }
       }
-      
+
       if ('code' in error) {
         switch (error.code) {
           case 'ECONNREFUSED':
@@ -1289,19 +1520,28 @@ export class SessionOperations {
    */
   private isRetryableError(statusCode?: number): boolean {
     if (!statusCode) return false;
-    return this.config.retryConfig?.retryableStatuses?.includes(statusCode) ?? false;
+    return (
+      this.config.retryConfig?.retryableStatuses?.includes(statusCode) ?? false
+    );
   }
 
   /**
    * Log operation for observability
    */
-  private logOperation(operation: string, duration: number, success: boolean, error?: any): void {
+  private logOperation(
+    operation: string,
+    duration: number,
+    success: boolean,
+    error?: any
+  ): void {
     if (this.config.logger) {
       const logData = {
         operation: `SessionOperations.${operation}`,
         duration: Math.round(duration),
         success,
-        ...(error && { error: error instanceof Error ? error.message : String(error) })
+        ...(error && {
+          error: error instanceof Error ? error.message : String(error),
+        }),
       };
 
       if (success) {

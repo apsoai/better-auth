@@ -1,19 +1,15 @@
 /**
  * Query Translator Implementation
- * 
+ *
  * This class translates Better Auth query conditions into Apso SDK-compatible
  * QueryParams. It handles where clauses, pagination, sorting, field selection,
  * email normalization, and multi-tenant scoping.
- * 
+ *
  * The translator bridges the gap between Better Auth adapter queries and the
  * Apso SDK's QueryBuilder format, enabling seamless integration.
  */
 
-import type {
-  PaginationOptions,
-  Logger,
-  ApsoAdapterConfig,
-} from '../types';
+import type { PaginationOptions, Logger, ApsoAdapterConfig } from '../types';
 // Define QueryParams interface locally since SDK export is inconsistent
 export interface QueryParams {
   fields?: string[];
@@ -63,7 +59,7 @@ export class QueryTranslator {
 
   /**
    * Translates Better Auth where conditions to Apso SDK QueryParams format
-   * 
+   *
    * @param where - Better Auth where conditions
    * @returns QueryParams with filter conditions
    */
@@ -95,11 +91,11 @@ export class QueryTranslator {
     }
 
     const queryParams: QueryParams = {};
-    
+
     if (Object.keys(filter).length > 0) {
       queryParams.filter = filter;
     }
-    
+
     if (hasOrConditions) {
       queryParams.or = or;
     }
@@ -109,7 +105,7 @@ export class QueryTranslator {
 
   /**
    * Builds pagination parameters for Apso SDK QueryParams
-   * 
+   *
    * @param options - Pagination options from Better Auth
    * @returns Partial QueryParams with pagination settings
    */
@@ -135,9 +131,9 @@ export class QueryTranslator {
       queryParams.offset = Math.max(0, options.offset);
     }
 
-    this.logger?.debug('Built pagination parameters', { 
-      input: options, 
-      output: queryParams 
+    this.logger?.debug('Built pagination parameters', {
+      input: options,
+      output: queryParams,
     });
 
     return queryParams;
@@ -145,11 +141,13 @@ export class QueryTranslator {
 
   /**
    * Builds sorting parameters for Apso SDK QueryParams
-   * 
+   *
    * @param orderBy - Better Auth sorting configuration
    * @returns Partial QueryParams with sort settings
    */
-  private buildSort(orderBy?: Record<string, 'asc' | 'desc'>): Partial<QueryParams> {
+  private buildSort(
+    orderBy?: Record<string, 'asc' | 'desc'>
+  ): Partial<QueryParams> {
     if (!orderBy || Object.keys(orderBy).length === 0) {
       return {};
     }
@@ -169,7 +167,7 @@ export class QueryTranslator {
 
   /**
    * Builds field selection for Apso SDK QueryParams
-   * 
+   *
    * @param fields - Better Auth field selection
    * @returns Partial QueryParams with fields setting
    */
@@ -191,7 +189,7 @@ export class QueryTranslator {
 
   /**
    * Main method to build complete query for Better Auth operations
-   * 
+   *
    * @param options - Query build options
    * @returns Complete QueryParams for Apso SDK
    */
@@ -222,9 +220,9 @@ export class QueryTranslator {
       queryParams = { ...queryParams, ...sortParams };
     }
 
-    this.logger?.debug('Built complete query', { 
-      input: options, 
-      output: queryParams 
+    this.logger?.debug('Built complete query', {
+      input: options,
+      output: queryParams,
     });
 
     return queryParams;
@@ -232,7 +230,7 @@ export class QueryTranslator {
 
   /**
    * Adds tenant scoping to query when multi-tenancy is configured
-   * 
+   *
    * @param query - Base QueryParams
    * @param tenantId - Optional tenant ID (uses config if not provided)
    * @returns QueryParams with tenant scope applied
@@ -242,9 +240,11 @@ export class QueryTranslator {
       return query;
     }
 
-    const effectiveTenantId = tenantId || (typeof this.tenantConfig.getScopeValue === 'function' 
-      ? this.tenantConfig.getScopeValue() 
-      : undefined);
+    const effectiveTenantId =
+      tenantId ||
+      (typeof this.tenantConfig.getScopeValue === 'function'
+        ? this.tenantConfig.getScopeValue()
+        : undefined);
 
     if (!effectiveTenantId) {
       this.logger?.warn('Multi-tenancy enabled but no tenant ID provided');
@@ -253,19 +253,19 @@ export class QueryTranslator {
 
     // Clone the query to avoid mutation
     const scopedQuery: QueryParams = { ...query };
-    
+
     // Add tenant scope to filter
     const tenantFilter = { [this.tenantConfig.scopeField]: effectiveTenantId };
-    
+
     if (scopedQuery.filter) {
       scopedQuery.filter = { ...scopedQuery.filter, ...tenantFilter };
     } else {
       scopedQuery.filter = tenantFilter;
     }
 
-    this.logger?.debug('Applied tenant scope', { 
+    this.logger?.debug('Applied tenant scope', {
       tenantId: effectiveTenantId,
-      scopeField: this.tenantConfig.scopeField
+      scopeField: this.tenantConfig.scopeField,
     });
 
     return scopedQuery;
@@ -277,11 +277,13 @@ export class QueryTranslator {
 
   /**
    * Processes individual where conditions, applying transformations as needed
-   * 
+   *
    * @param condition - Single where condition object
    * @returns Processed condition for Apso SDK filter
    */
-  private processWhereCondition(condition: Record<string, any>): Record<string, any> {
+  private processWhereCondition(
+    condition: Record<string, any>
+  ): Record<string, any> {
     const result: Record<string, any> = {};
 
     for (const [key, value] of Object.entries(condition)) {
@@ -293,9 +295,10 @@ export class QueryTranslator {
         result[key] = this.processComplexOperator(value);
       } else {
         // Handle simple values with email normalization
-        result[key] = this.emailNormalization && this.isEmailField(key)
-          ? this.normalizeEmailValue(value)
-          : value;
+        result[key] =
+          this.emailNormalization && this.isEmailField(key)
+            ? this.normalizeEmailValue(value)
+            : value;
       }
     }
 
@@ -304,11 +307,11 @@ export class QueryTranslator {
 
   /**
    * Processes OR conditions from Better Auth format
-   * 
+   *
    * For now, we take the first condition as the OR condition since
    * the Apso SDK QueryParams format doesn't clearly specify how to handle
    * multiple OR conditions. This may need to be refined based on SDK behavior.
-   * 
+   *
    * @param orConditions - Array of OR conditions
    * @returns Processed OR conditions for Apso SDK
    */
@@ -320,7 +323,7 @@ export class QueryTranslator {
     // For simplicity, use the first OR condition
     // The Apso SDK QueryParams structure doesn't clearly define how to handle multiple OR conditions
     const firstCondition = orConditions[0];
-    
+
     if (typeof firstCondition === 'object' && firstCondition !== null) {
       return this.processWhereCondition(firstCondition);
     }
@@ -330,7 +333,7 @@ export class QueryTranslator {
 
   /**
    * Processes complex operators (gt, lt, in, etc.)
-   * 
+   *
    * @param operatorObj - Object containing operators and values
    * @returns Processed operator object
    */
@@ -346,20 +349,20 @@ export class QueryTranslator {
 
   /**
    * Checks if a field name represents an email field
-   * 
+   *
    * @param fieldName - Field name to check
    * @returns True if field is email-related
    */
   private isEmailField(fieldName: string): boolean {
     const emailFields = ['email', 'identifier', 'emailAddress', 'userEmail'];
-    return emailFields.some(field => 
+    return emailFields.some(field =>
       fieldName.toLowerCase().includes(field.toLowerCase())
     );
   }
 
   /**
    * Normalizes email values using the EmailNormalizer utility
-   * 
+   *
    * @param value - Value to normalize (string or array)
    * @returns Normalized value
    */
@@ -379,7 +382,10 @@ export class QueryTranslator {
           try {
             return EmailNormalizer.normalize(v);
           } catch (error) {
-            this.logger?.warn('Failed to normalize email in array', { value: v, error });
+            this.logger?.warn('Failed to normalize email in array', {
+              value: v,
+              error,
+            });
             return v.toLowerCase().trim(); // Fallback
           }
         }
@@ -396,7 +402,7 @@ export class QueryTranslator {
 
   /**
    * Validates field names for security and format compliance
-   * 
+   *
    * @param fieldName - Field name to validate
    * @returns True if field name is valid
    */
@@ -442,7 +448,7 @@ export class QueryTranslator {
     return this.buildQuery({
       where: where || {},
       ...(pagination && { pagination }),
-      ...(orderBy && { sort: orderBy })
+      ...(orderBy && { sort: orderBy }),
     });
   }
 }

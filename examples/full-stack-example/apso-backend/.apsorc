@@ -1,0 +1,170 @@
+{
+  "version": 2,
+  "entities": [
+    {
+      "name": "User",
+      "created_at": true,
+      "updated_at": true,
+      "fields": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "primary": true
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "length": 255,
+          "is_email": true,
+          "unique": true
+        },
+        {
+          "name": "emailVerified",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "name": "hashedPassword",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "image",
+          "type": "text",
+          "nullable": true
+        }
+      ]
+    },
+    {
+      "name": "Session",
+      "created_at": true,
+      "updated_at": true,
+      "fields": [
+        {
+          "name": "id",
+          "type": "text",
+          "primary": true
+        },
+        {
+          "name": "userId",
+          "type": "uuid"
+        },
+        {
+          "name": "expiresAt",
+          "type": "date"
+        },
+        {
+          "name": "ipAddress",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "userAgent",
+          "type": "text",
+          "nullable": true
+        }
+      ]
+    },
+    {
+      "name": "VerificationToken",
+      "created_at": true,
+      "fields": [
+        {
+          "name": "identifier",
+          "type": "text"
+        },
+        {
+          "name": "token",
+          "type": "text",
+          "unique": true
+        },
+        {
+          "name": "expiresAt",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "name": "Account",
+      "created_at": true,
+      "updated_at": true,
+      "fields": [
+        {
+          "name": "userId",
+          "type": "uuid"
+        },
+        {
+          "name": "type",
+          "type": "text"
+        },
+        {
+          "name": "provider",
+          "type": "text"
+        },
+        {
+          "name": "providerAccountId",
+          "type": "text"
+        },
+        {
+          "name": "password",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "refresh_token",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "access_token",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "expires_at",
+          "type": "integer",
+          "nullable": true
+        },
+        {
+          "name": "token_type",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "scope",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "id_token",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "session_state",
+          "type": "text",
+          "nullable": true
+        }
+      ]
+    }
+  ],
+  "relationships": [
+  {
+    "name": "User",
+    "relationship": "hasMany",
+    "target": "Session",
+    "on": "userId"
+  },
+  {
+    "name": "User",
+    "relationship": "hasMany",
+    "target": "Account",
+    "on": "userId"
+  }
+ ]
+}

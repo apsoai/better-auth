@@ -1,13 +1,13 @@
 /**
  * Better Auth Apso Adapter
- * 
+ *
  * A database adapter for Better Auth that interfaces with Apso-generated CRUD REST endpoints.
  * This adapter enables Better Auth to work with any REST API that follows the Apso/nestjsx/crud conventions.
- * 
+ *
  * @example
  * ```typescript
  * import { apsoAdapter } from '@apso/better-auth-apso-adapter';
- * 
+ *
  * const adapter = apsoAdapter({
  *   baseUrl: process.env.APSO_BASE_URL!,
  *   apiKey: process.env.APSO_API_KEY,
@@ -25,7 +25,7 @@
 export * from './types';
 
 // Export main adapter factory and specialized factories
-export { 
+export {
   apsoAdapter,
   createApsoAdapter,
   createReliableApsoAdapter,

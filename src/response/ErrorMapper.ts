@@ -1,6 +1,6 @@
 /**
  * Error Mapper Implementation
- * 
+ *
  * This class maps HTTP errors and API responses to AdapterError instances.
  * It provides consistent error handling and categorization across the adapter.
  */
@@ -31,7 +31,7 @@ export class ErrorMapper {
     // 2. Extract error details from response body
     // 3. Determine if error is retryable
     // 4. Create appropriate AdapterError instance
-    
+
     const errorInfo = this.getErrorInfo(status, statusText, body);
     const error = new AdapterError(
       errorInfo.code,
@@ -63,7 +63,7 @@ export class ErrorMapper {
     // 2. Handle connection errors
     // 3. Handle DNS resolution errors
     // 4. Create appropriate AdapterError
-    
+
     let code: AdapterErrorCode;
     let retryable = true;
 
@@ -185,7 +185,7 @@ export class ErrorMapper {
     // 1. Handle various error response formats
     // 2. Look for common error message fields
     // 3. Return the most relevant error message
-    
+
     if (!body) return null;
 
     // Common error message fields
@@ -234,17 +234,20 @@ export class ErrorMapper {
   // Error Enhancement
   // =============================================================================
 
-  enhanceError(error: AdapterError, context: {
-    operation?: string;
-    model?: string;
-    params?: any;
-  }): AdapterError {
+  enhanceError(
+    error: AdapterError,
+    context: {
+      operation?: string;
+      model?: string;
+      params?: any;
+    }
+  ): AdapterError {
     // TODO: Enhance error with additional context
     // 1. Add operation context
     // 2. Add model information
     // 3. Add sanitized parameters
     // 4. Return enhanced error
-    
+
     const enhancedDetails = {
       ...error.details,
       operation: context.operation,
@@ -268,7 +271,7 @@ export class ErrorMapper {
     // 2. Remove API keys
     // 3. Remove other sensitive data
     // 4. Return sanitized params
-    
+
     if (!params || typeof params !== 'object') {
       return params;
     }
@@ -296,14 +299,18 @@ export class ErrorMapper {
     }
 
     // Network errors are generally retryable
-    return error.message.includes('timeout') || 
-           error.message.includes('network') ||
-           error.message.includes('ECONNRESET') ||
-           error.message.includes('ENOTFOUND');
+    return (
+      error.message.includes('timeout') ||
+      error.message.includes('network') ||
+      error.message.includes('ECONNRESET') ||
+      error.message.includes('ENOTFOUND')
+    );
   }
 
   isClientError(error: AdapterError): boolean {
-    return error.statusCode ? error.statusCode >= 400 && error.statusCode < 500 : false;
+    return error.statusCode
+      ? error.statusCode >= 400 && error.statusCode < 500
+      : false;
   }
 
   isServerError(error: AdapterError): boolean {
