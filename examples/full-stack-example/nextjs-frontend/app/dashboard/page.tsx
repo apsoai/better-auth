@@ -58,13 +58,24 @@ export default function DashboardPage() {
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-8">
-          <div className="space-y-2">
+          <div className="space-y-4">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-xl">BA</span>
+                </div>
+                <span className="text-2xl text-muted-foreground">+</span>
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-brand-blue flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-xl">A</span>
+                </div>
+              </div>
+            </div>
             <h1 className="text-4xl font-bold tracking-tight">
-              Welcome to <span className="text-primary">Apso</span>
+              Welcome to <span className="text-blue-600">Better Auth</span> + <span className="text-primary">Apso</span>
             </h1>
             <p className="text-lg text-muted-foreground">
               Hello <span className="font-medium">{session.user.name || session.user.email}</span>!
-              Ready to build your entire backend in 5 minutes?
+              Experience enterprise authentication with AI-powered backend development.
             </p>
           </div>
           <div className="flex gap-3">
@@ -81,35 +92,60 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Apso Value Proposition */}
-        <div className="bg-gradient-to-br from-primary/10 via-brand-blue/10 to-purple-500/10 rounded-xl p-8 mb-8">
-          <div className="text-center space-y-4">
+        {/* Combined Value Proposition */}
+        <div className="bg-gradient-to-br from-blue-600/10 via-primary/10 to-purple-500/10 rounded-xl p-8 mb-8">
+          <div className="text-center space-y-6">
+            <div className="flex justify-center items-center gap-6">
+              <div className="flex items-center space-x-2">
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-lg">BA</span>
+                </div>
+                <span className="text-xl text-muted-foreground">+</span>
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-brand-blue flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-lg">A</span>
+                </div>
+              </div>
+            </div>
             <h2 className="text-3xl font-bold">
-              Build Your Entire Backend in <span className="text-primary">5 Minutes</span>
+              <span className="text-blue-600">Enterprise Authentication</span> + <span className="text-primary">AI Backend Generation</span>
             </h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Stop waiting on backend engineers. Apso's AI-powered platform generates
-              enterprise-grade APIs, database schemas, and DevOps infrastructure instantly.
+            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
+              Combine Better Auth's industry-leading authentication with Apso's AI-powered backend platform.
+              Get enterprise-grade security and build your entire backend in 5 minutes.
             </p>
             <div className="flex flex-wrap justify-center gap-4 pt-4">
               <Button asChild size="lg">
-                <a href="https://apso.ai" target="_blank" rel="noopener noreferrer">
-                  <Code className="w-4 h-4 mr-2" />
-                  Start Building
+                <a href="https://www.better-auth.com" target="_blank" rel="noopener noreferrer">
+                  <Shield className="w-4 h-4 mr-2" />
+                  Better Auth
                 </a>
               </Button>
-              <Button variant="outline" size="lg" asChild>
-                <a href="https://apso.ai/docs" target="_blank" rel="noopener noreferrer">
-                  <Database className="w-4 h-4 mr-2" />
-                  View Docs
+              <Button asChild size="lg" variant="outline">
+                <a href="https://apso.ai" target="_blank" rel="noopener noreferrer">
+                  <Code className="w-4 h-4 mr-2" />
+                  Apso Platform
                 </a>
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Apso Benefits Cards */}
+        {/* Combined Benefits Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 bg-blue-600/10 rounded-lg">
+                  <Shield className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Security</p>
+                  <p className="text-2xl font-bold">Enterprise</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center space-x-2">
@@ -117,8 +153,8 @@ export default function DashboardPage() {
                   <Clock className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Time Saved</p>
-                  <p className="text-2xl font-bold">100+ Hours</p>
+                  <p className="text-sm font-medium text-muted-foreground">Development</p>
+                  <p className="text-2xl font-bold">5 Minutes</p>
                 </div>
               </div>
             </CardContent>
@@ -128,25 +164,11 @@ export default function DashboardPage() {
             <CardContent className="p-6">
               <div className="flex items-center space-x-2">
                 <div className="p-2 bg-success/10 rounded-lg">
-                  <Activity className="h-5 w-5 text-success" />
+                  <CheckCircle className="h-5 w-5 text-success" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Uptime</p>
-                  <p className="text-2xl font-bold">99.99%</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-2">
-                <div className="p-2 bg-brand-blue/10 rounded-lg">
-                  <Database className="h-5 w-5 text-brand-blue" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Services</p>
-                  <p className="text-2xl font-bold">100+</p>
+                  <p className="text-sm font-medium text-muted-foreground">Integration</p>
+                  <p className="text-2xl font-bold">Seamless</p>
                 </div>
               </div>
             </CardContent>
@@ -156,11 +178,11 @@ export default function DashboardPage() {
             <CardContent className="p-6">
               <div className="flex items-center space-x-2">
                 <div className="p-2 bg-purple-100 rounded-lg">
-                  <Code className="h-5 w-5 text-purple-600" />
+                  <Zap className="h-5 w-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Setup Time</p>
-                  <p className="text-2xl font-bold">5 Min</p>
+                  <p className="text-sm font-medium text-muted-foreground">Performance</p>
+                  <p className="text-2xl font-bold">Lightning</p>
                 </div>
               </div>
             </CardContent>
@@ -168,15 +190,18 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Apso Features */}
+          {/* Combined Platform Features */}
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader>
                 <div className="flex items-center space-x-2">
-                  <Code className="h-5 w-5 text-primary" />
-                  <CardTitle>What You Can Build with Apso</CardTitle>
+                  <div className="flex items-center space-x-1">
+                    <Shield className="h-4 w-4 text-blue-600" />
+                    <Code className="h-4 w-4 text-primary" />
+                  </div>
+                  <CardTitle>Better Auth + Apso Platform</CardTitle>
                 </div>
-                <CardDescription>AI-powered backend development platform for modern applications</CardDescription>
+                <CardDescription>Enterprise authentication combined with AI-powered backend development</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -194,13 +219,13 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="flex items-start space-x-3">
-                      <div className="p-2 bg-brand-blue/10 rounded-lg mt-1">
-                        <Shield className="h-4 w-4 text-brand-blue" />
+                      <div className="p-2 bg-blue-600/10 rounded-lg mt-1">
+                        <Shield className="h-4 w-4 text-blue-600" />
                       </div>
                       <div>
-                        <h4 className="font-semibold">Enterprise Security</h4>
+                        <h4 className="font-semibold">Better Auth Security</h4>
                         <p className="text-sm text-muted-foreground">
-                          Built-in authentication, authorization, rate limiting, and security best practices.
+                          Industry-leading authentication with built-in security, sessions, and multi-factor auth.
                         </p>
                       </div>
                     </div>

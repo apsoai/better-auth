@@ -38,9 +38,28 @@ export default function HomePage() {
             </h1>
             
             <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed">
-              Experience the perfect fusion of <strong>Better Auth</strong> and <strong>Apso</strong> - 
+              Experience the perfect fusion of <strong>Better Auth</strong> and <strong>Apso</strong> -
               delivering enterprise-grade security with developer-friendly tools for modern applications.
             </p>
+
+            {/* Logo Showcase */}
+            <div className="flex justify-center items-center gap-8 mb-8">
+              <div className="flex flex-col items-center space-y-2">
+                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-2xl">BA</span>
+                </div>
+                <span className="text-sm font-medium text-blue-600">Better Auth</span>
+              </div>
+
+              <div className="text-4xl text-muted-foreground font-light">+</div>
+
+              <div className="flex flex-col items-center space-y-2">
+                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-brand-blue flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-2xl">A</span>
+                </div>
+                <span className="text-sm font-medium text-primary">Apso</span>
+              </div>
+            </div>
 
             {session ? (
               <div className="space-y-6">

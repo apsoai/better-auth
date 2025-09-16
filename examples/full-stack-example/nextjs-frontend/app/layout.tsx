@@ -23,12 +23,21 @@ export default function RootLayout({
           <Header>
             <HeaderContainer>
               <HeaderLogo>
-                <Link href="/" className="flex items-center space-x-2">
-                  <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                    <span className="text-white font-bold text-sm">A</span>
+                <Link href="/" className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-2">
+                    {/* Better Auth Logo */}
+                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">BA</span>
+                    </div>
+                    {/* Plus Symbol */}
+                    <span className="text-muted-foreground font-medium">+</span>
+                    {/* Apso Logo */}
+                    <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">A</span>
+                    </div>
                   </div>
                   <span className="font-bold text-xl">
-                    <span className="text-primary">Apso</span> <span className="text-muted-foreground">+ Better Auth</span>
+                    <span className="text-blue-600">Better Auth</span> <span className="text-muted-foreground">+</span> <span className="text-primary">Apso</span>
                   </span>
                 </Link>
               </HeaderLogo>
@@ -71,10 +80,16 @@ export default function RootLayout({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div>
                   <div className="flex items-center space-x-2 mb-4">
-                    <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                      <span className="text-white font-bold text-sm">A</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
+                        <span className="text-white font-bold text-sm">BA</span>
+                      </div>
+                      <span className="text-muted-foreground">+</span>
+                      <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+                        <span className="text-white font-bold text-sm">A</span>
+                      </div>
                     </div>
-                    <span className="font-bold text-lg">Apso + Better Auth</span>
+                    <span className="font-bold text-lg">Better Auth + Apso</span>
                   </div>
                   <p className="text-sm text-muted-foreground">
                     Modern authentication platform combining the power of Better Auth with Apso's developer-focused tools.
