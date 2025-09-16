@@ -151,8 +151,6 @@ export class SessionOperations {
         userAgent: "", // Default value
       };
 
-      console.log('🔍 [SESSION DEBUG] Sending to database:', JSON.stringify(apiData, null, 2));
-
       // Execute HTTP request
       const url = `${this.config.baseUrl}/${this.apiPath}`;
       const response = await this.httpClient.post<ApsoSession>(url, apiData, {
@@ -160,17 +158,13 @@ export class SessionOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      console.log('🔍 [SESSION DEBUG] Database response:', JSON.stringify(response, null, 2));
-
       // Normalize and transform response
       const normalizedResponse =
         this.responseNormalizer.normalizeSingleResponse(
           response
         ) as ApsoSession;
-      console.log('🔍 [SESSION DEBUG] Normalized response:', JSON.stringify(normalizedResponse, null, 2));
 
       const result = this.entityMapper.mapSessionFromApi(normalizedResponse);
-      console.log('🔍 [SESSION DEBUG] Final session result:', JSON.stringify(result, null, 2));
 
       this.logOperation('createSession', performance.now() - startTime, true);
       return result;
@@ -236,7 +230,6 @@ export class SessionOperations {
 
       while (hasMorePages && !matchingSession) {
         const pageUrl = `${url}?page=${currentPage}`;
-        console.log('🔍 [SESSION DEBUG] Searching page', currentPage, 'for token:', sessionToken);
 
         const response = await this.httpClient.get<any>(pageUrl, {
           headers: this.buildHeaders(),
@@ -246,8 +239,6 @@ export class SessionOperations {
         const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
           response
         ) as ApsoSession[];
-
-        console.log('🔍 [SESSION DEBUG] Page', currentPage, 'has', normalizedResults.length, 'sessions');
 
         // Find session by ID (session token is now the ID)
         matchingSession = normalizedResults.find(
@@ -262,8 +253,6 @@ export class SessionOperations {
         }
       }
 
-      console.log('🔍 [SESSION DEBUG] Token search result:', matchingSession ? 'FOUND' : 'NOT FOUND');
-
       if (!matchingSession) {
         this.logOperation(
           'findSessionByToken',
@@ -274,7 +263,6 @@ export class SessionOperations {
       }
 
       const result = this.entityMapper.mapSessionFromApi(matchingSession);
-      console.log('🔍 [SESSION DEBUG] Returning session to Better Auth:', JSON.stringify(result, null, 2));
 
       this.logOperation(
         'findSessionByToken',

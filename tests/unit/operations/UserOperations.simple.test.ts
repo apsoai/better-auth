@@ -1,6 +1,6 @@
 /**
  * Simple UserOperations Test
- * 
+ *
  * Basic test to verify our setup is working
  */
 
@@ -8,10 +8,7 @@ import { UserOperations } from '../../../src/operations/UserOperations';
 import { AdapterError } from '../../../src/types';
 import type { ApsoAdapterConfig } from '../../../src/types';
 
-import {
-  createTestConfig,
-  createMockLogger,
-} from '../testUtils';
+import { createTestConfig, createMockLogger } from '../testUtils';
 
 describe('UserOperations - Simple', () => {
   let userOperations: UserOperations;
@@ -82,15 +79,15 @@ describe('UserOperations - Simple', () => {
     });
 
     it('should throw ValidationError for invalid ID in findUserById', async () => {
-      await expect(
-        userOperations.findUserById('')
-      ).rejects.toThrow(AdapterError);
+      await expect(userOperations.findUserById('')).rejects.toThrow(
+        AdapterError
+      );
     });
 
     it('should throw ValidationError for invalid email in findUserByEmail', async () => {
-      await expect(
-        userOperations.findUserByEmail('')
-      ).rejects.toThrow(AdapterError);
+      await expect(userOperations.findUserByEmail('')).rejects.toThrow(
+        AdapterError
+      );
     });
   });
 });

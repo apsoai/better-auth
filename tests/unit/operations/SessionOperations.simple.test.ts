@@ -1,6 +1,6 @@
 /**
  * Simple SessionOperations Test
- * 
+ *
  * Basic test to verify SessionOperations functionality
  */
 
@@ -8,10 +8,7 @@ import { SessionOperations } from '../../../src/operations/SessionOperations';
 import { AdapterError } from '../../../src/types';
 import type { ApsoAdapterConfig } from '../../../src/types';
 
-import {
-  createTestConfig,
-  createMockLogger,
-} from '../testUtils';
+import { createTestConfig, createMockLogger } from '../testUtils';
 
 describe('SessionOperations - Simple', () => {
   let sessionOperations: SessionOperations;
@@ -101,15 +98,15 @@ describe('SessionOperations - Simple', () => {
     });
 
     it('should throw ValidationError for empty sessionToken in findSessionByToken', async () => {
-      await expect(
-        sessionOperations.findSessionByToken('')
-      ).rejects.toThrow(AdapterError);
+      await expect(sessionOperations.findSessionByToken('')).rejects.toThrow(
+        AdapterError
+      );
     });
 
     it('should throw ValidationError for empty ID in findSessionById', async () => {
-      await expect(
-        sessionOperations.findSessionById('')
-      ).rejects.toThrow(AdapterError);
+      await expect(sessionOperations.findSessionById('')).rejects.toThrow(
+        AdapterError
+      );
     });
   });
 });

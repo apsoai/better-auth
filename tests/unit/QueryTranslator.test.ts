@@ -1,11 +1,15 @@
 /**
  * QueryTranslator Unit Tests
- * 
+ *
  * Tests the QueryTranslator class for proper translation of Better Auth
  * queries to Apso SDK QueryParams format.
  */
 
-import { QueryTranslator, QueryBuildOptions, QueryParams } from '../../src/query/QueryTranslator';
+import {
+  QueryTranslator,
+  QueryBuildOptions,
+  QueryParams,
+} from '../../src/query/QueryTranslator';
 
 describe('QueryTranslator', () => {
   let translator: QueryTranslator;
@@ -59,10 +63,7 @@ describe('QueryTranslator', () => {
 
     it('should handle OR conditions', () => {
       const where = {
-        OR: [
-          { status: 'active' },
-          { status: 'pending' },
-        ],
+        OR: [{ status: 'active' }, { status: 'pending' }],
       };
       const result = translator.translateWhere(where);
 
@@ -76,10 +77,7 @@ describe('QueryTranslator', () => {
 
     it('should handle AND conditions', () => {
       const where = {
-        AND: [
-          { status: 'active' },
-          { verified: true },
-        ],
+        AND: [{ status: 'active' }, { verified: true }],
       };
       const result = translator.translateWhere(where);
 
@@ -206,7 +204,10 @@ describe('QueryTranslator', () => {
         filter: { status: 'active' },
       };
 
-      const result = translatorWithTenant.addTenantScope(query, 'custom-tenant');
+      const result = translatorWithTenant.addTenantScope(
+        query,
+        'custom-tenant'
+      );
 
       expect(result).toEqual({
         filter: {

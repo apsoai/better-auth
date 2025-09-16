@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+env:
+  NODE_VERSION: '20'
+  REGISTRY_URL: 'https://registry.npmjs.org'
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: ${{ env.REGISTRY_URL }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build package
+        run: npm run build
+
+      - name: Extract release notes
+        id: extract-release-notes
+        uses: ffurrer2/extract-release-notes@v1
+        with:
+          changelog_file: CHANGELOG.md
+
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Verify package version matches tag
+        run: |
+          PACKAGE_VERSION=$(npm pkg get version | tr -d '"')
+          TAG_VERSION=${{ steps.version.outputs.version }}
+          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+            echo "Package version ($PACKAGE_VERSION) does not match tag version ($TAG_VERSION)"
+            exit 1
+          fi
+
+      - name: Run full test suite
+        run: |
+          npm run lint
+          npm run typecheck
+          npm run test
+          npm run build
+
+      - name: Create package tarball
+        run: npm pack
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release v${{ steps.version.outputs.version }}
+          body: ${{ steps.extract-release-notes.outputs.release_notes }}
+          files: |
+            *.tgz
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to npm with release tag
+        run: |
+          if [[ "${{ steps.version.outputs.version }}" == *"-"* ]]; then
+            npm publish --tag beta
+          else
+            npm publish --tag latest
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Update GitHub Pages docs (if stable release)
+        if: ${{ !contains(steps.version.outputs.version, '-') }}
+        run: |
+          echo "Stable release detected, updating documentation..."
+          # Add documentation deployment logic here if needed
+
+  notify-release:
+    name: Notify Release Success
+    needs: [create-release]
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Notify release success
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            
+            // Create a deployment status
+            const deployment = await github.rest.repos.createDeployment({
+              owner,
+              repo,
+              ref: context.ref,
+              environment: 'npm',
+              description: 'Deploy to npm registry',
+              auto_merge: false,
+              required_contexts: []
+            });
+            
+            await github.rest.repos.createDeploymentStatus({
+              owner,
+              repo,
+              deployment_id: deployment.data.id,
+              state: 'success',
+              description: 'Successfully published v${{ steps.version.outputs.version }} to npm',
+              environment_url: 'https://www.npmjs.com/package/@apso/better-auth-apso-adapter'
+            });

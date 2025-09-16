@@ -1,12 +1,15 @@
 /**
  * Conformance Test Setup
- * 
+ *
  * This file sets up the test environment for Better Auth conformance tests,
  * ensuring that all mocks are properly configured and that the test environment
  * matches real-world Better Auth usage patterns.
  */
 
-import { MockDataStore, mockApsoClientFactory } from '../unit/__mocks__/apsoSdk';
+import {
+  MockDataStore,
+  mockApsoClientFactory,
+} from '../unit/__mocks__/apsoSdk';
 
 // Mock the Apso SDK at module level
 jest.mock('@apso/sdk', () => {
@@ -54,7 +57,7 @@ declare global {
 // Custom matchers for Better Auth entities
 expect.extend({
   toBeValidBetterAuthUser(received) {
-    const pass = 
+    const pass =
       typeof received === 'object' &&
       received !== null &&
       typeof received.id === 'string' &&
@@ -67,19 +70,21 @@ expect.extend({
 
     if (pass) {
       return {
-        message: () => `Expected ${JSON.stringify(received)} not to be a valid Better Auth User`,
+        message: () =>
+          `Expected ${JSON.stringify(received)} not to be a valid Better Auth User`,
         pass: true,
       };
     } else {
       return {
-        message: () => `Expected ${JSON.stringify(received)} to be a valid Better Auth User with required fields: id (string), email (string), emailVerified (boolean), optional: name (string), image (string)`,
+        message: () =>
+          `Expected ${JSON.stringify(received)} to be a valid Better Auth User with required fields: id (string), email (string), emailVerified (boolean), optional: name (string), image (string)`,
         pass: false,
       };
     }
   },
 
   toBeValidBetterAuthSession(received) {
-    const pass = 
+    const pass =
       typeof received === 'object' &&
       received !== null &&
       typeof received.id === 'string' &&
@@ -92,19 +97,21 @@ expect.extend({
 
     if (pass) {
       return {
-        message: () => `Expected ${JSON.stringify(received)} not to be a valid Better Auth Session`,
+        message: () =>
+          `Expected ${JSON.stringify(received)} not to be a valid Better Auth Session`,
         pass: true,
       };
     } else {
       return {
-        message: () => `Expected ${JSON.stringify(received)} to be a valid Better Auth Session with required fields: id (string), sessionToken (string), userId (string), expiresAt (Date)`,
+        message: () =>
+          `Expected ${JSON.stringify(received)} to be a valid Better Auth Session with required fields: id (string), sessionToken (string), userId (string), expiresAt (Date)`,
         pass: false,
       };
     }
   },
 
   toBeValidBetterAuthVerificationToken(received) {
-    const pass = 
+    const pass =
       typeof received === 'object' &&
       received !== null &&
       typeof received.identifier === 'string' &&
@@ -115,12 +122,14 @@ expect.extend({
 
     if (pass) {
       return {
-        message: () => `Expected ${JSON.stringify(received)} not to be a valid Better Auth VerificationToken`,
+        message: () =>
+          `Expected ${JSON.stringify(received)} not to be a valid Better Auth VerificationToken`,
         pass: true,
       };
     } else {
       return {
-        message: () => `Expected ${JSON.stringify(received)} to be a valid Better Auth VerificationToken with required fields: identifier (string), token (string), expiresAt (Date)`,
+        message: () =>
+          `Expected ${JSON.stringify(received)} to be a valid Better Auth VerificationToken with required fields: identifier (string), token (string), expiresAt (Date)`,
         pass: false,
       };
     }

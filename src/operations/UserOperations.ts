@@ -98,22 +98,16 @@ export class UserOperations {
    */
   async createUser(userData: Partial<BetterAuthUser>): Promise<BetterAuthUser> {
     const startTime = performance.now();
-    
-    console.log('🔍 [SIGN-UP DEBUG] createUser called with data:', JSON.stringify(userData, null, 2));
-    console.log('🔍 [SIGN-UP DEBUG] userData keys:', Object.keys(userData));
-    console.log('🔍 [SIGN-UP DEBUG] userData.hashedPassword:', userData.hashedPassword);
-    console.log('🔍 [SIGN-UP DEBUG] userData.password:', (userData as any).password);
 
     try {
-      // Skip all validation for development
-      // this.validateCreateUserData(userData);
+      // Validate user data
+      this.validateCreateUserData(userData);
 
       // Normalize email for consistent storage and lookup
       let normalizedData = { ...userData };
       if (normalizedData.email) {
         try {
           normalizedData.email = EmailNormalizer.normalize(normalizedData.email);
-          console.log('🔍 [DEBUG] createUser - original email:', userData.email, 'normalized:', normalizedData.email);
         } catch (error) {
           throw new AdapterError(
             AdapterErrorCode.VALIDATION_ERROR,
@@ -134,13 +128,9 @@ export class UserOperations {
         // If plain password is provided, we need to hash it
         // For now, let's just store it as-is (in production, you'd use proper hashing)
         hashedPassword = (userData as any).password;
-        console.log('🔍 [SIGN-UP DEBUG] Found plain password, storing as-is:', hashedPassword);
       } else if (normalizedData.hashedPassword) {
         // If already hashed password is provided, use it
         hashedPassword = normalizedData.hashedPassword;
-        console.log('🔍 [SIGN-UP DEBUG] Found hashed password:', hashedPassword);
-      } else {
-        console.log('🔍 [SIGN-UP DEBUG] No password found in userData');
       }
 
       // Transform data to API format
@@ -153,13 +143,11 @@ export class UserOperations {
         ...(normalizedData.name && { name: normalizedData.name }),
         ...(normalizedData.image && { image: normalizedData.image }),
       };
-      
-      console.log('🔍 [SIGN-UP DEBUG] Created BetterAuthUser:', JSON.stringify(betterAuthUser, null, 2));
 
       const apiData = this.entityMapper.mapUserToApi(betterAuthUser);
 
-      // Skip email conflict check for development
-      // await this.checkEmailConflict(normalizedData.email!);
+      // Check for email conflicts
+      await this.checkEmailConflict(normalizedData.email!);
 
       // Execute HTTP request
       const url = `${this.config.baseUrl}/${this.apiPath}`;
@@ -300,13 +288,9 @@ export class UserOperations {
    */
   async findUserByEmail(email: string): Promise<BetterAuthUser | null> {
     const startTime = performance.now();
-    
-    console.log('🔍 [SIGN-IN DEBUG] findUserByEmail called with email:', email);
-    console.log('🔍 [SIGN-IN DEBUG] findUserByEmail - method entry point reached');
 
     try {
       if (!email || typeof email !== 'string') {
-        console.log('🔍 [SIGN-IN DEBUG] Email validation failed - not a string or empty');
         throw new AdapterError(
           AdapterErrorCode.VALIDATION_ERROR,
           'Email must be a non-empty string',
@@ -320,7 +304,6 @@ export class UserOperations {
       let normalizedEmail: string;
       try {
         normalizedEmail = EmailNormalizer.normalize(email);
-        console.log('🔍 [DEBUG] findUserByEmail - original email:', email, 'normalized:', normalizedEmail);
       } catch (error) {
         throw new AdapterError(
           AdapterErrorCode.VALIDATION_ERROR,
@@ -338,8 +321,6 @@ export class UserOperations {
       );
 
       const url = `${this.config.baseUrl}/${this.apiPath}`;
-      console.log('🔍 [SIGN-IN DEBUG] Making API request to:', url);
-      console.log('🔍 [SIGN-IN DEBUG] Request headers:', this.buildHeaders());
 
       // For now, we'll get all users and filter (in a real implementation,
       // we'd use query parameters)
@@ -347,28 +328,19 @@ export class UserOperations {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-      
-      console.log('🔍 [SIGN-IN DEBUG] API response status:', response.status);
-      console.log('🔍 [SIGN-IN DEBUG] API response data:', response.data);
 
       const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
         response
       ) as ApsoUser[];
-
-      console.log('🔍 [SIGN-IN DEBUG] findUserByEmail - API returned users:', normalizedResults.map(u => ({ id: u.id, email: u.email })));
-      console.log('🔍 [SIGN-IN DEBUG] Looking for normalized email:', normalizedEmail);
 
       // Find user by email (case-insensitive)
       const matchingUser = normalizedResults.find(
         (user: ApsoUser) => {
           const userEmailLower = user.email.toLowerCase();
           const normalizedEmailLower = normalizedEmail.toLowerCase();
-          console.log('🔍 [SIGN-IN DEBUG] Comparing:', userEmailLower, '===', normalizedEmailLower, '?', userEmailLower === normalizedEmailLower);
           return userEmailLower === normalizedEmailLower;
         }
       );
-      
-      console.log('🔍 [SIGN-IN DEBUG] Matching user found:', matchingUser ? { id: matchingUser.id, email: matchingUser.email } : 'null');
 
       if (!matchingUser) {
         this.logOperation(

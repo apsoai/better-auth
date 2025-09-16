@@ -1,8 +1,11 @@
 # Better Auth Apso Adapter
 
+[![CI/CD Pipeline](https://github.com/your-org/apso/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/your-org/apso/actions/workflows/ci-cd.yml)
 [![npm version](https://badge.fury.io/js/%40apso%2Fbetter-auth-apso-adapter.svg)](https://badge.fury.io/js/%40apso%2Fbetter-auth-apso-adapter)
+[![codecov](https://codecov.io/gh/your-org/apso/branch/main/graph/badge.svg)](https://codecov.io/gh/your-org/apso)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
+[![npm downloads](https://img.shields.io/npm/dm/@apso/better-auth-apso-adapter.svg)](https://www.npmjs.com/package/@apso/better-auth-apso-adapter)
 
 A production-ready database adapter for [Better Auth](https://better-auth.com) that seamlessly interfaces with Apso-generated CRUD REST endpoints. This adapter enables Better Auth to work with any REST API following Apso/nestjsx/crud conventions, providing enterprise-grade authentication for modern applications.
 

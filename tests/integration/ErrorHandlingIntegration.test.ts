@@ -1,6 +1,6 @@
 /**
  * Error Handling Integration Tests
- * 
+ *
  * Tests error scenarios with real network communication,
  * including timeouts, connection failures, and API errors.
  */
@@ -9,18 +9,22 @@ import { IntegrationTestHelper, shouldRunIntegrationTests } from './setup';
 import { apsoAdapter } from '../../src';
 
 // Skip all tests if integration tests are not enabled
-const describeIntegration = shouldRunIntegrationTests() ? describe : describe.skip;
+const describeIntegration = shouldRunIntegrationTests()
+  ? describe
+  : describe.skip;
 
 describeIntegration('Error Handling Integration Tests', () => {
   let testHelper: IntegrationTestHelper;
 
   beforeAll(async () => {
     testHelper = new IntegrationTestHelper();
-    
+
     // Verify base API connectivity
     const isHealthy = await testHelper.healthCheck();
     if (!isHealthy) {
-      throw new Error('API health check failed - cannot run error handling tests');
+      throw new Error(
+        'API health check failed - cannot run error handling tests'
+      );
     }
   }, 30000);
 
@@ -49,7 +53,7 @@ describeIntegration('Error Handling Integration Tests', () => {
       ).rejects.toThrow(/network|timeout|ENOTFOUND|connection/i);
 
       const duration = performance.now() - startTime;
-      
+
       // Should fail relatively quickly, not hang
       expect(duration).toBeLessThan(10000); // Within 10 seconds
     }, 15000);
@@ -73,7 +77,7 @@ describeIntegration('Error Handling Integration Tests', () => {
       ).rejects.toThrow(/timeout/i);
 
       const duration = performance.now() - startTime;
-      
+
       // Should fail very quickly due to timeout
       expect(duration).toBeLessThan(1000);
     });
@@ -100,7 +104,7 @@ describeIntegration('Error Handling Integration Tests', () => {
 
       try {
         const results = await Promise.allSettled(operations);
-        
+
         // At least some should succeed, but some might fail due to network issues
         const succeeded = results.filter(r => r.status === 'fulfilled');
         const failed = results.filter(r => r.status === 'rejected');
@@ -109,7 +113,9 @@ describeIntegration('Error Handling Integration Tests', () => {
         for (const result of succeeded) {
           if (result.status === 'fulfilled') {
             try {
-              await flakyAdapter.delete('user', { id: (result.value as any).id });
+              await flakyAdapter.delete('user', {
+                id: (result.value as any).id,
+              });
             } catch (error) {
               // Ignore cleanup errors
             }
@@ -138,7 +144,11 @@ describeIntegration('Error Handling Integration Tests', () => {
       ).rejects.toThrow();
 
       await expect(
-        adapter.update('user', { id: 'non-existent-user-id-12345' }, { name: 'Updated' })
+        adapter.update(
+          'user',
+          { id: 'non-existent-user-id-12345' },
+          { name: 'Updated' }
+        )
       ).rejects.toThrow();
 
       await expect(
@@ -158,9 +168,7 @@ describeIntegration('Error Handling Integration Tests', () => {
       ).rejects.toThrow();
 
       // Test missing required fields
-      await expect(
-        adapter.create('user', {} as any)
-      ).rejects.toThrow();
+      await expect(adapter.create('user', {} as any)).rejects.toThrow();
 
       // Test invalid data types
       await expect(
@@ -196,7 +204,7 @@ describeIntegration('Error Handling Integration Tests', () => {
   describe('Retry Mechanism Testing', () => {
     it('should retry failed requests according to configuration', async () => {
       let attemptCount = 0;
-      
+
       // Create adapter with retry configuration
       const retryAdapter = apsoAdapter({
         baseUrl: testHelper.getConfig().baseUrl,
@@ -213,7 +221,7 @@ describeIntegration('Error Handling Integration Tests', () => {
       // For this test, we'll use a valid operation that should succeed
       // In practice, you might want to test with a controlled flaky endpoint
       const startTime = performance.now();
-      
+
       try {
         const user = await retryAdapter.create('user', {
           email: `retry-test-${Date.now()}@example.com`,
@@ -221,10 +229,10 @@ describeIntegration('Error Handling Integration Tests', () => {
         });
 
         const duration = performance.now() - startTime;
-        
+
         // Should succeed and cleanup
         await retryAdapter.delete('user', { id: user.id });
-        
+
         // Should complete in reasonable time
         expect(duration).toBeLessThan(10000);
       } catch (error) {
@@ -251,7 +259,7 @@ describeIntegration('Error Handling Integration Tests', () => {
       ).rejects.toThrow();
 
       const duration = performance.now() - startTime;
-      
+
       // With 3 retries and exponential backoff, should take some time
       // 100ms + 200ms + 400ms + request times > 700ms
       expect(duration).toBeGreaterThan(700);
@@ -262,17 +270,19 @@ describeIntegration('Error Handling Integration Tests', () => {
   describe('Resource Exhaustion Scenarios', () => {
     it('should handle concurrent request limits gracefully', async () => {
       const adapter = testHelper.getAdapter();
-      
+
       // Create many concurrent requests to potentially hit limits
       const concurrentRequests = Array.from({ length: 20 }, (_, i) =>
-        adapter.create('user', {
-          email: `concurrent-${i}-${Date.now()}@example.com`,
-          name: `Concurrent User ${i}`,
-        }).catch(error => ({ error, index: i }))
+        adapter
+          .create('user', {
+            email: `concurrent-${i}-${Date.now()}@example.com`,
+            name: `Concurrent User ${i}`,
+          })
+          .catch(error => ({ error, index: i }))
       );
 
       const results = await Promise.allSettled(concurrentRequests);
-      
+
       let successCount = 0;
       let errorCount = 0;
       const createdUsers: any[] = [];
@@ -301,16 +311,18 @@ describeIntegration('Error Handling Integration Tests', () => {
 
       // Should handle some level of concurrency
       expect(successCount).toBeGreaterThan(0);
-      
+
       // If some failed, errors should be meaningful
       if (errorCount > 0) {
-        console.log(`${errorCount}/${results.length} requests failed due to concurrency limits or other errors`);
+        console.log(
+          `${errorCount}/${results.length} requests failed due to concurrency limits or other errors`
+        );
       }
     });
 
     it('should handle large payload scenarios', async () => {
       const adapter = testHelper.getAdapter();
-      
+
       // Create user with large data
       const largeUserData = {
         email: `large-payload-${Date.now()}@example.com`,
@@ -320,7 +332,7 @@ describeIntegration('Error Handling Integration Tests', () => {
       try {
         const user = await adapter.create('user', largeUserData);
         expect(user).toHaveValidEntityStructure();
-        
+
         // Cleanup
         await adapter.delete('user', { id: user.id });
       } catch (error) {
@@ -333,21 +345,24 @@ describeIntegration('Error Handling Integration Tests', () => {
   describe('Data Consistency Error Recovery', () => {
     it('should handle partial operation failures gracefully', async () => {
       const adapter = testHelper.getAdapter();
-      
+
       // Create user
       const user = await testHelper.createTestUser();
-      
+
       try {
         // Attempt operation that might partially fail
-        await adapter.update('user', { id: user.id }, {
-          name: 'Updated Name',
-          email: 'invalid-email-format', // This should cause validation error
-        });
-        
+        await adapter.update(
+          'user',
+          { id: user.id },
+          {
+            name: 'Updated Name',
+            email: 'invalid-email-format', // This should cause validation error
+          }
+        );
+
         // If it succeeds, verify the update
         const updatedUser = await adapter.findUnique('user', { id: user.id });
         expect(updatedUser.name).toBe('Updated Name');
-        
       } catch (error) {
         // If update fails, original data should be intact
         const originalUser = await adapter.findUnique('user', { id: user.id });
@@ -358,7 +373,7 @@ describeIntegration('Error Handling Integration Tests', () => {
 
     it('should handle cascade deletion errors properly', async () => {
       const adapter = testHelper.getAdapter();
-      
+
       // Create user with related data
       const user = await testHelper.createTestUser();
       const session = await testHelper.createTestSession(user.id);
@@ -367,20 +382,21 @@ describeIntegration('Error Handling Integration Tests', () => {
       try {
         // Attempt to delete user (might fail if cascade is not properly configured)
         await adapter.delete('user', { id: user.id });
-        
+
         // If deletion succeeded, related data should be handled appropriately
         await expect(
           adapter.findUnique('session', { sessionToken: session.sessionToken })
         ).rejects.toThrow();
-        
+
         await expect(
           adapter.findUnique('account', { id: account.id })
         ).rejects.toThrow();
-        
       } catch (error) {
         // If user deletion failed, manual cleanup of related data
         try {
-          await adapter.delete('session', { sessionToken: session.sessionToken });
+          await adapter.delete('session', {
+            sessionToken: session.sessionToken,
+          });
           await adapter.delete('account', { id: account.id });
           await adapter.delete('user', { id: user.id });
         } catch (cleanupError) {
@@ -393,7 +409,7 @@ describeIntegration('Error Handling Integration Tests', () => {
   describe('API Rate Limiting', () => {
     it('should handle rate limiting gracefully', async () => {
       const adapter = testHelper.getAdapter();
-      
+
       // Perform rapid requests that might trigger rate limiting
       const rapidRequests = Array.from({ length: 10 }, (_, i) =>
         adapter.create('user', {
@@ -415,8 +431,10 @@ describeIntegration('Error Handling Integration Tests', () => {
           successCount++;
           createdUsers.push(result.value);
         } else {
-          if (result.reason.message?.includes('429') || 
-              result.reason.message?.includes('rate limit')) {
+          if (
+            result.reason.message?.includes('429') ||
+            result.reason.message?.includes('rate limit')
+          ) {
             rateLimitCount++;
           }
         }
@@ -452,15 +470,17 @@ describeIntegration('Error Handling Integration Tests', () => {
         },
         {
           name: 'invalid email',
-          operation: () => adapter.create('user', {
-            email: 'invalid-email',
-            name: 'Test',
-          }),
+          operation: () =>
+            adapter.create('user', {
+              email: 'invalid-email',
+              name: 'Test',
+            }),
           expectedPattern: /email|validation|invalid/i,
         },
         {
           name: 'missing required field',
-          operation: () => adapter.create('user', { email: 'test@example.com' } as any),
+          operation: () =>
+            adapter.create('user', { email: 'test@example.com' } as any),
           expectedPattern: /required|missing/i,
         },
       ];

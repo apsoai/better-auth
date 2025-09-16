@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or Discussion
+    url: https://github.com/your-org/apso/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: Security Issue
+    url: mailto:security@mavric.team
+    about: Please report security vulnerabilities via email
+  - name: Documentation Issue
+    url: https://github.com/your-org/apso/issues/new?labels=documentation&template=documentation_issue.yml
+    about: Report issues with documentation or request documentation improvements

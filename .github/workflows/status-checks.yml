@@ -1,0 +1,164 @@
+name: Status Checks
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+jobs:
+  status-check:
+    name: Aggregate Status Check
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [] # This will be updated by branch protection rules
+    
+    steps:
+      - name: Check all required jobs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // This script runs after all other required checks
+            // and provides a single status check for branch protection
+            
+            const requiredJobs = [
+              'test',
+              'security', 
+              'dependency-review'
+            ];
+            
+            const { owner, repo } = context.repo;
+            const sha = context.sha;
+            
+            // Get all check runs for this commit
+            const checkRuns = await github.rest.checks.listForRef({
+              owner,
+              repo,
+              ref: sha,
+              status: 'completed'
+            });
+            
+            let allPassed = true;
+            let summary = '## Status Check Summary\n\n';
+            
+            for (const jobName of requiredJobs) {
+              const checkRun = checkRuns.data.check_runs.find(run => 
+                run.name.includes(jobName)
+              );
+              
+              if (checkRun) {
+                const status = checkRun.conclusion === 'success' ? '✅' : '❌';
+                summary += `${status} **${jobName}**: ${checkRun.conclusion}\n`;
+                
+                if (checkRun.conclusion !== 'success') {
+                  allPassed = false;
+                }
+              } else {
+                summary += `⏳ **${jobName}**: pending\n`;
+                allPassed = false;
+              }
+            }
+            
+            // Create a check run with the summary
+            await github.rest.checks.create({
+              owner,
+              repo,
+              name: 'All Status Checks',
+              head_sha: sha,
+              status: 'completed',
+              conclusion: allPassed ? 'success' : 'failure',
+              output: {
+                title: allPassed ? 'All checks passed!' : 'Some checks failed',
+                summary: summary
+              }
+            });
+            
+            core.setOutput('all_passed', allPassed);
+            
+            if (!allPassed) {
+              core.setFailed('Not all required checks passed');
+            }
+
+  # This job will only run on successful completion of all checks
+  ready-to-merge:
+    name: Ready to Merge
+    runs-on: ubuntu-latest
+    needs: [status-check]
+    if: success() && github.event_name == 'pull_request'
+    
+    steps:
+      - name: Add ready-to-merge label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { number } = context.payload.pull_request;
+            
+            // Add label to indicate PR is ready for merge
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number: number,
+              labels: ['ready-to-merge', 'all-checks-passed']
+            });
+            
+            // Remove any failure labels
+            try {
+              await github.rest.issues.removeLabel({
+                owner,
+                repo,
+                issue_number: number,
+                name: 'checks-failed'
+              });
+            } catch (error) {
+              // Label might not exist, ignore error
+            }
+
+  # This job runs when checks fail
+  mark-as-failing:
+    name: Mark as Failing
+    runs-on: ubuntu-latest
+    needs: [status-check]
+    if: failure() && github.event_name == 'pull_request'
+    
+    steps:
+      - name: Add failing label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { number } = context.payload.pull_request;
+            
+            // Add label to indicate PR has failing checks
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number: number,
+              labels: ['checks-failed']
+            });
+            
+            // Remove ready-to-merge label if it exists
+            try {
+              await github.rest.issues.removeLabel({
+                owner,
+                repo,
+                issue_number: number,
+                name: 'ready-to-merge'
+              });
+            } catch (error) {
+              // Label might not exist, ignore error
+            }
+            
+            // Comment on PR about the failure
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: number,
+              body: `❌ **Checks Failed**
+              
+Some required status checks are failing. Please review the failed checks and fix any issues before this PR can be merged.
+
+**Failed Workflow:** [View Details](${context.payload.repository.html_url}/actions/runs/${context.runId})
+
+This PR will automatically be updated when the issues are resolved.`
+            });

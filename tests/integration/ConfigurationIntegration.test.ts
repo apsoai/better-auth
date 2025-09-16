@@ -1,27 +1,35 @@
 /**
  * Configuration Integration Tests
- * 
+ *
  * Tests different adapter configurations with real Apso SDK
  * to ensure all configuration options work correctly in practice.
  */
 
 import { IntegrationTestHelper, shouldRunIntegrationTests } from './setup';
-import { apsoAdapter, createReliableApsoAdapter, createHighThroughputApsoAdapter } from '../../src';
+import {
+  apsoAdapter,
+  createReliableApsoAdapter,
+  createHighThroughputApsoAdapter,
+} from '../../src';
 import { ApsoAdapterConfig } from '../../src/types';
 
 // Skip all tests if integration tests are not enabled
-const describeIntegration = shouldRunIntegrationTests() ? describe : describe.skip;
+const describeIntegration = shouldRunIntegrationTests()
+  ? describe
+  : describe.skip;
 
 describeIntegration('Configuration Integration Tests', () => {
   let baseTestHelper: IntegrationTestHelper;
 
   beforeAll(async () => {
     baseTestHelper = new IntegrationTestHelper();
-    
+
     // Verify base API connectivity
     const isHealthy = await baseTestHelper.healthCheck();
     if (!isHealthy) {
-      throw new Error('API health check failed - cannot run configuration tests');
+      throw new Error(
+        'API health check failed - cannot run configuration tests'
+      );
     }
   }, 30000);
 
@@ -38,7 +46,7 @@ describeIntegration('Configuration Integration Tests', () => {
       };
 
       const adapter = apsoAdapter(minimalConfig);
-      
+
       // Test basic operation
       const user = await adapter.create('user', {
         email: `minimal-config-${Date.now()}@example.com`,
@@ -46,7 +54,7 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       expect(user).toHaveValidEntityStructure();
-      
+
       // Cleanup
       await adapter.delete('user', { id: user.id });
     });
@@ -76,7 +84,7 @@ describeIntegration('Configuration Integration Tests', () => {
       };
 
       const adapter = apsoAdapter(fullConfig);
-      
+
       // Test basic operation
       const user = await adapter.create('user', {
         email: `FULL-CONFIG+TEST@EXAMPLE.COM`, // Test email normalization
@@ -85,7 +93,7 @@ describeIntegration('Configuration Integration Tests', () => {
 
       expect(user).toHaveValidEntityStructure();
       expect(user.email).toBe('full-config+test@example.com'); // Should be normalized
-      
+
       // Cleanup
       await adapter.delete('user', { id: user.id });
     });
@@ -122,41 +130,44 @@ describeIntegration('Configuration Integration Tests', () => {
     const timeouts = [1000, 5000, 15000];
 
     timeouts.forEach(timeout => {
-      it(`should respect ${timeout}ms timeout setting`, async () => {
-        const timeoutHelper = new IntegrationTestHelper({
-          timeout,
-        });
-
-        const adapter = timeoutHelper.getAdapter();
-        
-        const startTime = performance.now();
-        
-        try {
-          const user = await adapter.create('user', {
-            email: `timeout-${timeout}-${Date.now()}@example.com`,
-            name: `Timeout ${timeout} User`,
+      it(
+        `should respect ${timeout}ms timeout setting`,
+        async () => {
+          const timeoutHelper = new IntegrationTestHelper({
+            timeout,
           });
 
-          const duration = performance.now() - startTime;
-          
-          // Should complete well within timeout
-          expect(duration).toBeLessThan(timeout * 0.8);
-          
-          // Cleanup
-          await adapter.delete('user', { id: user.id });
-          
-        } catch (error) {
-          const duration = performance.now() - startTime;
-          
-          // If it times out, should be close to the timeout value
-          if (error.message?.includes('timeout')) {
-            expect(duration).toBeGreaterThan(timeout * 0.9);
-            expect(duration).toBeLessThan(timeout * 1.2);
+          const adapter = timeoutHelper.getAdapter();
+
+          const startTime = performance.now();
+
+          try {
+            const user = await adapter.create('user', {
+              email: `timeout-${timeout}-${Date.now()}@example.com`,
+              name: `Timeout ${timeout} User`,
+            });
+
+            const duration = performance.now() - startTime;
+
+            // Should complete well within timeout
+            expect(duration).toBeLessThan(timeout * 0.8);
+
+            // Cleanup
+            await adapter.delete('user', { id: user.id });
+          } catch (error) {
+            const duration = performance.now() - startTime;
+
+            // If it times out, should be close to the timeout value
+            if (error.message?.includes('timeout')) {
+              expect(duration).toBeGreaterThan(timeout * 0.9);
+              expect(duration).toBeLessThan(timeout * 1.2);
+            }
           }
-        }
-        
-        await timeoutHelper.cleanup();
-      }, timeout + 5000);
+
+          await timeoutHelper.cleanup();
+        },
+        timeout + 5000
+      );
     });
   });
 
@@ -171,7 +182,7 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       const adapter = noRetryHelper.getAdapter();
-      
+
       // Test normal operation (should work without retries)
       const user = await adapter.create('user', {
         email: `no-retry-${Date.now()}@example.com`,
@@ -179,7 +190,7 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       expect(user).toHaveValidEntityStructure();
-      
+
       // Cleanup
       await adapter.delete('user', { id: user.id });
       await noRetryHelper.cleanup();
@@ -195,7 +206,7 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       const adapter = aggressiveRetryHelper.getAdapter();
-      
+
       // Test normal operation (retries shouldn't interfere with successful requests)
       const user = await adapter.create('user', {
         email: `aggressive-retry-${Date.now()}@example.com`,
@@ -203,7 +214,7 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       expect(user).toHaveValidEntityStructure();
-      
+
       // Cleanup
       await adapter.delete('user', { id: user.id });
       await aggressiveRetryHelper.cleanup();
@@ -219,14 +230,14 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       const adapter = conservativeRetryHelper.getAdapter();
-      
+
       const user = await adapter.create('user', {
         email: `conservative-retry-${Date.now()}@example.com`,
         name: 'Conservative Retry User',
       });
 
       expect(user).toHaveValidEntityStructure();
-      
+
       // Cleanup
       await adapter.delete('user', { id: user.id });
       await conservativeRetryHelper.cleanup();
@@ -246,7 +257,7 @@ describeIntegration('Configuration Integration Tests', () => {
         });
 
         const adapter = batchHelper.getAdapter();
-        
+
         // Create multiple users to test batching
         const userCount = Math.min(maxBatchSize + 2, 15); // Test slightly over batch size
         const users = [];
@@ -280,9 +291,9 @@ describeIntegration('Configuration Integration Tests', () => {
         });
 
         const adapter = batchHelper.getAdapter();
-        
+
         const startTime = performance.now();
-        
+
         // Create a few users
         const users = [];
         for (let i = 0; i < 3; i++) {
@@ -296,7 +307,7 @@ describeIntegration('Configuration Integration Tests', () => {
         const duration = performance.now() - startTime;
 
         expect(users).toHaveLength(3);
-        
+
         // With higher delays, operations might take longer
         if (batchDelayMs > 100) {
           expect(duration).toBeGreaterThan(batchDelayMs * 0.5);
@@ -314,7 +325,7 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       const adapter = normalizationHelper.getAdapter();
-      
+
       const testCases = [
         {
           input: 'Test.User@EXAMPLE.COM',
@@ -339,11 +350,11 @@ describeIntegration('Configuration Integration Tests', () => {
         expect(user.email).toBe(testCase.expected);
 
         // Should be findable by original format
-        const foundUser = await adapter.findUnique('user', { 
-          email: testCase.input 
+        const foundUser = await adapter.findUnique('user', {
+          email: testCase.input,
         });
         expect(foundUser.id).toBe(user.id);
-        
+
         // Cleanup
         await adapter.delete('user', { id: user.id });
       }
@@ -357,10 +368,10 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       const adapter = noNormalizationHelper.getAdapter();
-      
+
       // With normalization disabled, email should be used as-is
       const originalEmail = 'Test.User@EXAMPLE.COM';
-      
+
       try {
         const user = await adapter.create('user', {
           email: originalEmail,
@@ -370,10 +381,9 @@ describeIntegration('Configuration Integration Tests', () => {
         // Email might be preserved as-is or normalized by the API
         // The behavior depends on the backend API implementation
         expect(user.email).toBeDefined();
-        
+
         // Cleanup
         await adapter.delete('user', { id: user.id });
-        
       } catch (error) {
         // Some APIs might reject non-normalized emails
         expect(error).toBeInstanceOf(Error);
@@ -395,14 +405,14 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       const adapter = apiKeyHelper.getAdapter();
-      
+
       const user = await adapter.create('user', {
         email: `api-key-valid-${Date.now()}@example.com`,
         name: 'API Key User',
       });
 
       expect(user).toHaveValidEntityStructure();
-      
+
       // Cleanup
       await adapter.delete('user', { id: user.id });
       await apiKeyHelper.cleanup();
@@ -414,7 +424,7 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       const adapter = noApiKeyHelper.getAdapter();
-      
+
       try {
         const user = await adapter.create('user', {
           email: `no-api-key-${Date.now()}@example.com`,
@@ -424,7 +434,6 @@ describeIntegration('Configuration Integration Tests', () => {
         // If API doesn't require key, this should work
         expect(user).toHaveValidEntityStructure();
         await adapter.delete('user', { id: user.id });
-        
       } catch (error) {
         // If API requires key, should get appropriate error
         expect(error).toBeInstanceOf(Error);
@@ -440,16 +449,15 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       const adapter = invalidApiKeyHelper.getAdapter();
-      
+
       try {
         await adapter.create('user', {
           email: `invalid-api-key-${Date.now()}@example.com`,
           name: 'Invalid API Key User',
         });
-        
+
         // If this succeeds, the API doesn't validate keys properly
         console.warn('API accepted invalid API key');
-        
       } catch (error) {
         // Should get authentication error
         expect(error).toBeInstanceOf(Error);
@@ -474,7 +482,7 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       expect(user).toHaveValidEntityStructure();
-      
+
       // Cleanup
       await reliableAdapter.delete('user', { id: user.id });
     });
@@ -492,7 +500,7 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       expect(user).toHaveValidEntityStructure();
-      
+
       // Cleanup
       await throughputAdapter.delete('user', { id: user.id });
     });
@@ -500,8 +508,12 @@ describeIntegration('Configuration Integration Tests', () => {
     it('should handle concurrent operations with different configurations', async () => {
       const adapters = [
         apsoAdapter({ baseUrl: baseTestHelper.getConfig().baseUrl }),
-        createReliableApsoAdapter({ baseUrl: baseTestHelper.getConfig().baseUrl }),
-        createHighThroughputApsoAdapter({ baseUrl: baseTestHelper.getConfig().baseUrl }),
+        createReliableApsoAdapter({
+          baseUrl: baseTestHelper.getConfig().baseUrl,
+        }),
+        createHighThroughputApsoAdapter({
+          baseUrl: baseTestHelper.getConfig().baseUrl,
+        }),
       ];
 
       // Test concurrent operations with different adapter configurations
@@ -513,7 +525,7 @@ describeIntegration('Configuration Integration Tests', () => {
       );
 
       const results = await Promise.allSettled(operations);
-      
+
       let successCount = 0;
       const createdUsers: any[] = [];
 
@@ -542,7 +554,7 @@ describeIntegration('Configuration Integration Tests', () => {
   describe('Logger Configuration', () => {
     it('should work with custom logger', async () => {
       const logMessages: string[] = [];
-      
+
       const customLogger = {
         error: (msg: string) => logMessages.push(`ERROR: ${msg}`),
         warn: (msg: string) => logMessages.push(`WARN: ${msg}`),
@@ -555,7 +567,7 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       const adapter = loggerHelper.getAdapter();
-      
+
       // Perform operations that might generate logs
       const user = await adapter.create('user', {
         email: `logger-test-${Date.now()}@example.com`,
@@ -563,11 +575,11 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       expect(user).toHaveValidEntityStructure();
-      
+
       // Check if any logs were generated
       // Note: The actual logging depends on the adapter implementation
       expect(Array.isArray(logMessages)).toBe(true);
-      
+
       // Cleanup
       await adapter.delete('user', { id: user.id });
       await loggerHelper.cleanup();
@@ -579,7 +591,7 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       const adapter = noLoggerHelper.getAdapter();
-      
+
       // Should work fine without logger
       const user = await adapter.create('user', {
         email: `no-logger-${Date.now()}@example.com`,
@@ -587,7 +599,7 @@ describeIntegration('Configuration Integration Tests', () => {
       });
 
       expect(user).toHaveValidEntityStructure();
-      
+
       // Cleanup
       await adapter.delete('user', { id: user.id });
       await noLoggerHelper.cleanup();

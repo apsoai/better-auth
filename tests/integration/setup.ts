@@ -1,6 +1,6 @@
 /**
  * Integration Test Setup
- * 
+ *
  * Provides infrastructure for integration testing with real Apso SDK.
  * Only runs when INTEGRATION_TESTS=true environment variable is set.
  */
@@ -26,7 +26,9 @@ export interface IntegrationTestConfig {
 // Default integration test configuration
 export const defaultIntegrationConfig: IntegrationTestConfig = {
   baseUrl: process.env.APSO_TEST_BASE_URL || 'http://localhost:3000/api',
-  ...(process.env.APSO_TEST_API_KEY && { apiKey: process.env.APSO_TEST_API_KEY }),
+  ...(process.env.APSO_TEST_API_KEY && {
+    apiKey: process.env.APSO_TEST_API_KEY,
+  }),
   timeout: parseInt(process.env.APSO_TEST_TIMEOUT || '5000', 10),
   retryConfig: {
     maxRetries: parseInt(process.env.APSO_TEST_MAX_RETRIES || '3', 10),
@@ -119,7 +121,7 @@ export class IntegrationTestHelper {
   constructor(config: Partial<IntegrationTestConfig> = {}) {
     this.config = { ...defaultIntegrationConfig, ...config };
     this.registry = TestDataRegistry.getInstance();
-    
+
     const adapterConfig: Partial<ApsoAdapterConfig> = {
       baseUrl: this.config.baseUrl,
       ...(this.config.apiKey && { apiKey: this.config.apiKey }),
@@ -130,7 +132,7 @@ export class IntegrationTestHelper {
       },
       emailNormalization: true,
     };
-    
+
     this.adapterFactory = apsoAdapter(adapterConfig);
     this.adapter = this.adapterFactory();
   }
@@ -155,16 +157,19 @@ export class IntegrationTestHelper {
       ...overrides,
     };
 
-    const user = await this.adapter.create({
+    const user = (await this.adapter.create({
       model: 'user',
       data: userData,
-    }) as any;
+    })) as any;
     this.registry.registerUser(user.id);
     return user;
   }
 
   // Create test session with automatic cleanup registration
-  async createTestSession(userId: string, overrides: Partial<any> = {}): Promise<any> {
+  async createTestSession(
+    userId: string,
+    overrides: Partial<any> = {}
+  ): Promise<any> {
     const sessionData = {
       id: `${this.config.testSessionPrefix}-${Math.random().toString(36).substr(2, 9)}`,
       sessionToken: `session-${Math.random().toString(36).substr(2, 20)}`,
@@ -175,16 +180,19 @@ export class IntegrationTestHelper {
       ...overrides,
     };
 
-    const session = await this.adapter.create({
+    const session = (await this.adapter.create({
       model: 'session',
       data: sessionData,
-    }) as any;
+    })) as any;
     this.registry.registerSession(session.id);
     return session;
   }
 
   // Create test account with automatic cleanup registration
-  async createTestAccount(userId: string, overrides: Partial<any> = {}): Promise<any> {
+  async createTestAccount(
+    userId: string,
+    overrides: Partial<any> = {}
+  ): Promise<any> {
     const accountData = {
       id: `account-${Math.random().toString(36).substr(2, 9)}`,
       userId,
@@ -196,16 +204,18 @@ export class IntegrationTestHelper {
       ...overrides,
     };
 
-    const account = await this.adapter.create({
+    const account = (await this.adapter.create({
       model: 'account',
       data: accountData,
-    }) as any;
+    })) as any;
     this.registry.registerAccount(account.id);
     return account;
   }
 
   // Create test verification token with automatic cleanup registration
-  async createTestVerificationToken(overrides: Partial<any> = {}): Promise<any> {
+  async createTestVerificationToken(
+    overrides: Partial<any> = {}
+  ): Promise<any> {
     const identifier = `test-${Math.random().toString(36).substr(2, 9)}@example.com`;
     const tokenData = {
       identifier,
@@ -215,10 +225,10 @@ export class IntegrationTestHelper {
       ...overrides,
     };
 
-    const verificationToken = await this.adapter.create({
+    const verificationToken = (await this.adapter.create({
       model: 'verificationToken',
       data: tokenData,
-    }) as any;
+    })) as any;
     this.registry.registerVerificationToken(identifier);
     return verificationToken;
   }
@@ -301,7 +311,7 @@ export class IntegrationTestHelper {
         where: { id: testUser.id },
       });
       this.registry.clear();
-      
+
       return true;
     } catch (error) {
       console.error('Health check failed:', error);
@@ -326,7 +336,7 @@ export class IntegrationTestHelper {
   // Batch operation helper
   async createMultipleUsers(count: number): Promise<any[]> {
     const users = [];
-    
+
     for (let i = 0; i < count; i++) {
       const user = await this.createTestUser({
         email: `batch-user-${i}-${Date.now()}@example.com`,
@@ -334,7 +344,7 @@ export class IntegrationTestHelper {
       });
       users.push(user);
     }
-    
+
     return users;
   }
 }
@@ -342,14 +352,18 @@ export class IntegrationTestHelper {
 // Global setup for integration tests
 export const setupIntegrationTests = (): IntegrationTestHelper => {
   if (!shouldRunIntegrationTests()) {
-    throw new Error('Integration tests require INTEGRATION_TESTS=true environment variable');
+    throw new Error(
+      'Integration tests require INTEGRATION_TESTS=true environment variable'
+    );
   }
 
   return new IntegrationTestHelper();
 };
 
 // Global cleanup for integration tests
-export const cleanupIntegrationTests = async (helper: IntegrationTestHelper): Promise<void> => {
+export const cleanupIntegrationTests = async (
+  helper: IntegrationTestHelper
+): Promise<void> => {
   await helper.cleanup();
 };
 
@@ -369,12 +383,14 @@ expect.extend({
     const pass = received <= maxDuration;
     if (pass) {
       return {
-        message: () => `Expected operation to take more than ${maxDuration}ms, but it completed in ${received}ms`,
+        message: () =>
+          `Expected operation to take more than ${maxDuration}ms, but it completed in ${received}ms`,
         pass: true,
       };
     } else {
       return {
-        message: () => `Expected operation to complete within ${maxDuration}ms, but it took ${received}ms`,
+        message: () =>
+          `Expected operation to complete within ${maxDuration}ms, but it took ${received}ms`,
         pass: false,
       };
     }
@@ -385,8 +401,9 @@ expect.extend({
 expect.extend({
   toHaveValidEntityStructure(received: any) {
     const hasId = received && typeof received.id === 'string';
-    const hasTimestamps = received && 
-      received.createdAt instanceof Date && 
+    const hasTimestamps =
+      received &&
+      received.createdAt instanceof Date &&
       received.updatedAt instanceof Date;
 
     if (hasId && hasTimestamps) {
@@ -396,7 +413,8 @@ expect.extend({
       };
     } else {
       return {
-        message: () => `Expected entity to have valid structure with id and timestamps, but got: ${JSON.stringify(received)}`,
+        message: () =>
+          `Expected entity to have valid structure with id and timestamps, but got: ${JSON.stringify(received)}`,
         pass: false,
       };
     }

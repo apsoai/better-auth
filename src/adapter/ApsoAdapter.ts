@@ -165,8 +165,6 @@ export class ApsoAdapter implements IApsoAdapter {
 
   async create<T>(params: CreateParams): Promise<T> {
     const startTime = performance.now();
-    
-    console.log('🔍 [SIGN-IN DEBUG] ApsoAdapter.create called with model:', params.model, 'data:', JSON.stringify(params.data, null, 2));
 
     try {
       // Track request
@@ -180,22 +178,15 @@ export class ApsoAdapter implements IApsoAdapter {
           return userResult as T;
 
         case 'session':
-          // Debug logging to see what session data we're receiving
-          console.log('🔍 [DEBUG] Session creation - params.data:', JSON.stringify(params.data, null, 2));
-
           // Validate session data format
           // Better Auth might pass 'token' instead of 'sessionToken'
           const sessionToken = params.data.sessionToken || params.data.token;
-          console.log('🔍 [SESSION DEBUG] Extracted sessionToken:', sessionToken);
-          console.log('🔍 [SESSION DEBUG] userId:', params.data.userId);
-          console.log('🔍 [SESSION DEBUG] expiresAt:', params.data.expiresAt);
 
           if (
             !sessionToken ||
             !params.data.userId ||
             !params.data.expiresAt
           ) {
-            console.error('🔍 [SESSION DEBUG] Validation failed - missing required fields');
             throw new AdapterError(
               AdapterErrorCode.VALIDATION_ERROR,
               'Session creation requires sessionToken (or token), userId, and expiresAt',
@@ -205,24 +196,15 @@ export class ApsoAdapter implements IApsoAdapter {
             );
           }
 
-          console.log('🔍 [SESSION DEBUG] Validation passed, creating session...');
+          const sessionData = {
+            sessionToken: sessionToken,
+            userId: params.data.userId,
+            expiresAt: new Date(params.data.expiresAt),
+          };
 
-          try {
-            const sessionData = {
-              sessionToken: sessionToken,
-              userId: params.data.userId,
-              expiresAt: new Date(params.data.expiresAt),
-            };
-            console.log('🔍 [SESSION DEBUG] Calling createSession with:', JSON.stringify(sessionData, null, 2));
-
-            const sessionResult = await this.sessionOperations.createSession(sessionData);
-            console.log('🔍 [SESSION DEBUG] Session creation successful:', JSON.stringify(sessionResult, null, 2));
-            this.updateSuccessMetrics(performance.now() - startTime);
-            return sessionResult as T;
-          } catch (sessionError) {
-            console.error('🔍 [SESSION DEBUG] Session creation failed with error:', sessionError);
-            throw sessionError;
-          }
+          const sessionResult = await this.sessionOperations.createSession(sessionData);
+          this.updateSuccessMetrics(performance.now() - startTime);
+          return sessionResult as T;
 
         case 'verificationtoken':
           // Validate verification token data format
@@ -250,8 +232,6 @@ export class ApsoAdapter implements IApsoAdapter {
 
         case 'account':
           // Handle account creation - this is where Better Auth stores password hashes
-          console.log('🔍 [SIGN-IN DEBUG] Account creation - storing password hash');
-          
           // Transform account data to API format and create it
           const accountTransformedData = this.entityMapper.transformOutbound(
             params.model,
@@ -260,15 +240,10 @@ export class ApsoAdapter implements IApsoAdapter {
           const accountApiPath = this.entityMapper.getApiPath(params.model);
           const accountUrl = `${this.config.baseUrl}/${accountApiPath}`;
 
-          console.log('🔍 [SIGN-IN DEBUG] Creating account at:', accountUrl);
-          console.log('🔍 [SIGN-IN DEBUG] Account data:', accountTransformedData);
-
           const accountResponse = await this.httpClient.post<any>(accountUrl, accountTransformedData, {
             headers: this.buildHeaders(),
             ...(this.config.timeout && { timeout: this.config.timeout }),
           });
-
-          console.log('🔍 [SIGN-IN DEBUG] Account creation response:', accountResponse);
 
           const accountNormalizedResponse =
             this.responseNormalizer.normalizeSingleResponse(accountResponse);
@@ -296,13 +271,11 @@ export class ApsoAdapter implements IApsoAdapter {
 
           const normalizedResponse =
             this.responseNormalizer.normalizeSingleResponse(response);
-          console.log('🔍 [SESSION DEBUG] Normalized response:', JSON.stringify(normalizedResponse, null, 2));
 
           const finalResult = this.entityMapper.transformInbound(
             params.model,
             normalizedResponse
           );
-          console.log('🔍 [SESSION DEBUG] Final result returned to Better Auth:', JSON.stringify(finalResult, null, 2));
 
           this.updateSuccessMetrics(performance.now() - startTime);
           return finalResult;
@@ -751,8 +724,6 @@ export class ApsoAdapter implements IApsoAdapter {
 
   async findOne<T>(params: FindOneParams): Promise<T | null> {
     const startTime = performance.now();
-    
-    console.log('🔍 [SIGN-IN DEBUG] ApsoAdapter.findOne called with model:', params.model, 'where:', JSON.stringify(params.where, null, 2));
 
     try {
       // Track request
@@ -765,14 +736,12 @@ export class ApsoAdapter implements IApsoAdapter {
           const userWhere = this.parseWhereClause(params.where);
 
           if (userWhere.id) {
-            console.log('🔍 [USER DEBUG] Looking up user by ID:', userWhere.id);
             // For UUID lookups, use findManyUsers with filtering since direct ID lookup expects numeric
             const users = await this.userOperations.findManyUsers({
               where: { id: userWhere.id },
               pagination: { limit: 1 },
             });
             const userResult = users.length > 0 ? users[0] : null;
-            console.log('🔍 [USER DEBUG] User lookup result:', userResult ? 'FOUND' : 'NULL');
             this.updateSuccessMetrics(performance.now() - startTime);
             return userResult as T;
           } else if (userWhere.email) {
@@ -790,28 +759,20 @@ export class ApsoAdapter implements IApsoAdapter {
           }
 
         case 'session':
-          console.log('🔍 [SESSION LOOKUP DEBUG] Session findOne called with where:', JSON.stringify(params.where, null, 2));
-
           // Parse where clause using the new parser
           const sessionWhere = this.parseWhereClause(params.where);
-          console.log('🔍 [SESSION LOOKUP DEBUG] Parsed session where:', JSON.stringify(sessionWhere, null, 2));
 
           if (sessionWhere.id) {
-            console.log('🔍 [SESSION LOOKUP DEBUG] Using findSessionById with ID:', sessionWhere.id);
             const sessionResult = await this.sessionOperations.findSessionById(sessionWhere.id);
             this.updateSuccessMetrics(performance.now() - startTime);
             return sessionResult as T;
           } else if (sessionWhere.sessionToken) {
-            console.log('🔍 [SESSION LOOKUP DEBUG] Using findSessionByToken with sessionToken:', sessionWhere.sessionToken);
             const sessionResult = await this.sessionOperations.findSessionByToken(sessionWhere.sessionToken);
-            console.log('🔍 [SESSION LOOKUP DEBUG] findSessionByToken result:', sessionResult ? 'FOUND' : 'NULL');
             this.updateSuccessMetrics(performance.now() - startTime);
             return sessionResult as T;
           } else if (sessionWhere.token) {
-            console.log('🔍 [SESSION LOOKUP DEBUG] Using findSessionByToken with token:', sessionWhere.token);
             // Handle both sessionToken and token field names
             const sessionResult = await this.sessionOperations.findSessionByToken(sessionWhere.token);
-            console.log('🔍 [SESSION LOOKUP DEBUG] findSessionByToken result:', sessionResult ? 'FOUND' : 'NULL');
             this.updateSuccessMetrics(performance.now() - startTime);
             return sessionResult as T;
           } else {
@@ -825,11 +786,8 @@ export class ApsoAdapter implements IApsoAdapter {
           }
 
         case 'account':
-          console.log('🔍 [SIGN-IN DEBUG] Account findOne - params.where:', JSON.stringify(params.where, null, 2));
-
           // Parse where clause using the new parser
           const accountWhere = this.parseWhereClause(params.where);
-          console.log('🔍 [SIGN-IN DEBUG] Account findOne - parsed where:', JSON.stringify(accountWhere, null, 2));
 
           if (accountWhere.id) {
             // Find account by ID
@@ -888,16 +846,11 @@ export class ApsoAdapter implements IApsoAdapter {
           }
 
         default:
-          console.log('🔍 [ADAPTER DEBUG] findOne DEFAULT case - unsupported model:', params.model);
-          console.log('🔍 [ADAPTER DEBUG] findOne DEFAULT case - where:', JSON.stringify(params.where, null, 2));
-
           // Parse where clause for generic handling
           const genericWhere = this.parseWhereClause(params.where);
-          console.log('🔍 [ADAPTER DEBUG] findOne DEFAULT case - parsed where:', JSON.stringify(genericWhere, null, 2));
 
           // Fall back to generic implementation for unsupported models
           if (genericWhere.id && typeof genericWhere.id === 'string') {
-            console.log('🔍 [ADAPTER DEBUG] findOne DEFAULT case - using findById with ID:', genericWhere.id);
             return this.findById<T>(params.model, genericWhere.id);
           }
 
@@ -934,15 +887,11 @@ export class ApsoAdapter implements IApsoAdapter {
   async findMany<T>(params: FindManyParams): Promise<T[]> {
     const startTime = performance.now();
 
-    console.log('🔍 [ADAPTER DEBUG] findMany called with model:', params.model);
-    console.log('🔍 [ADAPTER DEBUG] findMany where:', JSON.stringify(params.where, null, 2));
-
     try {
       this.updateModelMetrics(params.model);
 
       // Parse where clause for filtering
       const whereClause = this.parseWhereClause(params.where || {});
-      console.log('🔍 [ADAPTER DEBUG] findMany parsed where:', JSON.stringify(whereClause, null, 2));
 
       // Build query parameters (for potential future use with query string)
       this.queryTranslator.buildFindQuery(
@@ -966,8 +915,6 @@ export class ApsoAdapter implements IApsoAdapter {
       const normalizedResults =
         this.responseNormalizer.normalizeArrayResponse(response);
 
-      console.log('🔍 [ADAPTER DEBUG] findMany raw results count:', normalizedResults.length);
-
       // Client-side filtering since we don't have query params yet
       let filteredResults = normalizedResults;
       if (whereClause && Object.keys(whereClause).length > 0) {
@@ -979,15 +926,12 @@ export class ApsoAdapter implements IApsoAdapter {
           }
           return true;
         });
-        console.log('🔍 [ADAPTER DEBUG] findMany filtered results count:', filteredResults.length);
       }
 
       // Transform each result
       const transformedResults = filteredResults.map(item =>
         this.entityMapper.transformInbound(params.model, item)
       );
-
-      console.log('🔍 [ADAPTER DEBUG] findMany transformed results:', JSON.stringify(transformedResults, null, 2));
 
       this.updateSuccessMetrics(performance.now() - startTime);
       return transformedResults;

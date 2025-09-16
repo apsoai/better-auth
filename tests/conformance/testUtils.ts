@@ -1,14 +1,11 @@
 /**
  * Test Utilities for Conformance Tests
- * 
+ *
  * This file provides utilities for creating properly mocked adapter instances
  * for conformance testing.
  */
 
-import type { 
-  BetterAuthAdapter,
-  ApsoAdapterConfig,
-} from '../../src/types';
+import type { BetterAuthAdapter, ApsoAdapterConfig } from '../../src/types';
 
 import { ApsoAdapter } from '../../src/adapter/ApsoAdapter';
 import { QueryTranslator } from '../../src/query/QueryTranslator';
@@ -20,13 +17,15 @@ import { MockHttpClient } from './__mocks__/HttpClient';
 /**
  * Creates an ApsoAdapter instance with mocked dependencies for testing
  */
-export function createTestAdapter(config: Partial<ApsoAdapterConfig>): BetterAuthAdapter {
+export function createTestAdapter(
+  config: Partial<ApsoAdapterConfig>
+): BetterAuthAdapter {
   // Validate and normalize configuration
   const validatedConfig = ConfigValidator.validateAndThrow(config);
-  
+
   // Create mocked HTTP client
   const httpClient = new MockHttpClient() as any;
-  
+
   // Create other components
   const queryTranslator = new QueryTranslator(validatedConfig);
   const responseNormalizer = new ResponseNormalizer(validatedConfig.logger);
@@ -37,7 +36,7 @@ export function createTestAdapter(config: Partial<ApsoAdapterConfig>): BetterAut
     httpClient,
     queryTranslator,
     responseNormalizer,
-    entityMapper
+    entityMapper,
   });
 
   return adapter;

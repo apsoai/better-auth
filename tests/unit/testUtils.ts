@@ -1,6 +1,6 @@
 /**
  * Test Utilities for Better Auth Apso Adapter Tests
- * 
+ *
  * Provides common test utilities, fixtures, and helper functions
  * for consistent and comprehensive testing across all test suites.
  */
@@ -21,7 +21,9 @@ import { MockDataStore } from './__mocks__/apsoSdk';
 // Test Data Fixtures
 // =============================================================================
 
-export const createTestUser = (overrides: Partial<BetterAuthUser> = {}): BetterAuthUser => ({
+export const createTestUser = (
+  overrides: Partial<BetterAuthUser> = {}
+): BetterAuthUser => ({
   id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
   email: 'test@example.com',
   emailVerified: false,
@@ -30,7 +32,7 @@ export const createTestUser = (overrides: Partial<BetterAuthUser> = {}): BetterA
 });
 
 export const createTestUsers = (count: number): BetterAuthUser[] => {
-  return Array.from({ length: count }, (_, index) => 
+  return Array.from({ length: count }, (_, index) =>
     createTestUser({
       email: `user${index + 1}@example.com`,
       name: `Test User ${index + 1}`,
@@ -39,7 +41,9 @@ export const createTestUsers = (count: number): BetterAuthUser[] => {
   );
 };
 
-export const createTestSession = (overrides: Partial<BetterAuthSession> = {}): BetterAuthSession => ({
+export const createTestSession = (
+  overrides: Partial<BetterAuthSession> = {}
+): BetterAuthSession => ({
   id: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
   sessionToken: `token_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`,
   userId: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -47,9 +51,13 @@ export const createTestSession = (overrides: Partial<BetterAuthSession> = {}): B
   ...overrides,
 });
 
-export const createTestSessions = (count: number, userId?: string): BetterAuthSession[] => {
-  const baseUserId = userId || `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  return Array.from({ length: count }, (_, index) => 
+export const createTestSessions = (
+  count: number,
+  userId?: string
+): BetterAuthSession[] => {
+  const baseUserId =
+    userId || `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return Array.from({ length: count }, (_, index) =>
     createTestSession({
       userId: baseUserId,
       sessionToken: `token_${index + 1}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -58,15 +66,19 @@ export const createTestSessions = (count: number, userId?: string): BetterAuthSe
   );
 };
 
-export const createTestVerificationToken = (overrides: Partial<BetterAuthVerificationToken> = {}): BetterAuthVerificationToken => ({
+export const createTestVerificationToken = (
+  overrides: Partial<BetterAuthVerificationToken> = {}
+): BetterAuthVerificationToken => ({
   identifier: 'test@example.com',
   token: `verify_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`,
   expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
   ...overrides,
 });
 
-export const createTestVerificationTokens = (count: number): BetterAuthVerificationToken[] => {
-  return Array.from({ length: count }, (_, index) => 
+export const createTestVerificationTokens = (
+  count: number
+): BetterAuthVerificationToken[] => {
+  return Array.from({ length: count }, (_, index) =>
     createTestVerificationToken({
       identifier: `user${index + 1}@example.com`,
       token: `verify_${index + 1}_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`,
@@ -76,7 +88,9 @@ export const createTestVerificationTokens = (count: number): BetterAuthVerificat
 };
 
 // Apso API format fixtures
-export const createTestApsoUser = (overrides: Partial<ApsoUser> = {}): ApsoUser => ({
+export const createTestApsoUser = (
+  overrides: Partial<ApsoUser> = {}
+): ApsoUser => ({
   id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
   email: 'test@example.com',
   emailVerified: false,
@@ -86,7 +100,9 @@ export const createTestApsoUser = (overrides: Partial<ApsoUser> = {}): ApsoUser 
   ...overrides,
 });
 
-export const createTestApsoSession = (overrides: Partial<ApsoSession> = {}): ApsoSession => ({
+export const createTestApsoSession = (
+  overrides: Partial<ApsoSession> = {}
+): ApsoSession => ({
   id: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
   sessionToken: `token_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`,
   userId: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -96,7 +112,9 @@ export const createTestApsoSession = (overrides: Partial<ApsoSession> = {}): Aps
   ...overrides,
 });
 
-export const createTestApsoVerificationToken = (overrides: Partial<ApsoVerificationToken> = {}): ApsoVerificationToken => ({
+export const createTestApsoVerificationToken = (
+  overrides: Partial<ApsoVerificationToken> = {}
+): ApsoVerificationToken => ({
   id: `token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
   identifier: 'test@example.com',
   token: `verify_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`,
@@ -109,7 +127,9 @@ export const createTestApsoVerificationToken = (overrides: Partial<ApsoVerificat
 // Test Configuration
 // =============================================================================
 
-export const createTestConfig = (overrides: Partial<ApsoAdapterConfig> = {}): ApsoAdapterConfig => ({
+export const createTestConfig = (
+  overrides: Partial<ApsoAdapterConfig> = {}
+): ApsoAdapterConfig => ({
   baseUrl: 'https://test-api.example.com',
   apiKey: 'test-api-key',
   timeout: 5000,
@@ -152,7 +172,7 @@ export const createMockLogger = (): Logger => ({
 export const setupTestEnvironment = () => {
   const mockDataStore = MockDataStore.getInstance();
   mockDataStore.reset();
-  
+
   // Set up some default test data
   const testUser = createTestApsoUser({
     id: 'test-user-1',
@@ -161,20 +181,20 @@ export const setupTestEnvironment = () => {
     name: 'Existing User',
   });
   mockDataStore.createEntity('users', testUser);
-  
+
   const testSession = createTestApsoSession({
     id: 'test-session-1',
     userId: 'test-user-1',
     sessionToken: 'existing-session-token',
   });
   mockDataStore.createEntity('sessions', testSession);
-  
+
   const testVerificationToken = createTestApsoVerificationToken({
     identifier: 'pending@example.com',
     token: 'existing-verification-token',
   });
   mockDataStore.createEntity('verification-tokens', testVerificationToken);
-  
+
   return {
     testUser,
     testSession,
@@ -211,11 +231,11 @@ export const assertBetterAuthUser = (user: BetterAuthUser): void => {
   assertValidId(user.id);
   assertValidEmail(user.email);
   expect(typeof user.emailVerified).toBe('boolean');
-  
+
   if (user.name !== undefined) {
     expect(typeof user.name).toBe('string');
   }
-  
+
   if (user.image !== undefined) {
     expect(typeof user.image === 'string' || user.image === null).toBe(true);
   }
@@ -229,7 +249,9 @@ export const assertBetterAuthSession = (session: BetterAuthSession): void => {
   assertValidDate(session.expiresAt);
 };
 
-export const assertBetterAuthVerificationToken = (token: BetterAuthVerificationToken): void => {
+export const assertBetterAuthVerificationToken = (
+  token: BetterAuthVerificationToken
+): void => {
   assertValidEmail(token.identifier);
   expect(typeof token.token).toBe('string');
   expect(token.token.length).toBeGreaterThan(0);
@@ -259,7 +281,10 @@ export const createHttpError = (status: number, message?: string): Error => {
   return error;
 };
 
-export const createValidationError = (field: string, message: string): Error => {
+export const createValidationError = (
+  field: string,
+  message: string
+): Error => {
   const error = new Error(`Validation error: ${message}`) as any;
   error.code = 'VALIDATION_ERROR';
   error.field = field;
@@ -270,18 +295,23 @@ export const createValidationError = (field: string, message: string): Error => 
 // Performance Testing Helpers
 // =============================================================================
 
-export const measureExecutionTime = async <T>(fn: () => Promise<T>): Promise<{ result: T; duration: number }> => {
+export const measureExecutionTime = async <T>(
+  fn: () => Promise<T>
+): Promise<{ result: T; duration: number }> => {
   const startTime = performance.now();
   const result = await fn();
   const endTime = performance.now();
-  
+
   return {
     result,
     duration: endTime - startTime,
   };
 };
 
-export const createLargeDataset = (size: number, type: 'users' | 'sessions' | 'tokens') => {
+export const createLargeDataset = (
+  size: number,
+  type: 'users' | 'sessions' | 'tokens'
+) => {
   switch (type) {
     case 'users':
       return createTestUsers(size);
@@ -299,10 +329,26 @@ export const createLargeDataset = (size: number, type: 'users' | 'sessions' | 't
 // =============================================================================
 
 export const generateEmailTestCases = () => [
-  { input: 'test@example.com', expected: 'test@example.com', description: 'normal email' },
-  { input: 'Test@Example.Com', expected: 'test@example.com', description: 'mixed case email' },
-  { input: 'TEST@EXAMPLE.COM', expected: 'test@example.com', description: 'uppercase email' },
-  { input: ' test@example.com ', expected: 'test@example.com', description: 'email with whitespace' },
+  {
+    input: 'test@example.com',
+    expected: 'test@example.com',
+    description: 'normal email',
+  },
+  {
+    input: 'Test@Example.Com',
+    expected: 'test@example.com',
+    description: 'mixed case email',
+  },
+  {
+    input: 'TEST@EXAMPLE.COM',
+    expected: 'test@example.com',
+    description: 'uppercase email',
+  },
+  {
+    input: ' test@example.com ',
+    expected: 'test@example.com',
+    description: 'email with whitespace',
+  },
 ];
 
 export const generateErrorTestCases = () => [
@@ -312,9 +358,17 @@ export const generateErrorTestCases = () => [
   { status: 404, description: 'not found', expectedCode: 'NOT_FOUND' },
   { status: 409, description: 'conflict', expectedCode: 'CONFLICT' },
   { status: 429, description: 'rate limited', expectedCode: 'RATE_LIMIT' },
-  { status: 500, description: 'internal server error', expectedCode: 'SERVER_ERROR' },
+  {
+    status: 500,
+    description: 'internal server error',
+    expectedCode: 'SERVER_ERROR',
+  },
   { status: 502, description: 'bad gateway', expectedCode: 'SERVER_ERROR' },
-  { status: 503, description: 'service unavailable', expectedCode: 'SERVER_ERROR' },
+  {
+    status: 503,
+    description: 'service unavailable',
+    expectedCode: 'SERVER_ERROR',
+  },
   { status: 504, description: 'gateway timeout', expectedCode: 'SERVER_ERROR' },
 ];
 

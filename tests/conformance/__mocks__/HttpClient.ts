@@ -1,12 +1,12 @@
 /**
  * Mock HttpClient for Conformance Tests
- * 
+ *
  * This mock HttpClient implementation provides realistic behavior for testing
  * the adapter without making actual HTTP requests.
  */
 
-import type { 
-  HttpClient as IHttpClient, 
+import type {
+  HttpClient as IHttpClient,
   RequestConfig,
   HttpClientConfig,
   HttpInterceptors,
@@ -24,14 +24,14 @@ export class MockHttpClient implements IHttpClient {
   public readonly config: HttpClientConfig;
   public readonly logger: Logger | undefined;
   public readonly interceptors: HttpInterceptors;
-  
+
   // Metrics properties
   public requestCount = 0;
   public successCount = 0;
   public errorCount = 0;
   public totalLatency = 0;
   public latencyBuckets: number[] = [];
-  
+
   // Mock circuit breaker and connection pool
   public circuitBreaker = {
     getStats: (): CircuitBreakerStats => ({
@@ -40,9 +40,9 @@ export class MockHttpClient implements IHttpClient {
       successes: 0,
       requests: 0,
     }),
-    reset: () => {}
+    reset: () => {},
   };
-  
+
   public connectionPool = {
     getStats: (): ConnectionPoolStats => ({
       activeConnections: 0,
@@ -52,7 +52,7 @@ export class MockHttpClient implements IHttpClient {
       connectionTimeouts: 0,
       requestsWaiting: 0,
     }),
-    destroy: () => {}
+    destroy: () => {},
   };
 
   constructor(config?: HttpClientConfig) {
@@ -68,26 +68,28 @@ export class MockHttpClient implements IHttpClient {
       },
       ...config,
     };
-    
+
     this.logger = this.config.logger || undefined;
     this.interceptors = this.config.interceptors || {};
   }
 
   async request<T>(config: RequestConfig): Promise<T> {
     const { method, url, body } = config;
-    
+
     // Parse URL to extract resource information
     const urlObj = new URL(url, 'https://api.example.com');
-    const pathParts = urlObj.pathname.split('/').filter(part => part.length > 0);
-    
+    const pathParts = urlObj.pathname
+      .split('/')
+      .filter(part => part.length > 0);
+
     // Handle different URL patterns:
     // Pattern 1: /users, /sessions, /verificationtokens
     // Pattern 2: /api/users, /api/sessions, /api/verificationtokens
     // Pattern 3: /users/123, /sessions/123 (with ID)
-    
+
     let entityType: string;
     let id: string | undefined;
-    
+
     if (pathParts.length === 1) {
       // Pattern 1: /users
       entityType = pathParts[0]!;
@@ -110,7 +112,7 @@ export class MockHttpClient implements IHttpClient {
       error.status = 400;
       throw error;
     }
-    
+
     // Normalize entity names to singular form for MockDataStore
     entityType = this.normalizeEntityType(entityType);
 
@@ -134,7 +136,7 @@ export class MockHttpClient implements IHttpClient {
             // Multiple entities request
             return this.mockStore.findEntities(entityType) as T;
           }
-        
+
         case 'POST':
           if (!body) {
             const error = new Error('Bad Request: Body required') as any;
@@ -143,11 +145,13 @@ export class MockHttpClient implements IHttpClient {
             throw error;
           }
           return this.mockStore.createEntity(entityType, body) as T;
-        
+
         case 'PUT':
         case 'PATCH':
           if (!id) {
-            const error = new Error('Bad Request: ID required for update') as any;
+            const error = new Error(
+              'Bad Request: ID required for update'
+            ) as any;
             error.statusCode = 400;
             error.status = 400;
             throw error;
@@ -158,7 +162,11 @@ export class MockHttpClient implements IHttpClient {
             error.status = 400;
             throw error;
           }
-          const updateResult = this.mockStore.updateEntity(entityType, id, body);
+          const updateResult = this.mockStore.updateEntity(
+            entityType,
+            id,
+            body
+          );
           if (!updateResult) {
             const error = new Error('Not Found') as any;
             error.statusCode = 404;
@@ -166,19 +174,23 @@ export class MockHttpClient implements IHttpClient {
             throw error;
           }
           return updateResult as T;
-        
+
         case 'DELETE':
           if (!id) {
-            const error = new Error('Bad Request: ID required for delete') as any;
+            const error = new Error(
+              'Bad Request: ID required for delete'
+            ) as any;
             error.statusCode = 400;
             error.status = 400;
             throw error;
           }
-          
+
           // Special handling for verification token deletion by token value
           if (entityType === 'verificationtoken') {
             // Find verification token by token value (not by ID)
-            const tokens = this.mockStore.findEntities(entityType, { token: id });
+            const tokens = this.mockStore.findEntities(entityType, {
+              token: id,
+            });
             if (tokens.length === 0) {
               const error = new Error('Not Found') as any;
               error.statusCode = 404;
@@ -187,7 +199,10 @@ export class MockHttpClient implements IHttpClient {
             }
             // Delete by actual ID
             const token = tokens[0];
-            const deleteResult = this.mockStore.deleteEntity(entityType, token.id);
+            const deleteResult = this.mockStore.deleteEntity(
+              entityType,
+              token.id
+            );
             if (!deleteResult) {
               const error = new Error('Not Found') as any;
               error.statusCode = 404;
@@ -206,7 +221,7 @@ export class MockHttpClient implements IHttpClient {
             }
             return deleteResult as T;
           }
-        
+
         default:
           const error = new Error(`Method ${method} not allowed`) as any;
           error.statusCode = 405;
@@ -223,46 +238,64 @@ export class MockHttpClient implements IHttpClient {
     }
   }
 
-  async get<T>(url: string, config?: Omit<RequestConfig, 'method' | 'url'>): Promise<T> {
+  async get<T>(
+    url: string,
+    config?: Omit<RequestConfig, 'method' | 'url'>
+  ): Promise<T> {
     return this.request<T>({
       method: 'GET',
       url,
-      ...config
+      ...config,
     });
   }
 
-  async post<T>(url: string, data?: any, config?: Omit<RequestConfig, 'method' | 'url' | 'body'>): Promise<T> {
+  async post<T>(
+    url: string,
+    data?: any,
+    config?: Omit<RequestConfig, 'method' | 'url' | 'body'>
+  ): Promise<T> {
     return this.request<T>({
       method: 'POST',
       url,
       body: data,
-      ...config
+      ...config,
     });
   }
 
-  async put<T>(url: string, data?: any, config?: Omit<RequestConfig, 'method' | 'url' | 'body'>): Promise<T> {
+  async put<T>(
+    url: string,
+    data?: any,
+    config?: Omit<RequestConfig, 'method' | 'url' | 'body'>
+  ): Promise<T> {
     return this.request<T>({
       method: 'PUT',
       url,
       body: data,
-      ...config
+      ...config,
     });
   }
 
-  async patch<T>(url: string, data?: any, config?: Omit<RequestConfig, 'method' | 'url' | 'body'>): Promise<T> {
+  async patch<T>(
+    url: string,
+    data?: any,
+    config?: Omit<RequestConfig, 'method' | 'url' | 'body'>
+  ): Promise<T> {
     return this.request<T>({
       method: 'PATCH',
       url,
       body: data,
-      ...config
+      ...config,
     });
   }
 
-  async delete<T>(url: string, config?: Omit<RequestConfig, 'method' | 'url'>): Promise<T> {
+  async delete<T>(
+    url: string,
+    config?: Omit<RequestConfig, 'method' | 'url'>
+  ): Promise<T> {
     return this.request<T>({
       method: 'DELETE',
       url,
-      ...config
+      ...config,
     });
   }
 
@@ -312,7 +345,7 @@ export class MockHttpClient implements IHttpClient {
    */
   private normalizeEntityType(entityType: string): string {
     const normalized = entityType.toLowerCase();
-    
+
     // Handle plural to singular mappings
     switch (normalized) {
       case 'users':
@@ -320,7 +353,7 @@ export class MockHttpClient implements IHttpClient {
       case 'sessions':
         return 'session';
       case 'verificationtokens':
-      case 'verification-tokens':  // Handle hyphenated form
+      case 'verification-tokens': // Handle hyphenated form
         return 'verificationtoken';
       case 'accounts':
         return 'account';

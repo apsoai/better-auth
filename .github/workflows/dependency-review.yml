@@ -1,0 +1,63 @@
+name: Dependency Review
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  dependency-review:
+    name: Review Dependencies
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v3
+        with:
+          fail-on-severity: moderate
+          allow-ghsas: |
+            GHSA-example-1234-5678
+          deny-licenses: |
+            GPL-2.0
+            GPL-3.0
+            AGPL-1.0
+            AGPL-3.0
+          comment-summary-in-pr: always
+
+  license-check:
+    name: License Compatibility Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install license checker
+        run: npm install -g license-checker
+
+      - name: Check licenses
+        run: |
+          license-checker --summary --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD' --excludePrivatePackages
+
+      - name: Generate license report
+        run: |
+          license-checker --csv --out licenses.csv
+          echo "## License Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Package | License | Repository |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|---------|------------|" >> $GITHUB_STEP_SUMMARY
+          license-checker --summary | grep -E '^├─|└─' | head -20 >> $GITHUB_STEP_SUMMARY || true

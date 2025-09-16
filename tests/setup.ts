@@ -51,7 +51,7 @@ expect.extend({
   toBeValidEmail(received: string) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const pass = emailRegex.test(received);
-    
+
     if (pass) {
       return {
         message: () => `expected ${received} not to be a valid email`,
@@ -66,9 +66,10 @@ expect.extend({
   },
 
   toBeValidUuid(received: string) {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     const pass = uuidRegex.test(received);
-    
+
     if (pass) {
       return {
         message: () => `expected ${received} not to be a valid UUID`,

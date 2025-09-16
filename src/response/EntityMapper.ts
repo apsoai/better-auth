@@ -98,14 +98,27 @@ export class EntityMapper {
    */
   mapUserToApi(user: BetterAuthUser): ApsoUser {
     try {
-      // Skip all validation for development
-      // if (this.config.enableValidation && user.id && user.id !== '') {
-      //   this.validateBetterAuthUser(user);
-      // }
+      if (this.config.enableValidation && user.id && user.id !== '') {
+        this.validateBetterAuthUser(user);
+      }
 
       const currentTime = new Date();
-      // Skip email normalization for development
       let normalizedEmail = user.email;
+
+      // Normalize email if enabled
+      if (this.config.enableEmailNormalization && user.email) {
+        try {
+          normalizedEmail = EmailNormalizer.normalize(user.email);
+        } catch (error) {
+          throw new AdapterError(
+            AdapterErrorCode.VALIDATION_ERROR,
+            `Invalid email format: ${(error as Error).message}`,
+            { email: user.email },
+            false,
+            400
+          );
+        }
+      }
 
       const apsoUser: ApsoUser = {
         // Only include ID if it's a meaningful value (not empty string)
@@ -149,10 +162,9 @@ export class EntityMapper {
    */
   mapUserFromApi(apiUser: ApsoUser): BetterAuthUser {
     try {
-      // Always skip validation for API responses (they come from trusted backend)
-      // if (this.config.enableValidation) {
-      //   this.validateApsoUser(apiUser);
-      // }
+      if (this.config.enableValidation) {
+        this.validateApsoUser(apiUser);
+      }
 
       const betterAuthUser: BetterAuthUser = {
         id: String(apiUser.id), // Convert numeric ID to string for Better Auth
@@ -163,10 +175,9 @@ export class EntityMapper {
         ...(apiUser.image !== undefined && { image: apiUser.image }),
       };
 
-      // Skip validation for converted API responses
-      // if (this.config.enableValidation) {
-      //   this.validateBetterAuthUser(betterAuthUser);
-      // }
+      if (this.config.enableValidation) {
+        this.validateBetterAuthUser(betterAuthUser);
+      }
 
       return betterAuthUser;
     } catch (error) {

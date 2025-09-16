@@ -1,6 +1,6 @@
 /**
  * Comprehensive Unit Tests for SessionOperations
- * 
+ *
  * These tests verify all CRUD operations for sessions including:
  * - Token uniqueness and validation
  * - Session expiration checking
@@ -138,7 +138,9 @@ describe('SessionOperations', () => {
         updated_at: new Date(),
       });
 
-      mockResponseNormalizer.normalizeSingleResponse.mockImplementation((data: any) => data);
+      mockResponseNormalizer.normalizeSingleResponse.mockImplementation(
+        (data: any) => data
+      );
       mockEntityMapper.mapSessionFromApi.mockReturnValue(validSessionData);
     });
 
@@ -157,7 +159,9 @@ describe('SessionOperations', () => {
       // Verify mock calls
       expect(mockEntityMapper.mapSessionToApi).toHaveBeenCalledTimes(1);
       expect(mockHttpClient.post).toHaveBeenCalledTimes(1);
-      expect(mockResponseNormalizer.normalizeSingleResponse).toHaveBeenCalledTimes(1);
+      expect(
+        mockResponseNormalizer.normalizeSingleResponse
+      ).toHaveBeenCalledTimes(1);
       expect(mockEntityMapper.mapSessionFromApi).toHaveBeenCalledTimes(1);
     });
 
@@ -320,14 +324,18 @@ describe('SessionOperations', () => {
       it('should handle network errors', async () => {
         mockHttpClient.post.mockRejectedValue(createNetworkError());
 
-        const error = await sessionOperations.createSession(validSessionData).catch(e => e);
+        const error = await sessionOperations
+          .createSession(validSessionData)
+          .catch(e => e);
         expect(error.code).toBe(AdapterErrorCode.NETWORK_ERROR);
       });
 
       it('should handle timeout errors', async () => {
         mockHttpClient.post.mockRejectedValue(createTimeoutError());
 
-        const error = await sessionOperations.createSession(validSessionData).catch(e => e);
+        const error = await sessionOperations
+          .createSession(validSessionData)
+          .catch(e => e);
         expect(error.code).toBe(AdapterErrorCode.TIMEOUT);
       });
     });
@@ -338,24 +346,31 @@ describe('SessionOperations', () => {
   // =============================================================================
 
   describe('findSessionByToken', () => {
-    const testSession = createTestSession({ sessionToken: 'test-session-token' });
+    const testSession = createTestSession({
+      sessionToken: 'test-session-token',
+    });
 
     beforeEach(() => {
-      mockHttpClient.get.mockResolvedValue([{
-        id: testSession.id,
-        sessionToken: testSession.sessionToken,
-        userId: testSession.userId,
-        expiresAt: testSession.expiresAt,
-        created_at: new Date(),
-        updated_at: new Date(),
-      }]);
+      mockHttpClient.get.mockResolvedValue([
+        {
+          id: testSession.id,
+          sessionToken: testSession.sessionToken,
+          userId: testSession.userId,
+          expiresAt: testSession.expiresAt,
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
+      ]);
 
-      mockResponseNormalizer.normalizeArrayResponse.mockImplementation((data: any) => data as any);
+      mockResponseNormalizer.normalizeArrayResponse.mockImplementation(
+        (data: any) => data as any
+      );
       mockEntityMapper.mapSessionFromApi.mockReturnValue(testSession);
     });
 
     it('should find session by token', async () => {
-      const result = await sessionOperations.findSessionByToken('test-session-token');
+      const result =
+        await sessionOperations.findSessionByToken('test-session-token');
 
       expect(result).toBeDefined();
       assertBetterAuthSession(result!);
@@ -366,19 +381,20 @@ describe('SessionOperations', () => {
       mockHttpClient.get.mockResolvedValue([]);
       mockResponseNormalizer.normalizeArrayResponse.mockReturnValue([]);
 
-      const result = await sessionOperations.findSessionByToken('nonexistent-token');
+      const result =
+        await sessionOperations.findSessionByToken('nonexistent-token');
 
       expect(result).toBeNull();
     });
 
     it('should throw ValidationError for empty token', async () => {
-      await expect(
-        sessionOperations.findSessionByToken('')
-      ).rejects.toThrow(AdapterError);
+      await expect(sessionOperations.findSessionByToken('')).rejects.toThrow(
+        AdapterError
+      );
 
-      await expect(
-        sessionOperations.findSessionByToken('')
-      ).rejects.toThrow(/sessionToken must be a non-empty string/);
+      await expect(sessionOperations.findSessionByToken('')).rejects.toThrow(
+        /sessionToken must be a non-empty string/
+      );
     });
   });
 
@@ -392,9 +408,13 @@ describe('SessionOperations', () => {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
       });
 
-      jest.spyOn(sessionOperations, 'findSessionByToken').mockResolvedValue(validSession);
+      jest
+        .spyOn(sessionOperations, 'findSessionByToken')
+        .mockResolvedValue(validSession);
 
-      const result = await sessionOperations.validateSession(validSession.sessionToken);
+      const result = await sessionOperations.validateSession(
+        validSession.sessionToken
+      );
 
       expect(result).toEqual(validSession);
     });
@@ -404,17 +424,24 @@ describe('SessionOperations', () => {
         expiresAt: new Date(Date.now() - 60 * 1000), // 1 minute ago
       });
 
-      jest.spyOn(sessionOperations, 'findSessionByToken').mockResolvedValue(expiredSession);
+      jest
+        .spyOn(sessionOperations, 'findSessionByToken')
+        .mockResolvedValue(expiredSession);
 
-      const result = await sessionOperations.validateSession(expiredSession.sessionToken);
+      const result = await sessionOperations.validateSession(
+        expiredSession.sessionToken
+      );
 
       expect(result).toBeNull();
     });
 
     it('should return null for non-existent session', async () => {
-      jest.spyOn(sessionOperations, 'findSessionByToken').mockResolvedValue(null);
+      jest
+        .spyOn(sessionOperations, 'findSessionByToken')
+        .mockResolvedValue(null);
 
-      const result = await sessionOperations.validateSession('nonexistent-token');
+      const result =
+        await sessionOperations.validateSession('nonexistent-token');
 
       expect(result).toBeNull();
     });
@@ -430,7 +457,9 @@ describe('SessionOperations', () => {
 
     beforeEach(() => {
       // Mock findSessionById to return existing session
-      jest.spyOn(sessionOperations, 'findSessionById').mockResolvedValue(existingSession);
+      jest
+        .spyOn(sessionOperations, 'findSessionById')
+        .mockResolvedValue(existingSession);
 
       mockEntityMapper.mapSessionToApi.mockReturnValue({
         ...existingSession,
@@ -446,7 +475,9 @@ describe('SessionOperations', () => {
         updated_at: new Date(),
       });
 
-      mockResponseNormalizer.normalizeSingleResponse.mockImplementation((data: any) => data);
+      mockResponseNormalizer.normalizeSingleResponse.mockImplementation(
+        (data: any) => data
+      );
       mockEntityMapper.mapSessionFromApi.mockReturnValue({
         ...existingSession,
         ...updates,
@@ -454,7 +485,10 @@ describe('SessionOperations', () => {
     });
 
     it('should update session successfully', async () => {
-      const result = await sessionOperations.updateSession('session-to-update', updates);
+      const result = await sessionOperations.updateSession(
+        'session-to-update',
+        updates
+      );
 
       expect(result).toBeDefined();
       assertBetterAuthSession(result);
@@ -481,18 +515,24 @@ describe('SessionOperations', () => {
     });
 
     it('should prevent ID and sessionToken updates', async () => {
-      const invalidUpdates = { 
+      const invalidUpdates = {
         id: 'new-id',
         sessionToken: 'new-token',
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       };
 
       await expect(
-        sessionOperations.updateSession('session-to-update', invalidUpdates as any)
+        sessionOperations.updateSession(
+          'session-to-update',
+          invalidUpdates as any
+        )
       ).rejects.toThrow(AdapterError);
 
       await expect(
-        sessionOperations.updateSession('session-to-update', invalidUpdates as any)
+        sessionOperations.updateSession(
+          'session-to-update',
+          invalidUpdates as any
+        )
       ).rejects.toThrow(/cannot be updated/);
     });
 
@@ -500,11 +540,15 @@ describe('SessionOperations', () => {
       const pastDate = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
 
       await expect(
-        sessionOperations.updateSession('session-to-update', { expiresAt: pastDate })
+        sessionOperations.updateSession('session-to-update', {
+          expiresAt: pastDate,
+        })
       ).rejects.toThrow(AdapterError);
 
       await expect(
-        sessionOperations.updateSession('session-to-update', { expiresAt: pastDate })
+        sessionOperations.updateSession('session-to-update', {
+          expiresAt: pastDate,
+        })
       ).rejects.toThrow(/expiresAt must be in the future/);
     });
   });
@@ -517,7 +561,9 @@ describe('SessionOperations', () => {
     const sessionToDelete = createTestSession({ id: 'session-to-delete' });
 
     beforeEach(() => {
-      jest.spyOn(sessionOperations, 'findSessionById').mockResolvedValue(sessionToDelete);
+      jest
+        .spyOn(sessionOperations, 'findSessionById')
+        .mockResolvedValue(sessionToDelete);
       mockHttpClient.delete.mockResolvedValue(undefined);
     });
 
@@ -544,16 +590,26 @@ describe('SessionOperations', () => {
     const sessionToDelete = createTestSession();
 
     beforeEach(() => {
-      jest.spyOn(sessionOperations, 'findSessionByToken').mockResolvedValue(sessionToDelete);
-      jest.spyOn(sessionOperations, 'deleteSession').mockResolvedValue(sessionToDelete);
+      jest
+        .spyOn(sessionOperations, 'findSessionByToken')
+        .mockResolvedValue(sessionToDelete);
+      jest
+        .spyOn(sessionOperations, 'deleteSession')
+        .mockResolvedValue(sessionToDelete);
     });
 
     it('should delete session by token', async () => {
-      const result = await sessionOperations.deleteSessionByToken(sessionToDelete.sessionToken);
+      const result = await sessionOperations.deleteSessionByToken(
+        sessionToDelete.sessionToken
+      );
 
       expect(result).toEqual(sessionToDelete);
-      expect(sessionOperations.findSessionByToken).toHaveBeenCalledWith(sessionToDelete.sessionToken);
-      expect(sessionOperations.deleteSession).toHaveBeenCalledWith(sessionToDelete.id);
+      expect(sessionOperations.findSessionByToken).toHaveBeenCalledWith(
+        sessionToDelete.sessionToken
+      );
+      expect(sessionOperations.deleteSession).toHaveBeenCalledWith(
+        sessionToDelete.id
+      );
     });
   });
 
@@ -580,8 +636,11 @@ describe('SessionOperations', () => {
       ];
 
       // Mock the internal method calls
-      jest.spyOn(sessionOperations, 'findManySessions').mockResolvedValue(expiredSessions);
-      jest.spyOn(sessionOperations, 'deleteSession')
+      jest
+        .spyOn(sessionOperations, 'findManySessions')
+        .mockResolvedValue(expiredSessions);
+      jest
+        .spyOn(sessionOperations, 'deleteSession')
         .mockResolvedValueOnce(expiredSessions[0]!)
         .mockResolvedValueOnce(expiredSessions[1]!);
 
@@ -604,7 +663,9 @@ describe('SessionOperations', () => {
     const userSessions = createTestSessions(3, userId);
 
     beforeEach(() => {
-      jest.spyOn(sessionOperations, 'findSessionsByUserId').mockResolvedValue(userSessions);
+      jest
+        .spyOn(sessionOperations, 'findSessionsByUserId')
+        .mockResolvedValue(userSessions);
       mockHttpClient.delete.mockResolvedValue(undefined);
     });
 
@@ -612,7 +673,9 @@ describe('SessionOperations', () => {
       const result = await sessionOperations.deleteUserSessions(userId);
 
       expect(result).toBe(3);
-      expect(sessionOperations.findSessionsByUserId).toHaveBeenCalledWith(userId);
+      expect(sessionOperations.findSessionsByUserId).toHaveBeenCalledWith(
+        userId
+      );
       expect(mockHttpClient.delete).toHaveBeenCalledTimes(3);
     });
   });
@@ -624,15 +687,21 @@ describe('SessionOperations', () => {
   describe('performance', () => {
     it('should handle large numbers of sessions efficiently', async () => {
       const largeBatch = createTestSessions(1000);
-      
-      mockHttpClient.get.mockResolvedValue(largeBatch.map(session => ({
-        ...session,
-        created_at: new Date(),
-        updated_at: new Date(),
-      })));
-      
-      mockResponseNormalizer.normalizeArrayResponse.mockReturnValue(largeBatch as any);
-      mockEntityMapper.mapSessionFromApi.mockImplementation((session: any) => session as any);
+
+      mockHttpClient.get.mockResolvedValue(
+        largeBatch.map(session => ({
+          ...session,
+          created_at: new Date(),
+          updated_at: new Date(),
+        }))
+      );
+
+      mockResponseNormalizer.normalizeArrayResponse.mockReturnValue(
+        largeBatch as any
+      );
+      mockEntityMapper.mapSessionFromApi.mockImplementation(
+        (session: any) => session as any
+      );
 
       const { result, duration } = await measureExecutionTime(() =>
         sessionOperations.findSessionsByUserId('user-with-many-sessions')
@@ -681,20 +750,28 @@ describe('SessionOperations', () => {
       expect(created.sessionToken).toBe('lifecycle-token');
 
       // Find session
-      jest.spyOn(sessionOperations, 'findSessionById').mockResolvedValue(created);
+      jest
+        .spyOn(sessionOperations, 'findSessionById')
+        .mockResolvedValue(created);
       const found = await sessionOperations.findSessionById(created.id);
       expect(found).toEqual(created);
 
       // Validate session
-      jest.spyOn(sessionOperations, 'findSessionByToken').mockResolvedValue(created);
-      const validated = await sessionOperations.validateSession(created.sessionToken);
+      jest
+        .spyOn(sessionOperations, 'findSessionByToken')
+        .mockResolvedValue(created);
+      const validated = await sessionOperations.validateSession(
+        created.sessionToken
+      );
       expect(validated).toEqual(created);
 
       // Update session
       const newExpiry = new Date(Date.now() + 48 * 60 * 60 * 1000);
       const updated = { ...created, expiresAt: newExpiry };
       jest.spyOn(sessionOperations, 'updateSession').mockResolvedValue(updated);
-      const result = await sessionOperations.updateSession(created.id, { expiresAt: newExpiry });
+      const result = await sessionOperations.updateSession(created.id, {
+        expiresAt: newExpiry,
+      });
       expect(result.expiresAt).toEqual(newExpiry);
 
       // Delete session

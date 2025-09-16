@@ -1,6 +1,6 @@
 /**
  * Comprehensive Apso SDK Mock for Unit Tests
- * 
+ *
  * This mock provides a complete implementation of the Apso SDK
  * for testing our adapter operations without hitting real HTTP endpoints.
  */
@@ -25,13 +25,19 @@ export interface MockQueryParams {
 export interface MockEntityClient {
   select: jest.MockedFunction<(fields: string[]) => MockEntityClient>;
   where: jest.MockedFunction<(filter: Record<string, any>) => MockEntityClient>;
-  or: jest.MockedFunction<(orCondition: Record<string, any>) => MockEntityClient>;
+  or: jest.MockedFunction<
+    (orCondition: Record<string, any>) => MockEntityClient
+  >;
   join: jest.MockedFunction<(joinTables: string[]) => MockEntityClient>;
-  orderBy: jest.MockedFunction<(sort: Record<string, 'ASC' | 'DESC'>) => MockEntityClient>;
+  orderBy: jest.MockedFunction<
+    (sort: Record<string, 'ASC' | 'DESC'>) => MockEntityClient
+  >;
   limit: jest.MockedFunction<(limit: number) => MockEntityClient>;
   offset: jest.MockedFunction<(offset: number) => MockEntityClient>;
   page: jest.MockedFunction<(page: number) => MockEntityClient>;
-  cache: jest.MockedFunction<(useCache?: boolean, duration?: number) => MockEntityClient>;
+  cache: jest.MockedFunction<
+    (useCache?: boolean, duration?: number) => MockEntityClient
+  >;
   get: jest.MockedFunction<() => Promise<any>>;
   post: jest.MockedFunction<(data: any) => Promise<any>>;
   put: jest.MockedFunction<(data: any) => Promise<any>>;
@@ -40,7 +46,14 @@ export interface MockEntityClient {
 
 export interface MockApsoClient {
   entity: jest.MockedFunction<(entityName: string) => MockEntityClient>;
-  get: jest.MockedFunction<(resource: string, params?: MockQueryParams, useCache?: boolean, cacheDuration?: number) => Promise<any>>;
+  get: jest.MockedFunction<
+    (
+      resource: string,
+      params?: MockQueryParams,
+      useCache?: boolean,
+      cacheDuration?: number
+    ) => Promise<any>
+  >;
   post: jest.MockedFunction<(resource: string, data: any) => Promise<any>>;
   put: jest.MockedFunction<(resource: string, data: any) => Promise<any>>;
   delete: jest.MockedFunction<(resource: string) => Promise<any>>;
@@ -87,10 +100,14 @@ export class MockDataStore {
     return entities?.get(id) || null;
   }
 
-  public updateEntity(entityType: string, id: string, updates: any): any | null {
+  public updateEntity(
+    entityType: string,
+    id: string,
+    updates: any
+  ): any | null {
     const entities = this.data.get(entityType);
     const existing = entities?.get(id);
-    
+
     if (!existing) return null;
 
     const updated = {
@@ -107,7 +124,7 @@ export class MockDataStore {
   public deleteEntity(entityType: string, id: string): any | null {
     const entities = this.data.get(entityType);
     const existing = entities?.get(id);
-    
+
     if (!existing) return null;
 
     entities!.delete(id);
@@ -151,11 +168,18 @@ export class MockDataStore {
     return results;
   }
 
-  public countEntities(entityType: string, filter?: Record<string, any>): number {
+  public countEntities(
+    entityType: string,
+    filter?: Record<string, any>
+  ): number {
     return this.findEntities(entityType, filter).length;
   }
 
-  public updateMany(entityType: string, filter: Record<string, any>, updates: any): number {
+  public updateMany(
+    entityType: string,
+    filter: Record<string, any>,
+    updates: any
+  ): number {
     const entities = this.findEntities(entityType, filter);
     let updateCount = 0;
 
@@ -183,7 +207,11 @@ export class MockDataStore {
     return deleteCount;
   }
 
-  public findByUniqueField(entityType: string, field: string, value: any): any | null {
+  public findByUniqueField(
+    entityType: string,
+    field: string,
+    value: any
+  ): any | null {
     const entities = this.data.get(entityType);
     if (!entities) return null;
 
@@ -208,7 +236,7 @@ export class MockDataStore {
 // Create mock EntityClient
 function createMockEntityClient(entityName: string): MockEntityClient {
   const store = MockDataStore.getInstance();
-  
+
   // Create a query builder state for method chaining
   let queryState = {
     fields: undefined as string[] | undefined,
@@ -228,48 +256,48 @@ function createMockEntityClient(entityName: string): MockEntityClient {
       queryState.fields = fields;
       return entityClient;
     }),
-    
+
     where: jest.fn((filter: Record<string, any>) => {
       queryState.filter = filter;
       return entityClient;
     }),
-    
+
     or: jest.fn((orCondition: Record<string, any>) => {
       queryState.or = orCondition;
       return entityClient;
     }),
-    
+
     join: jest.fn((joinTables: string[]) => {
       queryState.join = joinTables;
       return entityClient;
     }),
-    
+
     orderBy: jest.fn((sort: Record<string, 'ASC' | 'DESC'>) => {
       queryState.sort = sort;
       return entityClient;
     }),
-    
+
     limit: jest.fn((limit: number) => {
       queryState.limit = limit;
       return entityClient;
     }),
-    
+
     offset: jest.fn((offset: number) => {
       queryState.offset = offset;
       return entityClient;
     }),
-    
+
     page: jest.fn((page: number) => {
       queryState.page = page;
       return entityClient;
     }),
-    
+
     cache: jest.fn((useCache = true, duration = 60) => {
       queryState.useCache = useCache;
       queryState.cacheDuration = duration;
       return entityClient;
     }),
-    
+
     get: jest.fn(async () => {
       // Reset query state after use
       const filter = queryState.filter;
@@ -285,14 +313,14 @@ function createMockEntityClient(entityName: string): MockEntityClient {
         useCache: false,
         cacheDuration: 60,
       };
-      
+
       return store.findEntities(entityName, filter);
     }),
-    
+
     post: jest.fn(async (data: any) => {
       return store.createEntity(entityName, data);
     }),
-    
+
     put: jest.fn(async (data: any) => {
       if (!data.id) {
         throw new Error('PUT requires an ID');
@@ -305,7 +333,7 @@ function createMockEntityClient(entityName: string): MockEntityClient {
       }
       return result;
     }),
-    
+
     delete: jest.fn(async () => {
       // For delete operations, we need to know which entity to delete
       // This would typically be based on query filters or ID in URL
@@ -328,16 +356,16 @@ function createMockEntityClient(entityName: string): MockEntityClient {
 // Create mock ApsoClient
 function createMockApsoClient(): MockApsoClient {
   const store = MockDataStore.getInstance();
-  
+
   return {
     entity: jest.fn((entityName: string) => {
       return createMockEntityClient(entityName);
     }),
-    
+
     get: jest.fn(async (resource: string, params?: MockQueryParams) => {
       // Parse resource to get entity type and ID
       const [, entityType, id] = resource.split('/');
-      
+
       if (id && entityType) {
         // Single entity request
         const result = store.getEntity(entityType, id);
@@ -353,21 +381,21 @@ function createMockApsoClient(): MockApsoClient {
       }
       return [];
     }),
-    
+
     post: jest.fn(async (resource: string, data: any) => {
       const [, entityType] = resource.split('/');
       if (!entityType) throw new Error('Invalid resource path');
       return store.createEntity(entityType, data);
     }),
-    
+
     put: jest.fn(async (resource: string, data: any) => {
       const [, entityType, id] = resource.split('/');
-      
+
       if (!id) {
         throw new Error('PUT requires an ID in the resource path');
       }
       if (!entityType) throw new Error('Invalid resource path');
-      
+
       const result = store.updateEntity(entityType, id, data);
       if (!result) {
         const error = new Error('Not found') as any;
@@ -376,15 +404,15 @@ function createMockApsoClient(): MockApsoClient {
       }
       return result;
     }),
-    
+
     delete: jest.fn(async (resource: string) => {
       const [, entityType, id] = resource.split('/');
-      
+
       if (!id) {
         throw new Error('DELETE requires an ID in the resource path');
       }
       if (!entityType) throw new Error('Invalid resource path');
-      
+
       const result = store.deleteEntity(entityType, id);
       if (!result) {
         const error = new Error('Not found') as any;

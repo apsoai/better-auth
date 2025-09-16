@@ -1,6 +1,6 @@
 /**
  * Comprehensive Unit Tests for UserOperations
- * 
+ *
  * These tests verify all CRUD operations for users including:
  * - Email normalization and case-insensitive lookups
  * - Comprehensive validation and error handling
@@ -144,7 +144,9 @@ describe('UserOperations', () => {
         updated_at: new Date(),
       });
 
-      mockResponseNormalizer.normalizeSingleResponse.mockImplementation((data) => data);
+      mockResponseNormalizer.normalizeSingleResponse.mockImplementation(
+        data => data
+      );
       mockEntityMapper.mapUserFromApi.mockReturnValue(validUserData);
     });
 
@@ -164,7 +166,9 @@ describe('UserOperations', () => {
       // Verify mock calls
       expect(mockEntityMapper.mapUserToApi).toHaveBeenCalledTimes(1);
       expect(mockHttpClient.post).toHaveBeenCalledTimes(1);
-      expect(mockResponseNormalizer.normalizeSingleResponse).toHaveBeenCalledTimes(1);
+      expect(
+        mockResponseNormalizer.normalizeSingleResponse
+      ).toHaveBeenCalledTimes(1);
       expect(mockEntityMapper.mapUserFromApi).toHaveBeenCalledTimes(1);
     });
 
@@ -324,18 +328,22 @@ describe('UserOperations', () => {
       it('should handle network errors', async () => {
         mockHttpClient.post.mockRejectedValue(createNetworkError());
 
-        await expect(
-          userOperations.createUser(validUserData)
-        ).rejects.toThrow(AdapterError);
+        await expect(userOperations.createUser(validUserData)).rejects.toThrow(
+          AdapterError
+        );
 
-        const error = await userOperations.createUser(validUserData).catch(e => e);
+        const error = await userOperations
+          .createUser(validUserData)
+          .catch(e => e);
         expect(error.code).toBe(AdapterErrorCode.NETWORK_ERROR);
       });
 
       it('should handle timeout errors', async () => {
         mockHttpClient.post.mockRejectedValue(createTimeoutError());
 
-        const error = await userOperations.createUser(validUserData).catch(e => e);
+        const error = await userOperations
+          .createUser(validUserData)
+          .catch(e => e);
         expect(error.code).toBe(AdapterErrorCode.TIMEOUT);
       });
     });
@@ -380,7 +388,9 @@ describe('UserOperations', () => {
         updated_at: new Date(),
       });
 
-      mockResponseNormalizer.normalizeSingleResponse.mockImplementation((data) => data);
+      mockResponseNormalizer.normalizeSingleResponse.mockImplementation(
+        data => data
+      );
       mockEntityMapper.mapUserFromApi.mockReturnValue(testUser);
     });
 
@@ -406,17 +416,19 @@ describe('UserOperations', () => {
     });
 
     it('should throw ValidationError for invalid ID', async () => {
-      await expect(
-        userOperations.findUserById('')
-      ).rejects.toThrow(AdapterError);
+      await expect(userOperations.findUserById('')).rejects.toThrow(
+        AdapterError
+      );
 
-      await expect(
-        userOperations.findUserById(null as any)
-      ).rejects.toThrow(/User ID must be a non-empty string/);
+      await expect(userOperations.findUserById(null as any)).rejects.toThrow(
+        /User ID must be a non-empty string/
+      );
     });
 
     it('should handle server errors appropriately', async () => {
-      mockHttpClient.get.mockRejectedValue(createHttpError(500, 'Internal Server Error'));
+      mockHttpClient.get.mockRejectedValue(
+        createHttpError(500, 'Internal Server Error')
+      );
 
       await expect(
         userOperations.findUserById('test-user-123')
@@ -428,13 +440,17 @@ describe('UserOperations', () => {
     const testUsers = createTestUsers(3);
 
     beforeEach(() => {
-      mockHttpClient.get.mockResolvedValue(testUsers.map(user => ({
-        ...user,
-        created_at: new Date(),
-        updated_at: new Date(),
-      })));
+      mockHttpClient.get.mockResolvedValue(
+        testUsers.map(user => ({
+          ...user,
+          created_at: new Date(),
+          updated_at: new Date(),
+        }))
+      );
 
-      mockResponseNormalizer.normalizeArrayResponse.mockImplementation((data) => data as any);
+      mockResponseNormalizer.normalizeArrayResponse.mockImplementation(
+        data => data as any
+      );
       mockQueryTranslator.buildFindQuery.mockReturnValue({} as QueryParams);
     });
 
@@ -453,7 +469,7 @@ describe('UserOperations', () => {
 
       for (const testCase of emailCases) {
         mockHttpClient.get.mockClear();
-        
+
         await userOperations.findUserByEmail(testCase.input);
 
         // Verify the email was normalized for lookup
@@ -468,15 +484,17 @@ describe('UserOperations', () => {
       mockHttpClient.get.mockResolvedValue([]);
       mockResponseNormalizer.normalizeArrayResponse.mockReturnValue([]);
 
-      const result = await userOperations.findUserByEmail('nonexistent@example.com');
+      const result = await userOperations.findUserByEmail(
+        'nonexistent@example.com'
+      );
 
       expect(result).toBeNull();
     });
 
     it('should throw ValidationError for invalid email', async () => {
-      await expect(
-        userOperations.findUserByEmail('')
-      ).rejects.toThrow(AdapterError);
+      await expect(userOperations.findUserByEmail('')).rejects.toThrow(
+        AdapterError
+      );
 
       await expect(
         userOperations.findUserByEmail('invalid-email')
@@ -488,14 +506,18 @@ describe('UserOperations', () => {
     const testUsers = createTestUsers(5);
 
     beforeEach(() => {
-      mockHttpClient.get.mockResolvedValue(testUsers.map(user => ({
-        ...user,
-        created_at: new Date(),
-        updated_at: new Date(),
-      })));
+      mockHttpClient.get.mockResolvedValue(
+        testUsers.map(user => ({
+          ...user,
+          created_at: new Date(),
+          updated_at: new Date(),
+        }))
+      );
 
-      mockResponseNormalizer.normalizeArrayResponse.mockImplementation((data) => data as any);
-      mockEntityMapper.mapUserFromApi.mockImplementation((user) => user as any);
+      mockResponseNormalizer.normalizeArrayResponse.mockImplementation(
+        data => data as any
+      );
+      mockEntityMapper.mapUserFromApi.mockImplementation(user => user as any);
       mockQueryTranslator.buildFindQuery.mockReturnValue({} as QueryParams);
     });
 
@@ -504,12 +526,16 @@ describe('UserOperations', () => {
 
       expect(result).toHaveLength(5);
       result.forEach(assertBetterAuthUser);
-      expect(mockQueryTranslator.buildFindQuery).toHaveBeenCalledWith({}, undefined, undefined);
+      expect(mockQueryTranslator.buildFindQuery).toHaveBeenCalledWith(
+        {},
+        undefined,
+        undefined
+      );
     });
 
     it('should apply filters correctly', async () => {
       const whereClause = { emailVerified: true };
-      
+
       await userOperations.findManyUsers({ where: whereClause });
 
       expect(mockQueryTranslator.buildFindQuery).toHaveBeenCalledWith(
@@ -521,7 +547,7 @@ describe('UserOperations', () => {
 
     it('should apply pagination correctly', async () => {
       const pagination = { limit: 10, page: 1 };
-      
+
       await userOperations.findManyUsers({ pagination });
 
       expect(mockQueryTranslator.buildFindQuery).toHaveBeenCalledWith(
@@ -533,7 +559,7 @@ describe('UserOperations', () => {
 
     it('should apply sorting correctly', async () => {
       const sort = { email: 'ASC' as const };
-      
+
       await userOperations.findManyUsers({ sort });
 
       expect(mockQueryTranslator.buildFindQuery).toHaveBeenCalledWith(
@@ -563,7 +589,9 @@ describe('UserOperations', () => {
 
     beforeEach(() => {
       // Mock findUserById to return existing user
-      jest.spyOn(userOperations, 'findUserById').mockResolvedValue(existingUser);
+      jest
+        .spyOn(userOperations, 'findUserById')
+        .mockResolvedValue(existingUser);
 
       mockEntityMapper.mapUserToApi.mockReturnValue({
         ...existingUser,
@@ -579,7 +607,9 @@ describe('UserOperations', () => {
         updated_at: new Date(),
       });
 
-      mockResponseNormalizer.normalizeSingleResponse.mockImplementation((data) => data);
+      mockResponseNormalizer.normalizeSingleResponse.mockImplementation(
+        data => data
+      );
       mockEntityMapper.mapUserFromApi.mockReturnValue({
         ...existingUser,
         ...updates,
@@ -639,17 +669,26 @@ describe('UserOperations', () => {
     });
 
     it('should detect email conflicts during update', async () => {
-      const conflictingUser = createTestUser({ id: 'other-user', email: 'conflict@example.com' });
-      
+      const conflictingUser = createTestUser({
+        id: 'other-user',
+        email: 'conflict@example.com',
+      });
+
       // Mock email conflict check to return existing user
-      jest.spyOn(userOperations, 'findUserByEmail').mockResolvedValue(conflictingUser);
+      jest
+        .spyOn(userOperations, 'findUserByEmail')
+        .mockResolvedValue(conflictingUser);
 
       await expect(
-        userOperations.updateUser('user-to-update', { email: 'conflict@example.com' })
+        userOperations.updateUser('user-to-update', {
+          email: 'conflict@example.com',
+        })
       ).rejects.toThrow(AdapterError);
 
       await expect(
-        userOperations.updateUser('user-to-update', { email: 'conflict@example.com' })
+        userOperations.updateUser('user-to-update', {
+          email: 'conflict@example.com',
+        })
       ).rejects.toThrow(/already exists/);
     });
   });
@@ -658,7 +697,9 @@ describe('UserOperations', () => {
     const existingUser = createTestUser();
 
     beforeEach(() => {
-      jest.spyOn(userOperations, 'findUserByEmail').mockResolvedValue(existingUser);
+      jest
+        .spyOn(userOperations, 'findUserByEmail')
+        .mockResolvedValue(existingUser);
       jest.spyOn(userOperations, 'updateUser').mockResolvedValue({
         ...existingUser,
         name: 'Updated Name',
@@ -667,20 +708,30 @@ describe('UserOperations', () => {
 
     it('should update user by email', async () => {
       const updates = { name: 'Updated Name' };
-      const result = await userOperations.updateUserByEmail(existingUser.email, updates);
+      const result = await userOperations.updateUserByEmail(
+        existingUser.email,
+        updates
+      );
 
       expect(result).toBeDefined();
       expect(result.name).toBe('Updated Name');
 
-      expect(userOperations.findUserByEmail).toHaveBeenCalledWith(existingUser.email);
-      expect(userOperations.updateUser).toHaveBeenCalledWith(existingUser.id, updates);
+      expect(userOperations.findUserByEmail).toHaveBeenCalledWith(
+        existingUser.email
+      );
+      expect(userOperations.updateUser).toHaveBeenCalledWith(
+        existingUser.id,
+        updates
+      );
     });
 
     it('should throw error for non-existent email', async () => {
       jest.spyOn(userOperations, 'findUserByEmail').mockResolvedValue(null);
 
       await expect(
-        userOperations.updateUserByEmail('nonexistent@example.com', { name: 'Updated' })
+        userOperations.updateUserByEmail('nonexistent@example.com', {
+          name: 'Updated',
+        })
       ).rejects.toThrow(AdapterError);
     });
   });
@@ -693,7 +744,9 @@ describe('UserOperations', () => {
     const userToDelete = createTestUser({ id: 'user-to-delete' });
 
     beforeEach(() => {
-      jest.spyOn(userOperations, 'findUserById').mockResolvedValue(userToDelete);
+      jest
+        .spyOn(userOperations, 'findUserById')
+        .mockResolvedValue(userToDelete);
       mockHttpClient.delete.mockResolvedValue(undefined);
     });
 
@@ -710,15 +763,13 @@ describe('UserOperations', () => {
     it('should throw error for non-existent user', async () => {
       jest.spyOn(userOperations, 'findUserById').mockResolvedValue(null);
 
-      await expect(
-        userOperations.deleteUser('nonexistent-id')
-      ).rejects.toThrow(AdapterError);
+      await expect(userOperations.deleteUser('nonexistent-id')).rejects.toThrow(
+        AdapterError
+      );
     });
 
     it('should throw ValidationError for invalid ID', async () => {
-      await expect(
-        userOperations.deleteUser('')
-      ).rejects.toThrow(AdapterError);
+      await expect(userOperations.deleteUser('')).rejects.toThrow(AdapterError);
     });
   });
 
@@ -726,7 +777,9 @@ describe('UserOperations', () => {
     const userToDelete = createTestUser();
 
     beforeEach(() => {
-      jest.spyOn(userOperations, 'findUserByEmail').mockResolvedValue(userToDelete);
+      jest
+        .spyOn(userOperations, 'findUserByEmail')
+        .mockResolvedValue(userToDelete);
       jest.spyOn(userOperations, 'deleteUser').mockResolvedValue(userToDelete);
     });
 
@@ -734,7 +787,9 @@ describe('UserOperations', () => {
       const result = await userOperations.deleteUserByEmail(userToDelete.email);
 
       expect(result).toEqual(userToDelete);
-      expect(userOperations.findUserByEmail).toHaveBeenCalledWith(userToDelete.email);
+      expect(userOperations.findUserByEmail).toHaveBeenCalledWith(
+        userToDelete.email
+      );
       expect(userOperations.deleteUser).toHaveBeenCalledWith(userToDelete.id);
     });
 
@@ -779,7 +834,7 @@ describe('UserOperations', () => {
 
     it('should fallback to findManyUsers if count fails', async () => {
       mockHttpClient.get.mockRejectedValue(new Error('Count not supported'));
-      
+
       // Mock findManyUsers to return array of users
       const testUsers = createTestUsers(10);
       jest.spyOn(userOperations, 'findManyUsers').mockResolvedValue(testUsers);
@@ -798,8 +853,12 @@ describe('UserOperations', () => {
   describe('integration scenarios', () => {
     it('should handle complete user lifecycle', async () => {
       // Create user
-      const userData = { email: 'lifecycle@example.com', emailVerified: false, name: 'Lifecycle User' };
-      
+      const userData = {
+        email: 'lifecycle@example.com',
+        emailVerified: false,
+        name: 'Lifecycle User',
+      };
+
       mockEntityMapper.mapUserToApi.mockReturnValue({
         id: 'lifecycle-user',
         email: 'lifecycle@example.com',
@@ -818,7 +877,9 @@ describe('UserOperations', () => {
         updated_at: new Date(),
       });
 
-      mockResponseNormalizer.normalizeSingleResponse.mockImplementation((data) => data);
+      mockResponseNormalizer.normalizeSingleResponse.mockImplementation(
+        data => data
+      );
       mockEntityMapper.mapUserFromApi.mockReturnValue({
         id: 'lifecycle-user',
         email: 'lifecycle@example.com',
@@ -837,7 +898,9 @@ describe('UserOperations', () => {
       // Update user
       const updatedUser = { ...createdUser, emailVerified: true };
       jest.spyOn(userOperations, 'updateUser').mockResolvedValue(updatedUser);
-      const result = await userOperations.updateUser(createdUser.id, { emailVerified: true });
+      const result = await userOperations.updateUser(createdUser.id, {
+        emailVerified: true,
+      });
       expect(result.emailVerified).toBe(true);
 
       // Delete user
@@ -850,7 +913,7 @@ describe('UserOperations', () => {
       const users = createTestUsers(100);
       mockHttpClient.get.mockResolvedValue(users);
       mockResponseNormalizer.normalizeArrayResponse.mockReturnValue(users);
-      mockEntityMapper.mapUserFromApi.mockImplementation((user) => user);
+      mockEntityMapper.mapUserFromApi.mockImplementation(user => user);
 
       const { result, duration } = await measureExecutionTime(() =>
         userOperations.findManyUsers({ pagination: { limit: 100 } })
@@ -862,13 +925,15 @@ describe('UserOperations', () => {
 
     it('should maintain data consistency under concurrent operations', async () => {
       const user = createTestUser();
-      
+
       // Setup mocks for concurrent operations
       jest.spyOn(userOperations, 'findUserById').mockResolvedValue(user);
-      jest.spyOn(userOperations, 'updateUser').mockImplementation(async (_id, updates) => ({
-        ...user,
-        ...updates,
-      }));
+      jest
+        .spyOn(userOperations, 'updateUser')
+        .mockImplementation(async (_id, updates) => ({
+          ...user,
+          ...updates,
+        }));
 
       // Simulate concurrent updates
       const promises = [
@@ -878,7 +943,7 @@ describe('UserOperations', () => {
       ];
 
       const results = await Promise.all(promises);
-      
+
       // All operations should complete successfully
       expect(results).toHaveLength(3);
       results.forEach(result => expect(result).toBeDefined());
@@ -894,9 +959,7 @@ describe('UserOperations', () => {
       mockHttpClient.get.mockResolvedValue(null);
       mockResponseNormalizer.normalizeSingleResponse.mockReturnValue(null);
 
-      await expect(
-        userOperations.findUserById('test-id')
-      ).rejects.toThrow();
+      await expect(userOperations.findUserById('test-id')).rejects.toThrow();
     });
 
     it('should sanitize user input', async () => {
@@ -926,14 +989,14 @@ describe('UserOperations', () => {
       mockEntityMapper.mapUserFromApi.mockReturnValue(maliciousData);
 
       const result = await userOperations.createUser(maliciousData);
-      
+
       // The name should be preserved as-is (actual sanitization would be done at API level)
       expect(result.name).toBe('<script>alert("xss")</script>');
     });
 
     it('should handle very long input strings', async () => {
       const longString = 'a'.repeat(10000);
-      
+
       await expect(
         userOperations.createUser({
           email: `${longString}@example.com`,
@@ -976,13 +1039,15 @@ describe('UserOperations', () => {
     it('should handle large datasets without memory leaks', async () => {
       const largeDataset = createTestUsers(10000);
       mockHttpClient.get.mockResolvedValue(largeDataset);
-      mockResponseNormalizer.normalizeArrayResponse.mockReturnValue(largeDataset);
-      mockEntityMapper.mapUserFromApi.mockImplementation((user) => user);
+      mockResponseNormalizer.normalizeArrayResponse.mockReturnValue(
+        largeDataset
+      );
+      mockEntityMapper.mapUserFromApi.mockImplementation(user => user);
 
       const result = await userOperations.findManyUsers();
-      
+
       expect(result).toHaveLength(10000);
-      
+
       // Clear references to help garbage collection
       largeDataset.length = 0;
     });
@@ -994,7 +1059,7 @@ describe('UserOperations', () => {
       };
 
       const { duration } = await measureExecutionTime(() =>
-        userOperations.findManyUsers({ 
+        userOperations.findManyUsers({
           where: complexFilter,
           pagination: { limit: 1000 },
           sort: { email: 'ASC' },

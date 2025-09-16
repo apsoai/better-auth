@@ -1,6 +1,6 @@
 /**
  * Performance Integration Tests
- * 
+ *
  * Tests real-world performance characteristics of the Apso adapter
  * with actual HTTP communication and API response times.
  */
@@ -8,14 +8,16 @@
 import { IntegrationTestHelper, shouldRunIntegrationTests } from './setup';
 
 // Skip all tests if integration tests are not enabled
-const describeIntegration = shouldRunIntegrationTests() ? describe : describe.skip;
+const describeIntegration = shouldRunIntegrationTests()
+  ? describe
+  : describe.skip;
 
 describeIntegration('Performance Integration Tests', () => {
   let testHelper: IntegrationTestHelper;
 
   beforeAll(async () => {
     testHelper = new IntegrationTestHelper();
-    
+
     // Verify API connectivity
     const isHealthy = await testHelper.healthCheck();
     if (!isHealthy) {
@@ -116,7 +118,8 @@ describeIntegration('Performance Integration Tests', () => {
 
       const { duration } = await testHelper.measureOperation(
         'find session by token',
-        () => adapter.findUnique('session', { sessionToken: session.sessionToken })
+        () =>
+          adapter.findUnique('session', { sessionToken: session.sessionToken })
       );
 
       // P95 target: < 200ms for session lookup (critical for auth)
@@ -135,9 +138,8 @@ describeIntegration('Performance Integration Tests', () => {
 
       // Perform rapid lookups
       const lookupPromises = sessions.map(session =>
-        testHelper.measureOperation(
-          `rapid session lookup ${session.id}`,
-          () => adapter.findUnique('session', { sessionToken: session.sessionToken })
+        testHelper.measureOperation(`rapid session lookup ${session.id}`, () =>
+          adapter.findUnique('session', { sessionToken: session.sessionToken })
         )
       );
 
@@ -149,7 +151,9 @@ describeIntegration('Performance Integration Tests', () => {
       });
 
       // Average should be even better
-      const avgDuration = results.reduce((sum, { duration }) => sum + duration, 0) / results.length;
+      const avgDuration =
+        results.reduce((sum, { duration }) => sum + duration, 0) /
+        results.length;
       expect(avgDuration).toBeLessThan(200);
     });
   });
@@ -167,7 +171,7 @@ describeIntegration('Performance Integration Tests', () => {
         // Should average < 200ms per user for batch operations
         const avgPerUser = duration / batchSize;
         expect(avgPerUser).toBeLessThan(200);
-        
+
         // Total time should scale reasonably
         const expectedMaxTime = batchSize * 300; // 300ms per user worst case
         expect(duration).toCompleteWithin(expectedMaxTime);
@@ -176,7 +180,7 @@ describeIntegration('Performance Integration Tests', () => {
 
     it('should handle findMany with pagination efficiently', async () => {
       const adapter = testHelper.getAdapter();
-      
+
       // Create test data
       await testHelper.createMultipleUsers(20);
 
@@ -185,14 +189,15 @@ describeIntegration('Performance Integration Tests', () => {
       for (const pageSize of pageSizes) {
         const { duration } = await testHelper.measureOperation(
           `findMany with limit ${pageSize}`,
-          () => adapter.findMany('user', {
-            where: {
-              email: {
-                contains: testHelper.getConfig().testUserPrefix,
+          () =>
+            adapter.findMany('user', {
+              where: {
+                email: {
+                  contains: testHelper.getConfig().testUserPrefix,
+                },
               },
-            },
-            take: pageSize,
-          })
+              take: pageSize,
+            })
         );
 
         // Should complete quickly regardless of page size
@@ -204,13 +209,14 @@ describeIntegration('Performance Integration Tests', () => {
       const concurrencyLevels = [3, 5, 10];
 
       for (const concurrency of concurrencyLevels) {
-        const concurrentOperations = Array.from({ length: concurrency }, (_, i) =>
-          testHelper.measureOperation(
-            `concurrent user creation ${i}`,
-            () => testHelper.createTestUser({
-              email: `concurrent-perf-${concurrency}-${i}@example.com`,
-            })
-          )
+        const concurrentOperations = Array.from(
+          { length: concurrency },
+          (_, i) =>
+            testHelper.measureOperation(`concurrent user creation ${i}`, () =>
+              testHelper.createTestUser({
+                email: `concurrent-perf-${concurrency}-${i}@example.com`,
+              })
+            )
         );
 
         const startTime = performance.now();
@@ -240,7 +246,7 @@ describeIntegration('Performance Integration Tests', () => {
         const user = await testHelper.createTestUser({
           email: `memory-test-${i}@example.com`,
         });
-        
+
         await adapter.findUnique('user', { id: user.id });
         await adapter.update('user', { id: user.id }, { name: `Updated ${i}` });
       }
@@ -259,20 +265,21 @@ describeIntegration('Performance Integration Tests', () => {
 
     it('should handle large result sets efficiently', async () => {
       const adapter = testHelper.getAdapter();
-      
+
       // Create a larger dataset
       await testHelper.createMultipleUsers(100);
 
       const { result: users, duration } = await testHelper.measureOperation(
         'fetch 100 users',
-        () => adapter.findMany('user', {
-          where: {
-            email: {
-              contains: testHelper.getConfig().testUserPrefix,
+        () =>
+          adapter.findMany('user', {
+            where: {
+              email: {
+                contains: testHelper.getConfig().testUserPrefix,
+              },
             },
-          },
-          take: 100,
-        })
+            take: 100,
+          })
       );
 
       expect(users.length).toBeGreaterThan(50); // Should find at least our created users
@@ -337,11 +344,11 @@ describeIntegration('Performance Integration Tests', () => {
       };
 
       const adapter = testHelper.getAdapter();
-      
+
       // Test each baseline
       for (const [operation, maxDuration] of Object.entries(baselines)) {
         let duration: number;
-        
+
         switch (operation) {
           case 'createUser': {
             const result = await testHelper.measureOperation(operation, () =>
@@ -350,7 +357,7 @@ describeIntegration('Performance Integration Tests', () => {
             duration = result.duration;
             break;
           }
-          
+
           case 'findUserById': {
             const user = await testHelper.createTestUser();
             const result = await testHelper.measureOperation(operation, () =>
@@ -359,7 +366,7 @@ describeIntegration('Performance Integration Tests', () => {
             duration = result.duration;
             break;
           }
-          
+
           case 'findUserByEmail': {
             const user = await testHelper.createTestUser();
             const result = await testHelper.measureOperation(operation, () =>
@@ -368,7 +375,7 @@ describeIntegration('Performance Integration Tests', () => {
             duration = result.duration;
             break;
           }
-          
+
           case 'updateUser': {
             const user = await testHelper.createTestUser();
             const result = await testHelper.measureOperation(operation, () =>
@@ -377,7 +384,7 @@ describeIntegration('Performance Integration Tests', () => {
             duration = result.duration;
             break;
           }
-          
+
           case 'createSession': {
             const user = await testHelper.createTestUser();
             const result = await testHelper.measureOperation(operation, () =>
@@ -386,26 +393,30 @@ describeIntegration('Performance Integration Tests', () => {
             duration = result.duration;
             break;
           }
-          
+
           case 'findSessionByToken': {
             const user = await testHelper.createTestUser();
             const session = await testHelper.createTestSession(user.id);
             const result = await testHelper.measureOperation(operation, () =>
-              adapter.findUnique('session', { sessionToken: session.sessionToken })
+              adapter.findUnique('session', {
+                sessionToken: session.sessionToken,
+              })
             );
             duration = result.duration;
             break;
           }
-          
+
           default:
             continue;
         }
 
         // Check against baseline
         expect(duration).toCompleteWithin(maxDuration);
-        
+
         // Log performance metrics for monitoring
-        console.log(`Performance baseline: ${operation} completed in ${duration.toFixed(2)}ms (target: <${maxDuration}ms)`);
+        console.log(
+          `Performance baseline: ${operation} completed in ${duration.toFixed(2)}ms (target: <${maxDuration}ms)`
+        );
       }
     });
   });

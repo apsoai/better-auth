@@ -1,6 +1,6 @@
 {
   "name": "@apso/better-auth-apso-adapter",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Better Auth database adapter that interfaces with Apso-generated CRUD REST endpoints",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -35,8 +35,10 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run clean && npm run build",
-    "release": "npm run lint && npm run typecheck && npm run test && npm run build"
+    "prepublishOnly": "npm run clean && npm run build && npm run test",
+    "semantic-release": "semantic-release",
+    "ci": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "release": "npm run ci"
   },
   "keywords": [
     "better-auth",
@@ -77,12 +79,21 @@
     "jest": "^29.7.0",
     "prettier": "^3.2.5",
     "ts-jest": "^29.1.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^11.1.0",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^9.2.6",
+    "@semantic-release/npm": "^11.0.2",
+    "@semantic-release/release-notes-generator": "^12.1.0",
+    "conventional-changelog-conventionalcommits": "^7.0.2",
+    "semantic-release": "^22.0.12"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "publishConfig": {
-    "access": "restricted"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }

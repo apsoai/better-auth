@@ -29,18 +29,11 @@ export default function LoginPage() {
         password,
       })
 
-      console.log('🔍 [LOGIN DEBUG] Sign-in result:', JSON.stringify(result, null, 2));
-      console.log('🔍 [LOGIN DEBUG] result.data:', result.data);
-      console.log('🔍 [LOGIN DEBUG] result.error:', result.error);
-
       if (result.data) {
-        console.log('🔍 [LOGIN DEBUG] Redirecting to dashboard');
         router.push('/dashboard')
       } else if (result.error) {
-        console.log('🔍 [LOGIN DEBUG] Sign-in error:', result.error);
         setError(result.error.message || 'An error occurred during sign in')
       } else {
-        console.log('🔍 [LOGIN DEBUG] No data or error in result, checking if authentication succeeded anyway');
         // Sometimes the result doesn't have data but authentication still succeeded
         // Try redirecting after a short delay
         setTimeout(() => {
@@ -48,7 +41,6 @@ export default function LoginPage() {
         }, 1000);
       }
     } catch (err) {
-      console.log('🔍 [LOGIN DEBUG] Exception during sign-in:', err);
       setError('An unexpected error occurred')
     } finally {
       setIsLoading(false)

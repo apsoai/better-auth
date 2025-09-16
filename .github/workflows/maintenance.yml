@@ -1,0 +1,222 @@
+name: Maintenance
+
+on:
+  schedule:
+    # Run every Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch: # Allow manual trigger
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  dependency-audit:
+    name: Dependency Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run security audit
+        run: |
+          npm audit --audit-level=high --json > audit-results.json
+          
+          # Check if there are any high or critical vulnerabilities
+          HIGH_VULNS=$(cat audit-results.json | jq '.metadata.vulnerabilities.high // 0')
+          CRITICAL_VULNS=$(cat audit-results.json | jq '.metadata.vulnerabilities.critical // 0')
+          
+          echo "High vulnerabilities: $HIGH_VULNS"
+          echo "Critical vulnerabilities: $CRITICAL_VULNS"
+          
+          if [ "$HIGH_VULNS" -gt 0 ] || [ "$CRITICAL_VULNS" -gt 0 ]; then
+            echo "Security vulnerabilities found!"
+            npm audit --audit-level=high
+            exit 1
+          fi
+
+      - name: Create security issue if vulnerabilities found
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = 'Security Alert: High/Critical Vulnerabilities Detected';
+            const body = `## Security Audit Failed
+            
+            High or critical security vulnerabilities were detected in the project dependencies.
+            
+            **Action Required:**
+            1. Review the audit results in the failed workflow run
+            2. Update vulnerable dependencies
+            3. Test the updates thoroughly
+            4. Create a security release if needed
+            
+            **Workflow Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            This issue was automatically created by the maintenance workflow.`;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['security', 'high-priority', 'automated']
+            });
+
+  health-check:
+    name: Package Health Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check package health
+        run: |
+          echo "## Package Health Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Check build
+          if npm run build; then
+            echo "| Build | ✅ Passing |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Build | ❌ Failing |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Check tests
+          if npm test; then
+            echo "| Tests | ✅ Passing |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Tests | ❌ Failing |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Check linting
+          if npm run lint; then
+            echo "| Linting | ✅ Passing |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Linting | ❌ Failing |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Check types
+          if npm run typecheck; then
+            echo "| Type Check | ✅ Passing |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Type Check | ❌ Failing |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Generate package stats
+        run: |
+          echo "## Package Statistics" >> $GITHUB_STEP_SUMMARY
+          
+          # Package size
+          npm pack --dry-run > pack-output.txt 2>&1
+          PACKAGE_SIZE=$(grep -o '[0-9.]*[kmg]B' pack-output.txt | tail -1)
+          echo "| Package Size | $PACKAGE_SIZE |" >> $GITHUB_STEP_SUMMARY
+          
+          # File count
+          FILE_COUNT=$(find dist -type f | wc -l)
+          echo "| Dist Files | $FILE_COUNT |" >> $GITHUB_STEP_SUMMARY
+          
+          # Dependencies
+          DEP_COUNT=$(npm list --depth=0 --json | jq '.dependencies | length')
+          echo "| Dependencies | $DEP_COUNT |" >> $GITHUB_STEP_SUMMARY
+
+  performance-benchmark:
+    name: Performance Benchmark
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run performance tests
+        run: |
+          npm run test:performance
+          
+          # If performance results exist, add them to summary
+          if [ -f "performance-results.json" ]; then
+            echo "## Performance Results" >> $GITHUB_STEP_SUMMARY
+            echo "| Operation | Time (ms) | Memory (MB) |" >> $GITHUB_STEP_SUMMARY
+            echo "|-----------|-----------|-------------|" >> $GITHUB_STEP_SUMMARY
+            # Parse and display performance data
+            # This would need to be customized based on your performance test output
+          fi
+
+  cleanup:
+    name: Repository Cleanup
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Clean up old workflow runs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            
+            // Keep last 50 workflow runs, delete older ones
+            const workflows = await github.rest.actions.listWorkflowRunsForRepo({
+              owner,
+              repo,
+              per_page: 100,
+              page: 1
+            });
+            
+            const runsToDelete = workflows.data.workflow_runs
+              .filter(run => run.status === 'completed')
+              .slice(50); // Keep first 50, delete the rest
+            
+            for (const run of runsToDelete) {
+              try {
+                await github.rest.actions.deleteWorkflowRun({
+                  owner,
+                  repo,
+                  run_id: run.id
+                });
+                console.log(`Deleted workflow run ${run.id}`);
+              } catch (error) {
+                console.log(`Failed to delete workflow run ${run.id}: ${error.message}`);
+              }
+            }
+            
+            console.log(`Processed ${runsToDelete.length} old workflow runs`);
+
+      - name: Report maintenance completion
+        run: |
+          echo "## Maintenance Summary" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Security audit completed" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Health check completed" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Performance benchmark completed" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Repository cleanup completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Next scheduled maintenance:** $(date -d '+7 days' '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY

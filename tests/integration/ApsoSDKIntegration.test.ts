@@ -1,6 +1,6 @@
 /**
  * Main Integration Tests for Apso SDK Integration
- * 
+ *
  * Tests the full Better Auth adapter with real Apso SDK communication.
  * These tests only run when INTEGRATION_TESTS=true environment variable is set.
  */
@@ -8,14 +8,16 @@
 import { IntegrationTestHelper, shouldRunIntegrationTests } from './setup';
 
 // Skip all tests if integration tests are not enabled
-const describeIntegration = shouldRunIntegrationTests() ? describe : describe.skip;
+const describeIntegration = shouldRunIntegrationTests()
+  ? describe
+  : describe.skip;
 
 describeIntegration('Apso SDK Integration Tests', () => {
   let testHelper: IntegrationTestHelper;
 
   beforeAll(async () => {
     testHelper = new IntegrationTestHelper();
-    
+
     // Verify API connectivity before running tests
     const isHealthy = await testHelper.healthCheck();
     if (!isHealthy) {
@@ -51,13 +53,14 @@ describeIntegration('Apso SDK Integration Tests', () => {
   describe('User Operations with Real SDK', () => {
     it('should create a user via real API call', async () => {
       const adapter = testHelper.getAdapter();
-      
+
       const { result: user, duration } = await testHelper.measureOperation(
         'create user',
-        () => testHelper.createTestUser({
-          email: 'integration-test-user@example.com',
-          name: 'Integration Test User'
-        })
+        () =>
+          testHelper.createTestUser({
+            email: 'integration-test-user@example.com',
+            name: 'Integration Test User',
+          })
       );
 
       expect(user).toHaveValidEntityStructure();
@@ -107,10 +110,10 @@ describeIntegration('Apso SDK Integration Tests', () => {
         emailVerified: new Date(),
       };
 
-      const { result: updatedUser, duration } = await testHelper.measureOperation(
-        'update user',
-        () => adapter.update('user', { id: createdUser.id }, updateData)
-      );
+      const { result: updatedUser, duration } =
+        await testHelper.measureOperation('update user', () =>
+          adapter.update('user', { id: createdUser.id }, updateData)
+        );
 
       expect(updatedUser).toHaveValidEntityStructure();
       expect(updatedUser.name).toBe('Updated Name');
@@ -163,9 +166,10 @@ describeIntegration('Apso SDK Integration Tests', () => {
 
       const { result: session, duration } = await testHelper.measureOperation(
         'create session',
-        () => testHelper.createTestSession(testUser.id, {
-          sessionToken: 'integration-session-token',
-        })
+        () =>
+          testHelper.createTestSession(testUser.id, {
+            sessionToken: 'integration-session-token',
+          })
       );
 
       expect(session).toHaveValidEntityStructure();
@@ -182,10 +186,10 @@ describeIntegration('Apso SDK Integration Tests', () => {
       });
 
       const adapter = testHelper.getAdapter();
-      const { result: foundSession, duration } = await testHelper.measureOperation(
-        'find session by token',
-        () => adapter.findUnique('session', { sessionToken })
-      );
+      const { result: foundSession, duration } =
+        await testHelper.measureOperation('find session by token', () =>
+          adapter.findUnique('session', { sessionToken })
+        );
 
       expect(foundSession).toHaveValidEntityStructure();
       expect(foundSession.id).toBe(createdSession.id);
@@ -199,10 +203,14 @@ describeIntegration('Apso SDK Integration Tests', () => {
       const session = await testHelper.createTestSession(testUser.id);
       const newExpiration = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
 
-      const { result: updatedSession, duration } = await testHelper.measureOperation(
-        'update session expiration',
-        () => adapter.update('session', { id: session.id }, { expiresAt: newExpiration })
-      );
+      const { result: updatedSession, duration } =
+        await testHelper.measureOperation('update session expiration', () =>
+          adapter.update(
+            'session',
+            { id: session.id },
+            { expiresAt: newExpiration }
+          )
+        );
 
       expect(updatedSession.expiresAt.getTime()).toBe(newExpiration.getTime());
       expect(duration).toCompleteWithin(3000);
@@ -238,11 +246,12 @@ describeIntegration('Apso SDK Integration Tests', () => {
 
       const { result: account, duration } = await testHelper.measureOperation(
         'create account',
-        () => testHelper.createTestAccount(testUser.id, {
-          provider: 'github',
-          type: 'oauth',
-          providerAccountId: 'github-12345',
-        })
+        () =>
+          testHelper.createTestAccount(testUser.id, {
+            provider: 'github',
+            type: 'oauth',
+            providerAccountId: 'github-12345',
+          })
       );
 
       expect(account).toHaveValidEntityStructure();
@@ -262,10 +271,10 @@ describeIntegration('Apso SDK Integration Tests', () => {
         providerAccountId,
       });
 
-      const { result: foundAccount, duration } = await testHelper.measureOperation(
-        'find account by provider',
-        () => adapter.findUnique('account', { provider, providerAccountId })
-      );
+      const { result: foundAccount, duration } =
+        await testHelper.measureOperation('find account by provider', () =>
+          adapter.findUnique('account', { provider, providerAccountId })
+        );
 
       expect(foundAccount).toHaveValidEntityStructure();
       expect(foundAccount.id).toBe(createdAccount.id);
@@ -281,10 +290,11 @@ describeIntegration('Apso SDK Integration Tests', () => {
 
       const { result: token, duration } = await testHelper.measureOperation(
         'create verification token',
-        () => testHelper.createTestVerificationToken({
-          identifier: 'verification-test@example.com',
-          token: 'verification-token-123',
-        })
+        () =>
+          testHelper.createTestVerificationToken({
+            identifier: 'verification-test@example.com',
+            token: 'verification-token-123',
+          })
       );
 
       expect(token.identifier).toBe('verification-test@example.com');
@@ -303,10 +313,13 @@ describeIntegration('Apso SDK Integration Tests', () => {
         token: tokenValue,
       });
 
-      const { result: foundToken, duration } = await testHelper.measureOperation(
-        'find verification token',
-        () => adapter.findUnique('verificationToken', { identifier, token: tokenValue })
-      );
+      const { result: foundToken, duration } =
+        await testHelper.measureOperation('find verification token', () =>
+          adapter.findUnique('verificationToken', {
+            identifier,
+            token: tokenValue,
+          })
+        );
 
       expect(foundToken.identifier).toBe(identifier);
       expect(foundToken.token).toBe(tokenValue);
@@ -334,20 +347,21 @@ describeIntegration('Apso SDK Integration Tests', () => {
 
     it('should handle findMany operations with real API', async () => {
       const adapter = testHelper.getAdapter();
-      
+
       // Create multiple test users
       await testHelper.createMultipleUsers(5);
 
       const { result: users, duration } = await testHelper.measureOperation(
         'find many users',
-        () => adapter.findMany('user', {
-          where: {
-            email: {
-              contains: testHelper.getConfig().testUserPrefix,
+        () =>
+          adapter.findMany('user', {
+            where: {
+              email: {
+                contains: testHelper.getConfig().testUserPrefix,
+              },
             },
-          },
-          take: 10,
-        })
+            take: 10,
+          })
       );
 
       expect(Array.isArray(users)).toBe(true);
@@ -363,31 +377,31 @@ describeIntegration('Apso SDK Integration Tests', () => {
   describe('Data Consistency with Real SDK', () => {
     it('should maintain referential integrity across operations', async () => {
       const adapter = testHelper.getAdapter();
-      
+
       // Create user
       const user = await testHelper.createTestUser();
-      
+
       // Create session linked to user
       const session = await testHelper.createTestSession(user.id);
-      
+
       // Create account linked to user
       const account = await testHelper.createTestAccount(user.id);
 
       // Verify all relationships exist
-      const foundSession = await adapter.findUnique('session', { 
-        sessionToken: session.sessionToken 
+      const foundSession = await adapter.findUnique('session', {
+        sessionToken: session.sessionToken,
       });
       expect(foundSession.userId).toBe(user.id);
 
-      const foundAccount = await adapter.findUnique('account', { 
-        id: account.id 
+      const foundAccount = await adapter.findUnique('account', {
+        id: account.id,
       });
       expect(foundAccount.userId).toBe(user.id);
     });
 
     it('should handle cascade deletion properly', async () => {
       const adapter = testHelper.getAdapter();
-      
+
       // Create user with related data
       const user = await testHelper.createTestUser();
       const session = await testHelper.createTestSession(user.id);
@@ -409,7 +423,7 @@ describeIntegration('Apso SDK Integration Tests', () => {
   describe('Real-World Scenarios', () => {
     it('should handle typical authentication flow', async () => {
       const adapter = testHelper.getAdapter();
-      
+
       // 1. User registration
       const user = await testHelper.createTestUser({
         email: 'auth-flow@example.com',
@@ -423,9 +437,13 @@ describeIntegration('Apso SDK Integration Tests', () => {
       });
 
       // 3. Complete email verification
-      await adapter.update('user', { id: user.id }, {
-        emailVerified: new Date(),
-      });
+      await adapter.update(
+        'user',
+        { id: user.id },
+        {
+          emailVerified: new Date(),
+        }
+      );
 
       // 4. Create session after login
       const session = await testHelper.createTestSession(user.id);
@@ -440,18 +458,20 @@ describeIntegration('Apso SDK Integration Tests', () => {
       const finalUser = await adapter.findUnique('user', { id: user.id });
       expect(finalUser.emailVerified).toBeInstanceOf(Date);
 
-      const userSession = await adapter.findUnique('session', { 
-        sessionToken: session.sessionToken 
+      const userSession = await adapter.findUnique('session', {
+        sessionToken: session.sessionToken,
       });
       expect(userSession.userId).toBe(user.id);
 
-      const userAccount = await adapter.findUnique('account', { id: account.id });
+      const userAccount = await adapter.findUnique('account', {
+        id: account.id,
+      });
       expect(userAccount.userId).toBe(user.id);
     });
 
     it('should handle concurrent operations safely', async () => {
       const adapter = testHelper.getAdapter();
-      
+
       // Create multiple users concurrently
       const concurrentOperations = Array.from({ length: 5 }, (_, i) =>
         testHelper.createTestUser({
