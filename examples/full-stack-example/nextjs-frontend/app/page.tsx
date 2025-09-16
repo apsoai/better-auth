@@ -43,28 +43,32 @@ export default function HomePage() {
             </p>
 
             {/* Logo Showcase */}
-            <div className="flex justify-center items-center gap-8 mb-8">
-              <div className="flex flex-col items-center space-y-2">
-                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-2xl">BA</span>
+            <div className="flex justify-center items-center gap-12 mb-8">
+              <div className="flex flex-col items-center space-y-3">
+                <div className="h-20 w-20 bg-white rounded-2xl flex items-center justify-center shadow-lg border border-gray-100">
+                  <img
+                    src="/logos/better-auth-logo-dark.svg"
+                    alt="Better Auth"
+                    className="h-12 w-auto"
+                  />
                 </div>
-                <span className="text-sm font-medium text-blue-600">Better Auth</span>
+                <span className="text-sm font-medium text-foreground">Better Auth</span>
               </div>
 
               <div className="text-4xl text-muted-foreground font-light">+</div>
 
-              <div className="flex flex-col items-center space-y-2">
-                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-brand-blue flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-2xl">A</span>
+              <div className="flex flex-col items-center space-y-3">
+                <div className="h-20 w-20 bg-primary rounded-2xl flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-3xl">A</span>
                 </div>
-                <span className="text-sm font-medium text-primary">Apso</span>
+                <span className="text-sm font-medium text-foreground">Apso</span>
               </div>
             </div>
 
             {session ? (
               <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <Button asChild size="lg" variant="gradient">
+                  <Button asChild size="lg">
                     <Link href="/dashboard">
                       <Users className="w-4 h-4 mr-2" />
                       Go to Dashboard

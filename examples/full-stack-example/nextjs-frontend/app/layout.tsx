@@ -24,21 +24,23 @@ export default function RootLayout({
             <HeaderContainer>
               <HeaderLogo>
                 <Link href="/" className="flex items-center space-x-3">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-3">
                     {/* Better Auth Logo */}
-                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
-                      <span className="text-white font-bold text-sm">BA</span>
-                    </div>
+                    <img
+                      src="/logos/better-auth-logo-dark.svg"
+                      alt="Better Auth"
+                      className="h-8 w-auto"
+                    />
                     {/* Plus Symbol */}
-                    <span className="text-muted-foreground font-medium">+</span>
-                    {/* Apso Logo */}
-                    <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                      <span className="text-white font-bold text-sm">A</span>
+                    <span className="text-muted-foreground font-medium text-lg">+</span>
+                    {/* Apso Logo - use text for now */}
+                    <div className="flex items-center space-x-2">
+                      <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+                        <span className="text-white font-bold text-sm">A</span>
+                      </div>
+                      <span className="font-bold text-lg text-primary">Apso</span>
                     </div>
                   </div>
-                  <span className="font-bold text-xl">
-                    <span className="text-blue-600">Better Auth</span> <span className="text-muted-foreground">+</span> <span className="text-primary">Apso</span>
-                  </span>
                 </Link>
               </HeaderLogo>
               

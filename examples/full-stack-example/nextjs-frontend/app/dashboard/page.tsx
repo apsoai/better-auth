@@ -60,13 +60,17 @@ export default function DashboardPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-8">
           <div className="space-y-4">
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-xl">BA</span>
+              <div className="flex items-center space-x-4">
+                <div className="h-16 w-16 bg-white rounded-xl flex items-center justify-center shadow-lg border border-gray-100">
+                  <img
+                    src="/logos/better-auth-logo-dark.svg"
+                    alt="Better Auth"
+                    className="h-8 w-auto"
+                  />
                 </div>
-                <span className="text-2xl text-muted-foreground">+</span>
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-brand-blue flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-xl">A</span>
+                <span className="text-3xl text-muted-foreground font-light">+</span>
+                <div className="h-16 w-16 bg-primary rounded-xl flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-2xl">A</span>
                 </div>
               </div>
             </div>
@@ -95,14 +99,18 @@ export default function DashboardPage() {
         {/* Combined Value Proposition */}
         <div className="bg-gradient-to-br from-blue-600/10 via-primary/10 to-purple-500/10 rounded-xl p-8 mb-8">
           <div className="text-center space-y-6">
-            <div className="flex justify-center items-center gap-6">
-              <div className="flex items-center space-x-2">
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-lg">BA</span>
+            <div className="flex justify-center items-center gap-8">
+              <div className="flex items-center space-x-4">
+                <div className="h-14 w-14 bg-white rounded-xl flex items-center justify-center shadow-lg border border-gray-100">
+                  <img
+                    src="/logos/better-auth-logo-dark.svg"
+                    alt="Better Auth"
+                    className="h-7 w-auto"
+                  />
                 </div>
-                <span className="text-xl text-muted-foreground">+</span>
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-brand-blue flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-lg">A</span>
+                <span className="text-2xl text-muted-foreground font-light">+</span>
+                <div className="h-14 w-14 bg-primary rounded-xl flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-xl">A</span>
                 </div>
               </div>
             </div>
