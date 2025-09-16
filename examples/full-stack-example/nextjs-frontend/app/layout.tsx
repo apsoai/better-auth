@@ -44,25 +44,33 @@ export default function RootLayout({
               </HeaderLogo>
               
               <HeaderNav className="hidden md:flex ml-6">
-                <Link 
-                  href="/" 
+                <Link
+                  href="/"
                   className="transition-colors hover:text-primary text-muted-foreground"
                 >
                   Home
                 </Link>
-                <Link 
-                  href="/dashboard" 
+                <Link
+                  href="/dashboard"
                   className="transition-colors hover:text-primary text-muted-foreground"
                 >
                   Dashboard
                 </Link>
-                <a 
-                  href="https://www.better-auth.com/" 
-                  target="_blank" 
+                <a
+                  href="https://www.better-auth.com/docs"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="transition-colors hover:text-blue-600 text-muted-foreground"
+                >
+                  Better Auth Docs
+                </a>
+                <a
+                  href="https://app.apso.cloud/docs"
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="transition-colors hover:text-primary text-muted-foreground"
                 >
-                  Docs
+                  Apso Docs
                 </a>
               </HeaderNav>
               
@@ -101,17 +109,17 @@ export default function RootLayout({
                 <div>
                   <h3 className="font-semibold mb-4">Better Auth</h3>
                   <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li><a href="https://www.better-auth.com/" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Documentation</a></li>
-                    <li><a href="https://github.com/better-auth/better-auth" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">GitHub</a></li>
-                    <li><a href="https://www.better-auth.com/docs/concepts" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Concepts</a></li>
+                    <li><a href="https://www.better-auth.com/docs" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Documentation</a></li>
+                    <li><a href="https://github.com/better-auth/better-auth" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">GitHub</a></li>
+                    <li><a href="https://www.better-auth.com/docs/concepts" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Concepts</a></li>
                   </ul>
                 </div>
-                
+
                 <div>
                   <h3 className="font-semibold mb-4">Apso</h3>
                   <ul className="space-y-2 text-sm text-muted-foreground">
                     <li><a href="https://apso.ai" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Platform</a></li>
-                    <li><a href="https://apso.ai/docs" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Documentation</a></li>
+                    <li><a href="https://app.apso.cloud/docs" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Documentation</a></li>
                     <li><a href="https://apso.ai/examples" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Examples</a></li>
                   </ul>
                 </div>

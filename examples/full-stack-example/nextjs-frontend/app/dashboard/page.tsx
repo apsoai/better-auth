@@ -123,15 +123,15 @@ export default function DashboardPage() {
             </p>
             <div className="flex flex-wrap justify-center gap-4 pt-4">
               <Button asChild size="lg">
-                <a href="https://www.better-auth.com" target="_blank" rel="noopener noreferrer">
+                <a href="https://www.better-auth.com/docs" target="_blank" rel="noopener noreferrer">
                   <Shield className="w-4 h-4 mr-2" />
-                  Better Auth
+                  Better Auth Docs
                 </a>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <a href="https://apso.ai" target="_blank" rel="noopener noreferrer">
+                <a href="https://app.apso.cloud/docs" target="_blank" rel="noopener noreferrer">
                   <Code className="w-4 h-4 mr-2" />
-                  Apso Platform
+                  Apso Docs
                 </a>
               </Button>
             </div>
