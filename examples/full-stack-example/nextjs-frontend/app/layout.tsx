@@ -33,13 +33,12 @@ export default function RootLayout({
                     />
                     {/* Plus Symbol */}
                     <span className="text-muted-foreground font-medium text-lg">+</span>
-                    {/* Apso Logo - use text for now */}
-                    <div className="flex items-center space-x-2">
-                      <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                        <span className="text-white font-bold text-sm">A</span>
-                      </div>
-                      <span className="font-bold text-lg text-primary">Apso</span>
-                    </div>
+                    {/* Apso Logo */}
+                    <img
+                      src="/logos/apso-logo.svg"
+                      alt="Apso"
+                      className="h-8 w-auto"
+                    />
                   </div>
                 </Link>
               </HeaderLogo>
@@ -81,17 +80,18 @@ export default function RootLayout({
             <div className="container mx-auto px-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <div>
-                  <div className="flex items-center space-x-2 mb-4">
-                    <div className="flex items-center space-x-2">
-                      <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
-                        <span className="text-white font-bold text-sm">BA</span>
-                      </div>
-                      <span className="text-muted-foreground">+</span>
-                      <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                        <span className="text-white font-bold text-sm">A</span>
-                      </div>
-                    </div>
-                    <span className="font-bold text-lg">Better Auth + Apso</span>
+                  <div className="flex items-center space-x-3 mb-4">
+                    <img
+                      src="/logos/better-auth-logo-wordmark-dark.svg"
+                      alt="Better Auth"
+                      className="h-6 w-auto"
+                    />
+                    <span className="text-muted-foreground">+</span>
+                    <img
+                      src="/logos/apso-wordmark.svg"
+                      alt="Apso"
+                      className="h-6 w-auto"
+                    />
                   </div>
                   <p className="text-sm text-muted-foreground">
                     Modern authentication platform combining the power of Better Auth with Apso's developer-focused tools.

@@ -49,7 +49,7 @@ export default function HomePage() {
                   <img
                     src="/logos/better-auth-logo-dark.svg"
                     alt="Better Auth"
-                    className="h-12 w-auto"
+                    className="h-10 w-auto"
                   />
                 </div>
                 <span className="text-sm font-medium text-foreground">Better Auth</span>
@@ -58,8 +58,12 @@ export default function HomePage() {
               <div className="text-4xl text-muted-foreground font-light">+</div>
 
               <div className="flex flex-col items-center space-y-3">
-                <div className="h-20 w-20 bg-primary rounded-2xl flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-3xl">A</span>
+                <div className="h-20 w-20 bg-white rounded-2xl flex items-center justify-center shadow-lg border border-gray-100">
+                  <img
+                    src="/logos/apso-logo.svg"
+                    alt="Apso"
+                    className="h-10 w-auto"
+                  />
                 </div>
                 <span className="text-sm font-medium text-foreground">Apso</span>
               </div>

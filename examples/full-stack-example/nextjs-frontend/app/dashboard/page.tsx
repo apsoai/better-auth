@@ -100,18 +100,18 @@ export default function DashboardPage() {
         <div className="bg-gradient-to-br from-blue-600/10 via-primary/10 to-purple-500/10 rounded-xl p-8 mb-8">
           <div className="text-center space-y-6">
             <div className="flex justify-center items-center gap-8">
-              <div className="flex items-center space-x-4">
-                <div className="h-14 w-14 bg-white rounded-xl flex items-center justify-center shadow-lg border border-gray-100">
-                  <img
-                    src="/logos/better-auth-logo-dark.svg"
-                    alt="Better Auth"
-                    className="h-7 w-auto"
-                  />
-                </div>
+              <div className="flex items-center space-x-6">
+                <img
+                  src="/logos/better-auth-logo-wordmark-dark.svg"
+                  alt="Better Auth"
+                  className="h-8 w-auto"
+                />
                 <span className="text-2xl text-muted-foreground font-light">+</span>
-                <div className="h-14 w-14 bg-primary rounded-xl flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-xl">A</span>
-                </div>
+                <img
+                  src="/logos/apso-wordmark.svg"
+                  alt="Apso"
+                  className="h-8 w-auto"
+                />
               </div>
             </div>
             <h2 className="text-3xl font-bold">
