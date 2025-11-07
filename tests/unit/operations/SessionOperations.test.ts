@@ -129,6 +129,12 @@ describe('SessionOperations', () => {
         updated_at: new Date(),
       });
 
+      // Mock GET request for findSessionByToken (called by checkTokenConflict)
+      mockHttpClient.get.mockResolvedValue({
+        data: [],
+        status: 200,
+      });
+
       mockHttpClient.post.mockResolvedValue({
         id: validSessionData.id,
         sessionToken: validSessionData.sessionToken,
@@ -138,10 +144,16 @@ describe('SessionOperations', () => {
         updated_at: new Date(),
       });
 
+      mockResponseNormalizer.normalizeArrayResponse.mockReturnValue([]);
       mockResponseNormalizer.normalizeSingleResponse.mockImplementation(
         (data: any) => data
       );
-      mockEntityMapper.mapSessionFromApi.mockReturnValue(validSessionData);
+      mockEntityMapper.mapSessionFromApi.mockImplementation((data: any) => ({
+        ...validSessionData,
+        sessionToken: data.id || data.sessionToken,
+        userId: data.userId,
+        expiresAt: data.expiresAt,
+      }));
     });
 
     it('should create a session successfully with valid data', async () => {
@@ -167,7 +179,7 @@ describe('SessionOperations', () => {
 
     it('should generate ID if not provided', async () => {
       const sessionData = {
-        sessionToken: 'test-token',
+        sessionToken: 'test-token-123456', // At least 16 chars
         userId: 'user-123',
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       };
@@ -183,7 +195,7 @@ describe('SessionOperations', () => {
       const customId = 'custom-session-id-123';
       const sessionData = {
         id: customId,
-        sessionToken: 'test-token',
+        sessionToken: 'test-token-123456', // At least 16 chars
         userId: 'user-123',
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       };
@@ -218,14 +230,14 @@ describe('SessionOperations', () => {
       it('should throw ValidationError for missing userId', async () => {
         await expect(
           sessionOperations.createSession({
-            sessionToken: 'test-token',
+            sessionToken: 'test-token-123456',
             expiresAt: new Date(),
           } as any)
         ).rejects.toThrow(AdapterError);
 
         await expect(
           sessionOperations.createSession({
-            sessionToken: 'test-token',
+            sessionToken: 'test-token-123456',
             expiresAt: new Date(),
           } as any)
         ).rejects.toThrow(/userId is required/);
@@ -234,14 +246,14 @@ describe('SessionOperations', () => {
       it('should throw ValidationError for missing expiresAt', async () => {
         await expect(
           sessionOperations.createSession({
-            sessionToken: 'test-token',
+            sessionToken: 'test-token-123456',
             userId: 'user-123',
           } as any)
         ).rejects.toThrow(AdapterError);
 
         await expect(
           sessionOperations.createSession({
-            sessionToken: 'test-token',
+            sessionToken: 'test-token-123456',
             userId: 'user-123',
           } as any)
         ).rejects.toThrow(/expiresAt is required/);
@@ -252,7 +264,7 @@ describe('SessionOperations', () => {
 
         await expect(
           sessionOperations.createSession({
-            sessionToken: 'test-token',
+            sessionToken: 'test-token-123456',
             userId: 'user-123',
             expiresAt: pastDate,
           })
@@ -260,7 +272,7 @@ describe('SessionOperations', () => {
 
         await expect(
           sessionOperations.createSession({
-            sessionToken: 'test-token',
+            sessionToken: 'test-token-123456',
             userId: 'user-123',
             expiresAt: pastDate,
           })
@@ -273,7 +285,7 @@ describe('SessionOperations', () => {
         // Add existing session to mock data store
         mockDataStore.createEntity('sessions', {
           id: 'existing-session',
-          sessionToken: 'existing-token',
+          sessionToken: 'existing-token-123',
           userId: 'user-123',
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         });
@@ -281,14 +293,14 @@ describe('SessionOperations', () => {
         // Mock findSessionByToken to return existing session
         jest.spyOn(sessionOperations, 'findSessionByToken').mockResolvedValue({
           id: 'existing-session',
-          sessionToken: 'existing-token',
+          sessionToken: 'existing-token-123',
           userId: 'user-123',
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         });
 
         await expect(
           sessionOperations.createSession({
-            sessionToken: 'existing-token',
+            sessionToken: 'existing-token-123',
             userId: 'user-456',
             expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
           })
@@ -296,7 +308,7 @@ describe('SessionOperations', () => {
 
         await expect(
           sessionOperations.createSession({
-            sessionToken: 'existing-token',
+            sessionToken: 'existing-token-123',
             userId: 'user-456',
             expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
           })
@@ -517,7 +529,7 @@ describe('SessionOperations', () => {
     it('should prevent ID and sessionToken updates', async () => {
       const invalidUpdates = {
         id: 'new-id',
-        sessionToken: 'new-token',
+        sessionToken: 'new-token-123456',
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       };
 
