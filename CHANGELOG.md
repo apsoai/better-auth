@@ -1,5 +1,35 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+## 1.0.0 (2025-11-07)
+
+
+### Features
+
+* Add comprehensive integration tests with real Apso SDK ([858eebe](https://github.com/apsoai/better-auth/commit/858eebe748e40755d7dde2a71875d1eb8b8e10ba))
+* implement ApsoAdapterConfig interface validation and normalization ([fb98960](https://github.com/apsoai/better-auth/commit/fb989601d141fde0789b3089971ee69941107737))
+* implement ApsoAdapterFactory with comprehensive component integration ([13234a2](https://github.com/apsoai/better-auth/commit/13234a21e31bfd706e8c0f5070d0581cda891b7c))
+* implement comprehensive bulk operations with batching and error handling ([ec700e2](https://github.com/apsoai/better-auth/commit/ec700e28d3e9d001eab65f433bae0434e0fc4291))
+* implement comprehensive ResponseNormalizer for Apso SDK response handling ([2d65bf6](https://github.com/apsoai/better-auth/commit/2d65bf65417a0d3583cc136cc320fe5db8fe25f0))
+* implement comprehensive Session CRUD operations with token handling for Better Auth adapter ([e9b6431](https://github.com/apsoai/better-auth/commit/e9b6431a95e1e64c6c244f89840ef932eae46ae1))
+* implement comprehensive unit test suite for adapter operations ([376dbf1](https://github.com/apsoai/better-auth/commit/376dbf18083b6f75d59dc3463db7ac0b4797aba4))
+* implement comprehensive User CRUD operations for Better Auth adapter ([836a1de](https://github.com/apsoai/better-auth/commit/836a1de321a9d9a566d8b8415f282db2e122bf76))
+* implement comprehensive VerificationToken CRUD operations for Better Auth adapter ([4ff1736](https://github.com/apsoai/better-auth/commit/4ff17364c91ace82e8cd2ab39aab25d40d16cdb8))
+* implement EntityMapper for Better Auth and Apso API data transformation ([7da56f1](https://github.com/apsoai/better-auth/commit/7da56f19041a74c65e9a4890bd3dccb92ca184d8))
+* implement Phase 1 - Foundation Setup for Better Auth Apso Adapter ([cd6aba9](https://github.com/apsoai/better-auth/commit/cd6aba992fb6b6c4171cbaafedeabeca26f5eda9))
+* implement QueryTranslator for Better Auth to Apso SDK conversion ([24bb7a0](https://github.com/apsoai/better-auth/commit/24bb7a09df0f766981e7c2c5ac52f76ab68b243f))
+
+
+### Bug Fixes
+
+* complete TypeScript strict mode compliance ([4331423](https://github.com/apsoai/better-auth/commit/43314237c819878af9c506b4752b389a49d0340f))
+* resolve HttpClient TypeScript compilation errors ([b4f83ba](https://github.com/apsoai/better-auth/commit/b4f83ba8315b7eac27d7c9017579f1667da7397d))
+* resolve Jest configuration and TypeScript test errors ([32ddf8a](https://github.com/apsoai/better-auth/commit/32ddf8a1e7d1bdfe807b5e53fbaf9f1ca026d15f))
+* resolve TypeScript strict mode compilation errors ([986144f](https://github.com/apsoai/better-auth/commit/986144fe7ab77f31d4280cf15b1529d303dde65b))
+
+# Changelog
+
 All notable changes to the Better Auth Apso Adapter will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
