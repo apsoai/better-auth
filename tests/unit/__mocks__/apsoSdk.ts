@@ -62,8 +62,8 @@ export interface MockApsoClient {
 // Mock data store for consistent test behavior
 export class MockDataStore {
   private static instance: MockDataStore;
-  private data = new Map<string, Map<string, any>>();
-  private idCounters = new Map<string, number>();
+  private readonly data = new Map<string, Map<string, any>>();
+  private readonly idCounters = new Map<string, number>();
 
   public static getInstance(): MockDataStore {
     if (!MockDataStore.instance) {

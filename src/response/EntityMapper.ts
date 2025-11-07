@@ -127,12 +127,15 @@ export class EntityMapper {
         emailVerified: user.emailVerified,
         // Do NOT include hashedPassword in User table (it belongs in Account table per Better Auth schema)
         ...(user.name !== undefined && user.name !== '' && { name: user.name }),
-        ...(user.image !== undefined && user.image !== '' && { image: user.image }),
+        ...(user.image !== undefined &&
+          user.image !== '' && { image: user.image }),
         // Let backend handle timestamps for new records
-        ...(user.id && user.id !== '' && this.config.includeTimestamps && {
-          created_at: currentTime,
-          updated_at: currentTime
-        }),
+        ...(user.id &&
+          user.id !== '' &&
+          this.config.includeTimestamps && {
+            created_at: currentTime,
+            updated_at: currentTime,
+          }),
       };
 
       // Skip validation for new users (no ID indicates creation)
@@ -253,13 +256,15 @@ export class EntityMapper {
       const betterAuthSession: BetterAuthSession = {
         // Better Auth requires both id AND token fields for proper cookie handling
         id: apiSession.id, // Session token as database primary key
+        sessionToken: apiSession.sessionToken || apiSession.id, // Session token
         token: apiSession.id, // Better Auth uses session.token for cookie value!
         userId: apiSession.userId,
-        expiresAt: apiSession.expiresAt instanceof Date
-          ? apiSession.expiresAt
-          : new Date(apiSession.expiresAt),
-        ipAddress: apiSession.ipAddress || "",
-        userAgent: apiSession.userAgent || "",
+        expiresAt:
+          apiSession.expiresAt instanceof Date
+            ? apiSession.expiresAt
+            : new Date(apiSession.expiresAt),
+        ipAddress: apiSession.ipAddress || '',
+        userAgent: apiSession.userAgent || '',
       };
 
       if (this.config.enableValidation) {
@@ -372,7 +377,9 @@ export class EntityMapper {
    * @returns Transformed Apso API account entity
    * @throws {AdapterError} If validation fails or transformation error occurs
    */
-  mapAccountToApi(account: BetterAuthAccount | BetterAuthAccountWithPassword): ApsoAccount {
+  mapAccountToApi(
+    account: BetterAuthAccount | BetterAuthAccountWithPassword
+  ): ApsoAccount {
     try {
       if (this.config.enableValidation) {
         this.validateBetterAuthAccount(account);
@@ -384,9 +391,15 @@ export class EntityMapper {
         id: account.id,
         userId: account.userId,
         type: account.type || 'credential', // Default to 'credential' for email/password auth
-        provider: account.provider || accountWithPassword.providerId || 'credential', // Handle providerId field
-        providerAccountId: account.providerAccountId || accountWithPassword.accountId || account.userId,
-        ...(accountWithPassword.password && { password: accountWithPassword.password }),
+        provider:
+          account.provider || accountWithPassword.providerId || 'credential', // Handle providerId field
+        providerAccountId:
+          account.providerAccountId ||
+          accountWithPassword.accountId ||
+          account.userId,
+        ...(accountWithPassword.password && {
+          password: accountWithPassword.password,
+        }),
         ...(account.refresh_token !== undefined && {
           refresh_token: account.refresh_token,
         }),
@@ -441,13 +454,17 @@ export class EntityMapper {
       const betterAuthAccount: BetterAuthAccount = {
         id: String(apiAccount.id), // Convert to string for Better Auth
         userId: apiAccount.userId,
+        type: apiAccount.type,
+        provider: apiAccount.provider,
+        providerAccountId:
+          apiAccount.providerAccountId || String(apiAccount.id),
         // Map to Better Auth field names
         accountId: apiAccount.providerAccountId || String(apiAccount.id),
-        providerId: apiAccount.provider,
         // Include password field for credential authentication
-        ...(apiAccount.password !== undefined && apiAccount.password !== null && {
-          password: apiAccount.password,
-        }),
+        ...(apiAccount.password !== undefined &&
+          apiAccount.password !== null && {
+            password: apiAccount.password,
+          }),
         ...(apiAccount.refresh_token !== undefined && {
           refresh_token: apiAccount.refresh_token,
         }),
@@ -1459,8 +1476,8 @@ export class EntityMapper {
     // Convert model name to API endpoint path
     const pluralize = (name: string): string => {
       if (name.endsWith('s')) return name;
-      if (name.endsWith('y')) return name.slice(0, -1) + 'ies';
-      return name + 's';
+      if (name.endsWith('y')) return `${name.slice(0, -1)}ies`;
+      return `${name}s`;
     };
 
     switch (modelName.toLowerCase()) {

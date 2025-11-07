@@ -289,7 +289,7 @@ export class VerificationTokenOperations {
       this.validateTokenFormat(token);
 
       // Build query to find token (for future query parameter implementation)
-      this.queryTranslator.buildFindQuery({ token: token }, { limit: 1 });
+      this.queryTranslator.buildFindQuery({ token }, { limit: 1 });
 
       const url = `${this.config.baseUrl}/${this.apiPath}`;
 
@@ -300,9 +300,8 @@ export class VerificationTokenOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
-        response
-      ) as ApsoVerificationToken[];
+      const normalizedResults =
+        this.responseNormalizer.normalizeArrayResponse(response) as ApsoVerificationToken[];
 
       // Find token by exact match
       const matchingToken = normalizedResults.find(
@@ -426,9 +425,8 @@ export class VerificationTokenOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
-        response
-      ) as ApsoVerificationToken[];
+      const normalizedResults =
+        this.responseNormalizer.normalizeArrayResponse(response) as ApsoVerificationToken[];
 
       // Filter by identifier (case-insensitive for emails)
       let matchingTokens = normalizedResults.filter(
@@ -578,7 +576,7 @@ export class VerificationTokenOperations {
       const result: TokenValidationResult = {
         token: foundToken,
         isValid: !isExpired,
-        isExpired: isExpired,
+        isExpired,
         validationDetails: {
           timeUntilExpiry: Math.max(0, timeUntilExpiry),
           foundButExpired: false,
@@ -596,7 +594,7 @@ export class VerificationTokenOperations {
           valid: !isExpired,
           expired: isExpired,
           identifier: this.sanitizeIdentifierForLogging(foundToken.identifier),
-          timeUntilExpiry: timeUntilExpiry,
+          timeUntilExpiry,
         }
       );
 
@@ -1269,9 +1267,8 @@ export class VerificationTokenOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
-        response
-      ) as ApsoVerificationToken[];
+      const normalizedResults =
+        this.responseNormalizer.normalizeArrayResponse(response) as ApsoVerificationToken[];
       const matchingToken = normalizedResults.find(
         (t: ApsoVerificationToken) => t.token === token
       );
@@ -1338,9 +1335,7 @@ export class VerificationTokenOperations {
       ...(this.config.timeout && { timeout: this.config.timeout }),
     });
 
-    return this.responseNormalizer.normalizeArrayResponse(
-      response
-    ) as ApsoVerificationToken[];
+    return this.responseNormalizer.normalizeArrayResponse(response);
   }
 
   /**

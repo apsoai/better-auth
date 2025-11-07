@@ -227,9 +227,15 @@ export class ApsoAdapterFactory {
     const queryTranslator = new QueryTranslator(config);
     const responseNormalizer = new ResponseNormalizer(config.logger);
     const entityMapper = new EntityMapper({
-      enableValidation: config.enableValidation,
-      enableEmailNormalization: config.enableEmailNormalization,
-      includeTimestamps: config.includeTimestamps,
+      ...(config.enableValidation !== undefined && {
+        enableValidation: config.enableValidation,
+      }),
+      ...(config.enableEmailNormalization !== undefined && {
+        enableEmailNormalization: config.enableEmailNormalization,
+      }),
+      ...(config.includeTimestamps !== undefined && {
+        includeTimestamps: config.includeTimestamps,
+      }),
     });
 
     return {

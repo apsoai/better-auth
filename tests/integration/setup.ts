@@ -56,10 +56,10 @@ export const skipIfNoIntegration = (): void => {
 // Test data cleanup registry
 export class TestDataRegistry {
   private static instance: TestDataRegistry;
-  private createdUsers: Set<string> = new Set();
-  private createdSessions: Set<string> = new Set();
-  private createdAccounts: Set<string> = new Set();
-  private createdVerificationTokens: Set<string> = new Set();
+  private readonly createdUsers: Set<string> = new Set();
+  private readonly createdSessions: Set<string> = new Set();
+  private readonly createdAccounts: Set<string> = new Set();
+  private readonly createdVerificationTokens: Set<string> = new Set();
 
   static getInstance(): TestDataRegistry {
     if (!TestDataRegistry.instance) {
@@ -113,10 +113,10 @@ export class TestDataRegistry {
 
 // Integration test helper class
 export class IntegrationTestHelper {
-  private adapterFactory: ReturnType<typeof apsoAdapter>;
-  private adapter: BetterAuthAdapter;
-  private config: IntegrationTestConfig;
-  private registry: TestDataRegistry;
+  private readonly adapterFactory: ReturnType<typeof apsoAdapter>;
+  private readonly adapter: BetterAuthAdapter;
+  private readonly config: IntegrationTestConfig;
+  private readonly registry: TestDataRegistry;
 
   constructor(config: Partial<IntegrationTestConfig> = {}) {
     this.config = { ...defaultIntegrationConfig, ...config };

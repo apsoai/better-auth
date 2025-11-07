@@ -147,8 +147,8 @@ export class SessionOperations {
         id: sessionData.sessionToken, // Session token IS the ID in Better Auth
         userId: sessionData.userId,
         expiresAt: sessionData.expiresAt,
-        ipAddress: "", // Default value
-        userAgent: "", // Default value
+        ipAddress: '', // Default value
+        userAgent: '', // Default value
       };
 
       // Execute HTTP request
@@ -236,14 +236,13 @@ export class SessionOperations {
           ...(this.config.timeout && { timeout: this.config.timeout }),
         });
 
-        const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
-          response
-        ) as ApsoSession[];
+        const normalizedResults =
+          this.responseNormalizer.normalizeArrayResponse(response) as ApsoSession[];
 
         // Find session by ID (session token is now the ID)
-        matchingSession = normalizedResults.find(
-          session => session.id === sessionToken
-        ) || null;
+        matchingSession =
+          normalizedResults.find(session => session.id === sessionToken) ||
+          null;
 
         // Check if there are more pages
         if (response.pageCount && currentPage < response.pageCount) {
@@ -398,9 +397,8 @@ export class SessionOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
-        response
-      ) as ApsoSession[];
+      const normalizedResults =
+        this.responseNormalizer.normalizeArrayResponse(response) as ApsoSession[];
 
       // Filter sessions by userId
       let userSessions = normalizedResults.filter(
@@ -982,9 +980,8 @@ export class SessionOperations {
       });
 
       // Normalize and transform results
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
-        response
-      ) as ApsoSession[];
+      const normalizedResults =
+        this.responseNormalizer.normalizeArrayResponse(response) as ApsoSession[];
 
       // Apply client-side filtering if needed
       let filteredResults = normalizedResults;
@@ -1299,34 +1296,6 @@ export class SessionOperations {
     if (this.config.logger) {
       this.config.logger.debug('User existence validation skipped', { userId });
     }
-  }
-
-  /**
-   * Generate a unique numeric session ID for database compatibility
-   */
-  private generateNumericSessionId(): number {
-    // Generate a numeric ID that fits within 32-bit integer range (max: 2,147,483,647)
-    // Use a combination of timestamp modulo and random component
-    const timestamp = Date.now();
-    const randomComponent = Math.floor(Math.random() * 10000); // 0-9999
-    const timestampMod = timestamp % 1000000; // Last 6 digits of timestamp
-    
-    // Combine and ensure it's within 32-bit range
-    const id = timestampMod * 10000 + randomComponent;
-    
-    // Ensure it's within 32-bit integer range
-    return Math.min(id, 2147483647);
-  }
-
-  /**
-   * Generate a unique session ID
-   */
-  private generateSessionId(): string {
-    // Simple UUID v4-like generator for demo purposes
-    // In production, you might use a proper UUID library or let the API generate IDs
-    return (
-      'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
-    );
   }
 
   /**

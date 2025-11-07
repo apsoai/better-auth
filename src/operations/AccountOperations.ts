@@ -20,6 +20,7 @@ import {
   ApsoAccount,
   AdapterError,
   AdapterErrorCode,
+  ApiResponseWithStatus,
 } from '../types/index';
 
 /**
@@ -76,7 +77,7 @@ export class AccountOperations {
    */
   async findAccountById(id: string): Promise<BetterAuthAccount | null> {
     const startTime = performance.now();
-    
+
     console.log('🔍 [SIGN-IN DEBUG] findAccountById called with id:', id);
 
     try {
@@ -93,7 +94,9 @@ export class AccountOperations {
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;
       console.log('🔍 [SIGN-IN DEBUG] Making API request to:', url);
 
-      const response = await this.httpClient.get<ApsoAccount>(url, {
+      const response = await this.httpClient.get<
+        ApiResponseWithStatus<ApsoAccount>
+      >(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
@@ -116,10 +119,19 @@ export class AccountOperations {
         );
       }
 
-      const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response);
-      const result = this.entityMapper.transformInbound('account', normalizedResponse);
+      const normalizedResponse =
+        this.responseNormalizer.normalizeSingleResponse(response);
+      const result = this.entityMapper.transformInbound(
+        'account',
+        normalizedResponse
+      );
 
-      console.log('🔍 [SIGN-IN DEBUG] findAccountById result:', result ? { id: result.id, userId: result.userId, type: result.type } : 'null');
+      console.log(
+        '🔍 [SIGN-IN DEBUG] findAccountById result:',
+        result
+          ? { id: result.id, userId: result.userId, type: result.type }
+          : 'null'
+      );
 
       this.logOperation('findAccountById', performance.now() - startTime, true);
       return result;
@@ -151,8 +163,11 @@ export class AccountOperations {
    */
   async findAccountByUserId(userId: string): Promise<BetterAuthAccount | null> {
     const startTime = performance.now();
-    
-    console.log('🔍 [SIGN-IN DEBUG] findAccountByUserId called with userId:', userId);
+
+    console.log(
+      '🔍 [SIGN-IN DEBUG] findAccountByUserId called with userId:',
+      userId
+    );
 
     try {
       if (!userId || typeof userId !== 'string') {
@@ -169,7 +184,9 @@ export class AccountOperations {
       console.log('🔍 [SIGN-IN DEBUG] Making API request to:', url);
 
       // Get all accounts and filter by userId (in a real implementation, we'd use query parameters)
-      const response = await this.httpClient.get<ApsoAccount[]>(url, {
+      const response = await this.httpClient.get<
+        ApiResponseWithStatus<ApsoAccount[]>
+      >(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
@@ -187,16 +204,38 @@ export class AccountOperations {
         );
       }
 
-      const normalizedResponse = this.responseNormalizer.normalizeArrayResponse(response);
-      const accounts = this.entityMapper.transformInbound('account', normalizedResponse) as BetterAuthAccount[];
+      const normalizedResponse =
+        this.responseNormalizer.normalizeArrayResponse(response);
+      const accounts = this.entityMapper.transformInbound(
+        'account',
+        normalizedResponse
+      ) as BetterAuthAccount[];
 
       // Find account with matching userId
-      const matchingAccount = accounts.find(account => account.userId === userId);
+      const matchingAccount = accounts.find(
+        account => account.userId === userId
+      );
 
-      console.log('🔍 [SIGN-IN DEBUG] findAccountByUserId - found accounts:', accounts.map(a => ({ id: a.id, userId: a.userId, type: a.type })));
-      console.log('🔍 [SIGN-IN DEBUG] findAccountByUserId - matching account:', matchingAccount ? { id: matchingAccount.id, userId: matchingAccount.userId, type: matchingAccount.type } : 'null');
+      console.log(
+        '🔍 [SIGN-IN DEBUG] findAccountByUserId - found accounts:',
+        accounts.map(a => ({ id: a.id, userId: a.userId, type: a.type }))
+      );
+      console.log(
+        '🔍 [SIGN-IN DEBUG] findAccountByUserId - matching account:',
+        matchingAccount
+          ? {
+              id: matchingAccount.id,
+              userId: matchingAccount.userId,
+              type: matchingAccount.type,
+            }
+          : 'null'
+      );
 
-      this.logOperation('findAccountByUserId', performance.now() - startTime, true);
+      this.logOperation(
+        'findAccountByUserId',
+        performance.now() - startTime,
+        true
+      );
       return matchingAccount || null;
     } catch (error) {
       this.logOperation(
@@ -216,15 +255,19 @@ export class AccountOperations {
    * @returns Promise resolving to array of accounts
    * @throws {AdapterError} If API errors occur
    */
-  async findManyAccounts(options: {
-    where?: Record<string, any>;
-    pagination?: { limit?: number; offset?: number };
-  } = {}): Promise<BetterAuthAccount[]> {
+  async findManyAccounts(
+    options: {
+      where?: Record<string, any>;
+      pagination?: { limit?: number; offset?: number };
+    } = {}
+  ): Promise<BetterAuthAccount[]> {
     const startTime = performance.now();
 
     try {
       const url = `${this.config.baseUrl}/${this.apiPath}`;
-      const response = await this.httpClient.get<ApsoAccount[]>(url, {
+      const response = await this.httpClient.get<
+        ApiResponseWithStatus<ApsoAccount[]>
+      >(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
@@ -239,12 +282,16 @@ export class AccountOperations {
         );
       }
 
-      const normalizedResponse = this.responseNormalizer.normalizeArrayResponse(response);
-      const accounts = this.entityMapper.transformInbound('account', normalizedResponse) as BetterAuthAccount[];
+      const normalizedResponse =
+        this.responseNormalizer.normalizeArrayResponse(response);
+      const accounts = this.entityMapper.transformInbound(
+        'account',
+        normalizedResponse
+      ) as BetterAuthAccount[];
 
       // Apply filtering and pagination
       let filteredAccounts = accounts;
-      
+
       if (options.where) {
         filteredAccounts = accounts.filter(account => {
           return Object.entries(options.where!).every(([key, value]) => {
@@ -255,10 +302,17 @@ export class AccountOperations {
 
       if (options.pagination?.limit) {
         const offset = options.pagination.offset || 0;
-        filteredAccounts = filteredAccounts.slice(offset, offset + options.pagination.limit);
+        filteredAccounts = filteredAccounts.slice(
+          offset,
+          offset + options.pagination.limit
+        );
       }
 
-      this.logOperation('findManyAccounts', performance.now() - startTime, true);
+      this.logOperation(
+        'findManyAccounts',
+        performance.now() - startTime,
+        true
+      );
       return filteredAccounts;
     } catch (error) {
       this.logOperation(
@@ -293,20 +347,30 @@ export class AccountOperations {
    * });
    * ```
    */
-  async createAccount(accountData: Partial<BetterAuthAccount>): Promise<BetterAuthAccount> {
+  async createAccount(
+    accountData: Partial<BetterAuthAccount>
+  ): Promise<BetterAuthAccount> {
     const startTime = performance.now();
 
     try {
-      console.log('🔍 [SIGN-IN DEBUG] createAccount called with data:', JSON.stringify(accountData, null, 2));
+      console.log(
+        '🔍 [SIGN-IN DEBUG] createAccount called with data:',
+        JSON.stringify(accountData, null, 2)
+      );
 
       // Transform account data to API format
-      const transformedData = this.entityMapper.transformOutbound('account', accountData);
+      const transformedData = this.entityMapper.transformOutbound(
+        'account',
+        accountData
+      );
       const url = `${this.config.baseUrl}/${this.apiPath}`;
 
       console.log('🔍 [SIGN-IN DEBUG] Creating account at:', url);
       console.log('🔍 [SIGN-IN DEBUG] Account data:', transformedData);
 
-      const response = await this.httpClient.post<ApsoAccount>(url, transformedData, {
+      const response = await this.httpClient.post<
+        ApiResponseWithStatus<ApsoAccount>
+      >(url, transformedData, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
@@ -323,8 +387,12 @@ export class AccountOperations {
         );
       }
 
-      const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response);
-      const result = this.entityMapper.transformInbound('account', normalizedResponse);
+      const normalizedResponse =
+        this.responseNormalizer.normalizeSingleResponse(response);
+      const result = this.entityMapper.transformInbound(
+        'account',
+        normalizedResponse
+      );
 
       this.logOperation('createAccount', performance.now() - startTime, true);
       return result;
@@ -351,14 +419,22 @@ export class AccountOperations {
    * @returns Promise resolving to the updated account
    * @throws {AdapterError} If validation fails or API errors occur
    */
-  async updateAccount(id: string, updateData: Partial<BetterAuthAccount>): Promise<BetterAuthAccount> {
+  async updateAccount(
+    id: string,
+    updateData: Partial<BetterAuthAccount>
+  ): Promise<BetterAuthAccount> {
     const startTime = performance.now();
 
     try {
-      const transformedData = this.entityMapper.transformOutbound('account', updateData);
+      const transformedData = this.entityMapper.transformOutbound(
+        'account',
+        updateData
+      );
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;
 
-      const response = await this.httpClient.put<ApsoAccount>(url, transformedData, {
+      const response = await this.httpClient.put<
+        ApiResponseWithStatus<ApsoAccount>
+      >(url, transformedData, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
@@ -373,8 +449,12 @@ export class AccountOperations {
         );
       }
 
-      const normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response);
-      const result = this.entityMapper.transformInbound('account', normalizedResponse);
+      const normalizedResponse =
+        this.responseNormalizer.normalizeSingleResponse(response);
+      const result = this.entityMapper.transformInbound(
+        'account',
+        normalizedResponse
+      );
 
       this.logOperation('updateAccount', performance.now() - startTime, true);
       return result;
@@ -406,7 +486,9 @@ export class AccountOperations {
     try {
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;
 
-      const response = await this.httpClient.delete(url, {
+      const response = await this.httpClient.delete<
+        ApiResponseWithStatus<void>
+      >(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
@@ -443,7 +525,7 @@ export class AccountOperations {
   private buildHeaders(): Record<string, string> {
     return {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      Accept: 'application/json',
     };
   }
 
@@ -457,9 +539,14 @@ export class AccountOperations {
     error?: any
   ): void {
     if (success) {
-      console.log(`✅ [AccountOps] ${operation} completed in ${duration.toFixed(2)}ms`);
+      console.log(
+        `✅ [AccountOps] ${operation} completed in ${duration.toFixed(2)}ms`
+      );
     } else {
-      console.log(`❌ [AccountOps] ${operation} failed in ${duration.toFixed(2)}ms:`, error?.message || error);
+      console.log(
+        `❌ [AccountOps] ${operation} failed in ${duration.toFixed(2)}ms:`,
+        error?.message || error
+      );
     }
   }
 

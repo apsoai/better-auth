@@ -363,7 +363,7 @@ describe('SessionOperations', () => {
       ]);
 
       mockResponseNormalizer.normalizeArrayResponse.mockImplementation(
-        (data: any) => data as any
+        (data: any) => data
       );
       mockEntityMapper.mapSessionFromApi.mockReturnValue(testSession);
     });
@@ -700,7 +700,7 @@ describe('SessionOperations', () => {
         largeBatch as any
       );
       mockEntityMapper.mapSessionFromApi.mockImplementation(
-        (session: any) => session as any
+        (session: any) => session
       );
 
       const { result, duration } = await measureExecutionTime(() =>

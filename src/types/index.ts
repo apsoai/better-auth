@@ -110,7 +110,10 @@ export interface ApsoAdapterConfig {
   // Behavior
   usePlural?: boolean;
   emailNormalization?: boolean;
+  enableEmailNormalization?: boolean; // Alias for emailNormalization
   softDeletes?: boolean;
+  enableValidation?: boolean;
+  includeTimestamps?: boolean;
 
   // Development
   debugMode?: boolean;
@@ -357,6 +360,15 @@ export interface ApiResponse<T> {
   meta?: ResponseMeta;
 }
 
+/**
+ * HTTP Response wrapper that includes status code
+ */
+export interface ApiResponseWithStatus<T> {
+  status: number;
+  data: T;
+  meta?: ResponseMeta;
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   meta: PaginationMeta;
@@ -392,6 +404,7 @@ export enum AdapterErrorCode {
   TIMEOUT = 'TIMEOUT',
   RATE_LIMIT = 'RATE_LIMIT',
   SERVER_ERROR = 'SERVER_ERROR',
+  API_ERROR = 'API_ERROR',
   UNKNOWN = 'UNKNOWN',
 }
 
@@ -661,12 +674,14 @@ export type NonNullable<T> = T extends null | undefined ? never : T;
  * Better Auth User entity format
  */
 export interface BetterAuthUser {
-  id: string;
+  id?: string;
   email: string;
   emailVerified: boolean;
   hashedPassword?: string;
   name?: string;
   image?: string;
+  created_at?: Date;
+  updated_at?: Date;
 }
 
 /**
@@ -674,9 +689,12 @@ export interface BetterAuthUser {
  */
 export interface BetterAuthSession {
   id: string;
+  token?: string; // Alias for sessionToken
   sessionToken: string;
   userId: string;
   expiresAt: Date;
+  ipAddress?: string;
+  userAgent?: string;
 }
 
 /**
@@ -693,6 +711,7 @@ export interface BetterAuthVerificationToken {
  */
 export interface BetterAuthAccount {
   id: string;
+  accountId?: string; // Alias for id
   userId: string;
   type: string;
   provider: string;
@@ -720,14 +739,14 @@ export interface BetterAuthAccountWithPassword extends BetterAuthAccount {
  * Apso API User entity format
  */
 export interface ApsoUser {
-  id: string;
+  id?: string;
   email: string;
   emailVerified: boolean;
   hashedPassword?: string;
   name?: string;
   image?: string;
-  created_at: Date;
-  updated_at: Date;
+  created_at?: Date;
+  updated_at?: Date;
 }
 
 /**
@@ -738,6 +757,8 @@ export interface ApsoSession {
   sessionToken: string;
   userId: string;
   expiresAt: Date;
+  ipAddress?: string;
+  userAgent?: string;
   created_at: Date;
   updated_at: Date;
 }

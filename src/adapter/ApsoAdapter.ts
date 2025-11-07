@@ -182,11 +182,7 @@ export class ApsoAdapter implements IApsoAdapter {
           // Better Auth might pass 'token' instead of 'sessionToken'
           const sessionToken = params.data.sessionToken || params.data.token;
 
-          if (
-            !sessionToken ||
-            !params.data.userId ||
-            !params.data.expiresAt
-          ) {
+          if (!sessionToken || !params.data.userId || !params.data.expiresAt) {
             throw new AdapterError(
               AdapterErrorCode.VALIDATION_ERROR,
               'Session creation requires sessionToken (or token), userId, and expiresAt',
@@ -197,12 +193,13 @@ export class ApsoAdapter implements IApsoAdapter {
           }
 
           const sessionData = {
-            sessionToken: sessionToken,
+            sessionToken,
             userId: params.data.userId,
             expiresAt: new Date(params.data.expiresAt),
           };
 
-          const sessionResult = await this.sessionOperations.createSession(sessionData);
+          const sessionResult =
+            await this.sessionOperations.createSession(sessionData);
           this.updateSuccessMetrics(performance.now() - startTime);
           return sessionResult as T;
 
@@ -240,10 +237,14 @@ export class ApsoAdapter implements IApsoAdapter {
           const accountApiPath = this.entityMapper.getApiPath(params.model);
           const accountUrl = `${this.config.baseUrl}/${accountApiPath}`;
 
-          const accountResponse = await this.httpClient.post<any>(accountUrl, accountTransformedData, {
-            headers: this.buildHeaders(),
-            ...(this.config.timeout && { timeout: this.config.timeout }),
-          });
+          const accountResponse = await this.httpClient.post<any>(
+            accountUrl,
+            accountTransformedData,
+            {
+              headers: this.buildHeaders(),
+              ...(this.config.timeout && { timeout: this.config.timeout }),
+            }
+          );
 
           const accountNormalizedResponse =
             this.responseNormalizer.normalizeSingleResponse(accountResponse);
@@ -420,8 +421,8 @@ export class ApsoAdapter implements IApsoAdapter {
             const tokenResult =
               await this.verificationTokenOperations.createVerificationToken({
                 identifier:
-                  updatedTokenData.identifier || existingToken!.identifier,
-                token: updatedTokenData.token || existingToken!.token,
+                  updatedTokenData.identifier || existingToken.identifier,
+                token: updatedTokenData.token || existingToken.token,
                 expiresAt: updatedTokenData.expiresAt,
               });
             this.updateSuccessMetrics(performance.now() - startTime);
@@ -586,7 +587,8 @@ export class ApsoAdapter implements IApsoAdapter {
         if (sessionWhere.id || sessionWhere.token) {
           const sessionToken = sessionWhere.id || sessionWhere.token;
           // Use session operations to delete by token
-          const deletedSession = await this.sessionOperations.deleteSessionByToken(sessionToken);
+          const deletedSession =
+            await this.sessionOperations.deleteSessionByToken(sessionToken);
           this.updateSuccessMetrics(performance.now() - startTime);
           return deletedSession as T;
         } else {
@@ -765,7 +767,9 @@ export class ApsoAdapter implements IApsoAdapter {
             this.updateSuccessMetrics(performance.now() - startTime);
             return userResult as T;
           } else if (userWhere.email) {
-            const userResult = await this.userOperations.findUserByEmail(userWhere.email);
+            const userResult = await this.userOperations.findUserByEmail(
+              userWhere.email
+            );
             this.updateSuccessMetrics(performance.now() - startTime);
             return userResult as T;
           } else {
@@ -783,16 +787,24 @@ export class ApsoAdapter implements IApsoAdapter {
           const sessionWhere = this.parseWhereClause(params.where);
 
           if (sessionWhere.id) {
-            const sessionResult = await this.sessionOperations.findSessionById(sessionWhere.id);
+            const sessionResult = await this.sessionOperations.findSessionById(
+              sessionWhere.id
+            );
             this.updateSuccessMetrics(performance.now() - startTime);
             return sessionResult as T;
           } else if (sessionWhere.sessionToken) {
-            const sessionResult = await this.sessionOperations.findSessionByToken(sessionWhere.sessionToken);
+            const sessionResult =
+              await this.sessionOperations.findSessionByToken(
+                sessionWhere.sessionToken
+              );
             this.updateSuccessMetrics(performance.now() - startTime);
             return sessionResult as T;
           } else if (sessionWhere.token) {
             // Handle both sessionToken and token field names
-            const sessionResult = await this.sessionOperations.findSessionByToken(sessionWhere.token);
+            const sessionResult =
+              await this.sessionOperations.findSessionByToken(
+                sessionWhere.token
+              );
             this.updateSuccessMetrics(performance.now() - startTime);
             return sessionResult as T;
           } else {
@@ -811,12 +823,17 @@ export class ApsoAdapter implements IApsoAdapter {
 
           if (accountWhere.id) {
             // Find account by ID
-            const accountResult = await this.accountOperations.findAccountById(accountWhere.id);
+            const accountResult = await this.accountOperations.findAccountById(
+              accountWhere.id
+            );
             this.updateSuccessMetrics(performance.now() - startTime);
             return accountResult as T;
           } else if (accountWhere.userId) {
             // Find account by user ID
-            const accountResult = await this.accountOperations.findAccountByUserId(accountWhere.userId);
+            const accountResult =
+              await this.accountOperations.findAccountByUserId(
+                accountWhere.userId
+              );
             this.updateSuccessMetrics(performance.now() - startTime);
             return accountResult as T;
           } else {
@@ -938,7 +955,7 @@ export class ApsoAdapter implements IApsoAdapter {
       // Client-side filtering since we don't have query params yet
       let filteredResults = normalizedResults;
       if (whereClause && Object.keys(whereClause).length > 0) {
-        filteredResults = normalizedResults.filter(item => {
+        filteredResults = normalizedResults.filter((item: any) => {
           for (const [field, value] of Object.entries(whereClause)) {
             if (item[field] !== value) {
               return false;

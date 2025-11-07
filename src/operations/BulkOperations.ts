@@ -203,6 +203,7 @@ export interface BulkOperationsDependencies {
   userOperations: UserOperations;
   sessionOperations: SessionOperations;
   verificationTokenOperations: VerificationTokenOperations;
+  accountOperations?: any; // AccountOperations type (optional)
 }
 
 // =============================================================================

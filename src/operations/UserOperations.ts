@@ -104,10 +104,12 @@ export class UserOperations {
       this.validateCreateUserData(userData);
 
       // Normalize email for consistent storage and lookup
-      let normalizedData = { ...userData };
+      const normalizedData = { ...userData };
       if (normalizedData.email) {
         try {
-          normalizedData.email = EmailNormalizer.normalize(normalizedData.email);
+          normalizedData.email = EmailNormalizer.normalize(
+            normalizedData.email
+          );
         } catch (error) {
           throw new AdapterError(
             AdapterErrorCode.VALIDATION_ERROR,
@@ -161,11 +163,18 @@ export class UserOperations {
       let result: BetterAuthUser;
 
       try {
-        normalizedResponse = this.responseNormalizer.normalizeSingleResponse(response) as ApsoUser;
+        normalizedResponse = this.responseNormalizer.normalizeSingleResponse(
+          response
+        ) as ApsoUser;
       } catch (normalizeError) {
         // If normalization fails but we have a valid response, try to use it directly
-        if (response && typeof response === 'object' && response.id && response.email) {
-          normalizedResponse = response as ApsoUser;
+        if (
+          response &&
+          typeof response === 'object' &&
+          response.id &&
+          response.email
+        ) {
+          normalizedResponse = response;
         } else {
           throw normalizeError;
         }
@@ -175,13 +184,15 @@ export class UserOperations {
         result = this.entityMapper.mapUserFromApi(normalizedResponse);
       } catch (mapError) {
         // If mapping fails but we have valid user data, create a minimal BetterAuth user
-        if (normalizedResponse && normalizedResponse.id && normalizedResponse.email) {
+        if (normalizedResponse?.id && normalizedResponse.email) {
           result = {
             id: String(normalizedResponse.id),
             email: normalizedResponse.email,
             emailVerified: normalizedResponse.emailVerified || false,
             ...(normalizedResponse.name && { name: normalizedResponse.name }),
-            ...(normalizedResponse.image && { image: normalizedResponse.image }),
+            ...(normalizedResponse.image && {
+              image: normalizedResponse.image,
+            }),
           };
         } else {
           throw mapError;
@@ -329,18 +340,15 @@ export class UserOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
-        response
-      ) as ApsoUser[];
+      const normalizedResults =
+        this.responseNormalizer.normalizeArrayResponse(response) as ApsoUser[];
 
       // Find user by email (case-insensitive)
-      const matchingUser = normalizedResults.find(
-        (user: ApsoUser) => {
-          const userEmailLower = user.email.toLowerCase();
-          const normalizedEmailLower = normalizedEmail.toLowerCase();
-          return userEmailLower === normalizedEmailLower;
-        }
-      );
+      const matchingUser = normalizedResults.find((user: ApsoUser) => {
+        const userEmailLower = user.email.toLowerCase();
+        const normalizedEmailLower = normalizedEmail.toLowerCase();
+        return userEmailLower === normalizedEmailLower;
+      });
 
       if (!matchingUser) {
         this.logOperation(
@@ -403,9 +411,8 @@ export class UserOperations {
       });
 
       // Normalize and transform results
-      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
-        response
-      ) as ApsoUser[];
+      const normalizedResults =
+        this.responseNormalizer.normalizeArrayResponse(response) as ApsoUser[];
 
       // Apply client-side filtering if needed (in a real implementation,
       // this would be handled by query parameters)
@@ -484,7 +491,7 @@ export class UserOperations {
       this.validateUpdateUserData(updates);
 
       // Normalize email if provided in updates
-      let normalizedUpdates = { ...updates };
+      const normalizedUpdates = { ...updates };
       if (updates.email) {
         try {
           normalizedUpdates.email = EmailNormalizer.normalize(updates.email);
@@ -517,7 +524,7 @@ export class UserOperations {
       const updatedUser: BetterAuthUser = {
         ...existingUser,
         ...normalizedUpdates,
-        id: existingUser.id, // Ensure ID cannot be changed
+        ...(existingUser.id && { id: existingUser.id }), // Ensure ID cannot be changed
       };
 
       // Transform to API format
@@ -579,6 +586,16 @@ export class UserOperations {
           { email },
           false,
           404
+        );
+      }
+
+      if (!existingUser.id) {
+        throw new AdapterError(
+          AdapterErrorCode.VALIDATION_ERROR,
+          'User ID is missing',
+          { email },
+          false,
+          400
         );
       }
 
@@ -691,6 +708,16 @@ export class UserOperations {
           { email },
           false,
           404
+        );
+      }
+
+      if (!existingUser.id) {
+        throw new AdapterError(
+          AdapterErrorCode.VALIDATION_ERROR,
+          'User ID is missing',
+          { email },
+          false,
+          400
         );
       }
 
@@ -905,20 +932,11 @@ export class UserOperations {
    */
   private generateUUID(): string {
     // Generate a proper UUID v4
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0;
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
       return v.toString(16);
     });
-  }
-
-  /**
-   * Generate a unique user ID
-   */
-  private generateUserId(): string {
-    // Simple UUID v4-like generator for demo purposes
-    // In production, you might use a proper UUID library or let the API generate IDs
-    return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   }
 
   /**
@@ -1059,7 +1077,10 @@ export class UserOperations {
           case 422:
             // Check if this is a duplicate email error
             const errorMessage = error.message || '';
-            if (errorMessage.includes('duplicate key') || errorMessage.includes('unique constraint')) {
+            if (
+              errorMessage.includes('duplicate key') ||
+              errorMessage.includes('unique constraint')
+            ) {
               errorCode = AdapterErrorCode.CONFLICT;
             } else {
               errorCode = AdapterErrorCode.VALIDATION_ERROR;
@@ -1099,7 +1120,10 @@ export class UserOperations {
     // Special handling for duplicate email errors
     if (errorCode === AdapterErrorCode.CONFLICT && operation === 'createUser') {
       const errorText = error instanceof Error ? error.message : String(error);
-      if (errorText.includes('duplicate key') || errorText.includes('unique constraint')) {
+      if (
+        errorText.includes('duplicate key') ||
+        errorText.includes('unique constraint')
+      ) {
         message = 'A user with this email address already exists';
       }
     }

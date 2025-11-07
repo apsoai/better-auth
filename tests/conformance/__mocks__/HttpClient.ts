@@ -18,7 +18,7 @@ import { CircuitState } from '../../../src/types';
 import { MockDataStore } from '../../unit/__mocks__/apsoSdk';
 
 export class MockHttpClient implements IHttpClient {
-  private mockStore: MockDataStore;
+  private readonly mockStore: MockDataStore;
 
   // Properties to match the real HttpClient interface
   public readonly config: HttpClientConfig;

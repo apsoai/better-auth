@@ -203,7 +203,7 @@ describeIntegration('Error Handling Integration Tests', () => {
 
   describe('Retry Mechanism Testing', () => {
     it('should retry failed requests according to configuration', async () => {
-      let attemptCount = 0;
+      const attemptCount = 0;
 
       // Create adapter with retry configuration
       const retryAdapter = apsoAdapter({

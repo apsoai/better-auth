@@ -32,10 +32,10 @@ export class HttpClient implements IHttpClient {
   private successCount = 0;
   private errorCount = 0;
   private totalLatency = 0;
-  private latencyBuckets: number[] = [];
+  private readonly latencyBuckets: number[] = [];
 
   // Mock circuit breaker and connection pool for now
-  private circuitBreaker = {
+  private readonly circuitBreaker = {
     getStats: (): CircuitBreakerStats => ({
       state: CircuitState.CLOSED,
       failures: 0,
@@ -45,7 +45,7 @@ export class HttpClient implements IHttpClient {
     reset: () => {},
   };
 
-  private connectionPool = {
+  private readonly connectionPool = {
     getStats: (): ConnectionPoolStats => ({
       activeConnections: 0,
       idleConnections: 0,
@@ -99,7 +99,10 @@ export class HttpClient implements IHttpClient {
     };
 
     if (config.body) {
-      fetchOptions.body = typeof config.body === 'string' ? config.body : JSON.stringify(config.body);
+      fetchOptions.body =
+        typeof config.body === 'string'
+          ? config.body
+          : JSON.stringify(config.body);
     }
 
     // 4. Execute request with timeout
@@ -138,9 +141,9 @@ export class HttpClient implements IHttpClient {
 
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
-        return await response.json() as T;
+        return (await response.json()) as T;
       } else {
-        return await response.text() as unknown as T;
+        return (await response.text()) as unknown as T;
       }
     } catch (error) {
       clearTimeout(timeoutId);

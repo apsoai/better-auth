@@ -137,7 +137,7 @@ function isProductionEnvironment(): boolean {
  * Cache for validation results to improve performance
  */
 class ValidationCache {
-  private cache = new Map<
+  private readonly cache = new Map<
     string,
     { result: ConfigValidationResult; timestamp: number }
   >();
@@ -525,8 +525,7 @@ export class ConfigValidator {
           warnings.push({
             field: 'baseUrl',
             message,
-            suggestion:
-              suggestion + '. Consider using allowPrivateIPs option if needed.',
+            suggestion: `${suggestion}. Consider using allowPrivateIPs option if needed.`,
           });
         }
       }
