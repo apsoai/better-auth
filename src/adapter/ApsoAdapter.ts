@@ -185,7 +185,7 @@ export class ApsoAdapter implements IApsoAdapter {
           if (!sessionToken || !params.data.userId || !params.data.expiresAt) {
             throw new AdapterError(
               AdapterErrorCode.VALIDATION_ERROR,
-              'Session creation requires sessionToken (or token), userId, and expiresAt',
+              'Session creation requires sessionToken, userId, and expiresAt',
               params.data,
               false,
               400
@@ -584,8 +584,13 @@ export class ApsoAdapter implements IApsoAdapter {
       // Handle session deletion specially (since session ID is now a string token)
       if (params.model.toLowerCase() === 'session') {
         const sessionWhere = this.parseWhereClause(params.where);
-        if (sessionWhere.id || sessionWhere.token) {
-          const sessionToken = sessionWhere.id || sessionWhere.token;
+        if (
+          sessionWhere.id ||
+          sessionWhere.token ||
+          sessionWhere.sessionToken
+        ) {
+          const sessionToken =
+            sessionWhere.id || sessionWhere.token || sessionWhere.sessionToken;
           // Use session operations to delete by token
           const deletedSession =
             await this.sessionOperations.deleteSessionByToken(sessionToken);
@@ -594,7 +599,7 @@ export class ApsoAdapter implements IApsoAdapter {
         } else {
           throw new AdapterError(
             AdapterErrorCode.VALIDATION_ERROR,
-            'Session deletion requires id or token',
+            'Session deletion requires id, token, or sessionToken',
             params.where,
             false,
             400

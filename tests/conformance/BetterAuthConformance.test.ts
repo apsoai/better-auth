@@ -93,10 +93,10 @@ describe('Better Auth Adapter Conformance', () => {
 
     it('should handle optional parameters correctly', async () => {
       // Test methods with minimal parameters
-      const user = await adapter.create({
+      const user = (await adapter.create({
         model: 'user',
         data: { email: 'minimal@example.com', emailVerified: false },
-      });
+      })) as BetterAuthUser;
 
       const found = await adapter.findOne({
         model: 'user',

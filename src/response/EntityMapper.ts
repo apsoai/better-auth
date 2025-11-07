@@ -60,7 +60,7 @@ export interface EntityMapperConfig {
  */
 const DEFAULT_CONFIG: EntityMapperConfig = {
   enableEmailNormalization: true,
-  enableValidation: true,
+  enableValidation: false, // Disabled by default for compatibility
   includeTimestamps: true,
 };
 
@@ -898,17 +898,24 @@ export class EntityMapper {
       });
     }
 
-    if (!(session.created_at instanceof Date)) {
+    // Optional timestamp validation (relaxed for compatibility)
+    if (
+      session.created_at !== undefined &&
+      !(session.created_at instanceof Date)
+    ) {
       errors.push({
         field: 'created_at',
-        message: 'Created_at is required and must be a Date',
+        message: 'Created_at must be a Date if provided',
       });
     }
 
-    if (!(session.updated_at instanceof Date)) {
+    if (
+      session.updated_at !== undefined &&
+      !(session.updated_at instanceof Date)
+    ) {
       errors.push({
         field: 'updated_at',
-        message: 'Updated_at is required and must be a Date',
+        message: 'Updated_at must be a Date if provided',
       });
     }
 

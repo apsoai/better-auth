@@ -683,12 +683,8 @@ export class SessionOperations {
         );
       }
 
-      // For production: Return the found session as "deleted"
-      // Note: The frontend sign-out already clears cookies, which effectively signs out the user
-      // In production, you would implement proper session deletion via backend API updates
-      // or database-level session cleanup processes
-
-      const result = existingSession;
+      // Use deleteSession with the found session's ID to actually delete it
+      const result = await this.deleteSession(existingSession.id);
 
       this.logOperation(
         'deleteSessionByToken',

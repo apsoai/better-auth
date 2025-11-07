@@ -42,7 +42,6 @@ const baseConfig = {
     '<rootDir>/dist/',
     // Temporarily skip failing test suites until API issues are resolved
     '<rootDir>/tests/integration/',
-    '<rootDir>/tests/conformance/',
     '<rootDir>/tests/performance/',
     // Temporarily skip unit tests with mock configuration issues
     '<rootDir>/tests/unit/operations/SessionOperations.test.ts',
