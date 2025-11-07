@@ -237,7 +237,9 @@ export class SessionOperations {
         });
 
         const normalizedResults =
-          this.responseNormalizer.normalizeArrayResponse(response) as ApsoSession[];
+          this.responseNormalizer.normalizeArrayResponse(
+            response
+          ) as ApsoSession[];
 
         // Find session by ID (session token is now the ID)
         matchingSession =
@@ -397,8 +399,9 @@ export class SessionOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      const normalizedResults =
-        this.responseNormalizer.normalizeArrayResponse(response) as ApsoSession[];
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
+        response
+      ) as ApsoSession[];
 
       // Filter sessions by userId
       let userSessions = normalizedResults.filter(
@@ -980,8 +983,9 @@ export class SessionOperations {
       });
 
       // Normalize and transform results
-      const normalizedResults =
-        this.responseNormalizer.normalizeArrayResponse(response) as ApsoSession[];
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
+        response
+      ) as ApsoSession[];
 
       // Apply client-side filtering if needed
       let filteredResults = normalizedResults;

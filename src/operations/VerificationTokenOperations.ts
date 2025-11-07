@@ -300,8 +300,9 @@ export class VerificationTokenOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      const normalizedResults =
-        this.responseNormalizer.normalizeArrayResponse(response) as ApsoVerificationToken[];
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
+        response
+      ) as ApsoVerificationToken[];
 
       // Find token by exact match
       const matchingToken = normalizedResults.find(
@@ -425,8 +426,9 @@ export class VerificationTokenOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      const normalizedResults =
-        this.responseNormalizer.normalizeArrayResponse(response) as ApsoVerificationToken[];
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
+        response
+      ) as ApsoVerificationToken[];
 
       // Filter by identifier (case-insensitive for emails)
       let matchingTokens = normalizedResults.filter(
@@ -1267,8 +1269,9 @@ export class VerificationTokenOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      const normalizedResults =
-        this.responseNormalizer.normalizeArrayResponse(response) as ApsoVerificationToken[];
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
+        response
+      ) as ApsoVerificationToken[];
       const matchingToken = normalizedResults.find(
         (t: ApsoVerificationToken) => t.token === token
       );

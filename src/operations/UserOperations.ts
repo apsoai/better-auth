@@ -340,8 +340,9 @@ export class UserOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      const normalizedResults =
-        this.responseNormalizer.normalizeArrayResponse(response) as ApsoUser[];
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
+        response
+      ) as ApsoUser[];
 
       // Find user by email (case-insensitive)
       const matchingUser = normalizedResults.find((user: ApsoUser) => {
@@ -411,8 +412,9 @@ export class UserOperations {
       });
 
       // Normalize and transform results
-      const normalizedResults =
-        this.responseNormalizer.normalizeArrayResponse(response) as ApsoUser[];
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
+        response
+      ) as ApsoUser[];
 
       // Apply client-side filtering if needed (in a real implementation,
       // this would be handled by query parameters)
