@@ -28,7 +28,7 @@
     "test:integration:with-env": "jest --selectProjects integration",
     "test:unit": "jest --selectProjects unit",
     "test:conformance": "jest --testPathPattern=conformance",
-    "test:performance": "jest --selectProjects performance",
+    "test:performance": "jest --selectProjects performance --passWithNoTests",
     "test:all-integration": "INTEGRATION_TESTS=true jest --selectProjects integration performance",
     "lint": "eslint src tests --ext .ts",
     "lint:fix": "eslint src tests --ext .ts --fix",
