@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0](https://github.com/apsoai/better-auth/compare/v1.0.0...v2.0.0) (2025-11-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* Package renamed from @apso/better-auth-apso-adapter
+to @apso/better-auth-adapter. Users must update their package.json
+to use the new package name.
+
+This change simplifies the package name and removes redundancy.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+### Features
+
+* rename package to @apso/better-auth-adapter ([25802c1](https://github.com/apsoai/better-auth/commit/25802c1a3c90a7a5aba79548b4353f3f879e67af))
+
 ## 1.0.0 (2025-11-07)
 
 

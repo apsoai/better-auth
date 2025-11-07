@@ -1,6 +1,6 @@
 {
   "name": "@apso/better-auth-adapter",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Better Auth database adapter that interfaces with Apso-generated CRUD REST endpoints",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
