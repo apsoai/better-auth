@@ -358,10 +358,19 @@ export class AccountOperations {
         JSON.stringify(accountData, null, 2)
       );
 
+      // Generate a proper UUID for the account ID if not provided
+      const accountId = accountData.id || this.generateUUID();
+
+      // Create account data with UUID
+      const accountDataWithId = {
+        ...accountData,
+        id: accountId,
+      };
+
       // Transform account data to API format
       const transformedData = this.entityMapper.transformOutbound(
         'account',
-        accountData
+        accountDataWithId
       );
       const url = `${this.config.baseUrl}/${this.apiPath}`;
 
@@ -518,6 +527,18 @@ export class AccountOperations {
   // =============================================================================
   // Helper Methods
   // =============================================================================
+
+  /**
+   * Generate a proper UUID v4
+   */
+  private generateUUID(): string {
+    // Generate a proper UUID v4
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
 
   /**
    * Build HTTP headers for API requests

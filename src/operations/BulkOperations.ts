@@ -489,8 +489,10 @@ export class BulkOperations {
    * Get memory usage statistics
    */
   getMemoryStats(): MemoryStats {
-    if (typeof process !== 'undefined' && process.memoryUsage) {
-      const usage = process.memoryUsage();
+    // Use dynamic access to avoid Edge Runtime static analysis errors
+    const globalProcess = (globalThis as any).process;
+    if (typeof globalProcess !== 'undefined' && globalProcess.memoryUsage) {
+      const usage = globalProcess.memoryUsage();
       return {
         used: usage.heapUsed,
         free: usage.heapTotal - usage.heapUsed,

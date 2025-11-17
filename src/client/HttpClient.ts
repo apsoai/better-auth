@@ -141,7 +141,19 @@ export class HttpClient implements IHttpClient {
 
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
-        return (await response.json()) as T;
+        // Get raw text first for debugging
+        const rawText = await response.text();
+        console.log('[HttpClient] Raw response text:', rawText);
+        console.log('[HttpClient] Response length:', rawText.length);
+        console.log('[HttpClient] Char at position 52:', rawText.charAt(52));
+
+        try {
+          return JSON.parse(rawText) as T;
+        } catch (parseError) {
+          console.error('[HttpClient] JSON parse error:', parseError);
+          console.error('[HttpClient] Failed to parse:', rawText);
+          throw new Error(`JSON parse failed: ${parseError instanceof Error ? parseError.message : 'Unknown error'}. Raw response: ${rawText.substring(0, 100)}`);
+        }
       } else {
         return (await response.text()) as unknown as T;
       }

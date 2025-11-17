@@ -228,31 +228,9 @@ export class ApsoAdapter implements IApsoAdapter {
           return tokenResult as T;
 
         case 'account':
-          // Handle account creation - this is where Better Auth stores password hashes
-          // Transform account data to API format and create it
-          const accountTransformedData = this.entityMapper.transformOutbound(
-            params.model,
-            params.data
-          );
-          const accountApiPath = this.entityMapper.getApiPath(params.model);
-          const accountUrl = `${this.config.baseUrl}/${accountApiPath}`;
-
-          const accountResponse = await this.httpClient.post<any>(
-            accountUrl,
-            accountTransformedData,
-            {
-              headers: this.buildHeaders(),
-              ...(this.config.timeout && { timeout: this.config.timeout }),
-            }
-          );
-
-          const accountNormalizedResponse =
-            this.responseNormalizer.normalizeSingleResponse(accountResponse);
-          const accountResult = this.entityMapper.transformInbound(
-            params.model,
-            accountNormalizedResponse
-          );
-
+          // Handle account creation - delegate to AccountOperations for UUID generation
+          const accountResult =
+            await this.accountOperations.createAccount(params.data);
           this.updateSuccessMetrics(performance.now() - startTime);
           return accountResult as T;
 
