@@ -778,7 +778,7 @@ export interface ApsoVerificationToken {
  * Apso API Account entity format (optional)
  */
 export interface ApsoAccount {
-  id: string;
+  id?: string; // Optional - backend can generate
   userId: string;
   type: string;
   provider: string;
@@ -791,8 +791,8 @@ export interface ApsoAccount {
   scope?: string;
   id_token?: string;
   session_state?: string;
-  created_at: Date;
-  updated_at: Date;
+  created_at?: Date; // Optional for creation
+  updated_at?: Date; // Optional for creation
 }
 
 /**

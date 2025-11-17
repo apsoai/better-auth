@@ -388,7 +388,8 @@ export class EntityMapper {
       const currentTime = new Date();
       const accountWithPassword = account as BetterAuthAccountWithPassword;
       const apsoAccount: ApsoAccount = {
-        id: account.id,
+        // Only include ID if it's a meaningful value (not empty string)
+        ...(account.id && account.id !== '' && { id: account.id }),
         userId: account.userId,
         type: account.type || 'credential', // Default to 'credential' for email/password auth
         provider:

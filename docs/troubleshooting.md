@@ -5,6 +5,7 @@ This guide helps you diagnose and resolve common issues with the Better Auth Aps
 ## Table of Contents
 
 - [Quick Diagnostics](#quick-diagnostics)
+- **[Apso Integration Issues](#apso-integration-issues)** ⭐ **Start here for Apso-specific problems**
 - [Connection Issues](#connection-issues)
 - [Authentication Problems](#authentication-problems)
 - [Configuration Errors](#configuration-errors)
@@ -132,6 +133,321 @@ async function runDiagnosticTests() {
 
 await runDiagnosticTests();
 ```
+
+## Apso Integration Issues
+
+### Problem: Entity Name Conflicts with Better Auth
+
+**Symptoms:**
+- Errors like "table 'user' already exists"
+- Conflicts between your business entities and Better Auth authentication entities
+- Better Auth trying to create tables that clash with your Apso schema
+
+**Root Cause:**
+Better Auth reserves certain entity names (`user`, `account`, `session`, `verification`) for authentication. If your Apso schema uses these names for business entities, you'll have conflicts.
+
+**Solution:**
+
+**1. Rename your business entities in `.apsorc` to avoid conflicts:**
+
+```json
+{
+  "schemas": {
+    "public": {
+      "entities": {
+        // BEFORE (conflicts with Better Auth):
+        // "Account": { ... },
+        // "Session": { ... },
+
+        // AFTER (no conflicts):
+        "Organization": {  // Renamed from "Account"
+          "name": "string",
+          "slug": "string!"
+        },
+        "DiscoverySession": {  // Renamed from "Session"
+          "userId": "User",
+          "status": "string"
+        },
+
+        // Better Auth Reserved Entities:
+        // Keep these EXACTLY as Better Auth expects them
+        "User": {  // DO NOT rename - Better Auth requires "User"
+          "email": "string!",
+          "email_verified": "boolean",
+          "name": "string!",
+          "avatar_url": "string?",        // nullable for OAuth
+          "password_hash": "string?",     // nullable for OAuth
+          "oauth_provider": "string?",    // nullable for email/password
+          "oauth_id": "string?"           // nullable for email/password
+        },
+        "account": {  // lowercase - Better Auth convention
+          "userId": "User!",
+          "accountId": "string",
+          "providerId": "string",
+          "accessToken": "string?",
+          "refreshToken": "string?",
+          "accessTokenExpiresAt": "datetime?",
+          "refreshTokenExpiresAt": "datetime?",
+          "scope": "string?",
+          "idToken": "string?",
+          "password": "string?"
+        },
+        "session": {  // lowercase - Better Auth convention
+          "sessionToken": "string!",
+          "userId": "User!",
+          "expiresAt": "datetime!"
+        },
+        "verification": {  // lowercase - Better Auth convention
+          "identifier": "string!",
+          "value": "string!",
+          "expiresAt": "datetime!"
+        }
+      }
+    }
+  }
+}
+```
+
+**2. Regenerate Apso backend after renaming:**
+
+```bash
+cd backend
+npx apso generate
+npm install
+```
+
+**3. Drop and recreate the database:**
+
+```bash
+# Connect to your database
+PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -d lightbulb_dev
+
+# Drop all tables
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+
+# Exit psql
+\q
+
+# Restart backend to recreate tables with TypeORM synchronize
+npm run start:dev
+```
+
+### Problem: "null value in column violates not-null constraint"
+
+**Symptoms:**
+- User signup fails with database constraint errors
+- Errors mentioning `avatar_url`, `password_hash`, `oauth_id`, or `oauth_provider` columns
+
+**Root Cause:**
+Better Auth needs certain User fields to be nullable because:
+- OAuth users don't have `password_hash`
+- Email/password users don't have `oauth_id` or `oauth_provider`
+- Not all users have `avatar_url`
+
+**Solution:**
+
+**1. Update your User entity to make optional fields nullable:**
+
+In `backend/src/autogen/User/User.entity.ts`:
+
+```typescript
+@Entity('user')
+export class User {
+  @Column({ type: 'text', nullable: false })
+  @PrimaryColumn()
+  id: string;
+
+  @Column({ type: 'text', nullable: false, unique: true })
+  email: string;
+
+  @Column({ type: 'boolean', default: false })
+  email_verified!: boolean;
+
+  @Column({ type: 'text', nullable: false })
+  name: string;
+
+  // MAKE THESE NULLABLE:
+  @Column({ type: 'text', nullable: true })  // Changed from false
+  avatar_url: string;
+
+  @Column({ type: 'text', nullable: true })  // Changed from false
+  password_hash: string;
+
+  @Column({
+    type: 'enum',
+    enum: enums.UserOauthProviderEnum,
+    nullable: true,  // Changed from false
+  })
+  oauth_provider: enums.UserOauthProviderEnum;
+
+  @Column({ type: 'text', nullable: true })  // Changed from false
+  oauth_id: string;
+
+  // ... rest of fields
+}
+```
+
+**2. Update the account entity similarly:**
+
+In `backend/src/autogen/account/account.entity.ts`, ensure all optional Better Auth fields are nullable.
+
+**3. Drop and recreate the database** (TypeORM synchronize won't update existing NOT NULL constraints):
+
+```bash
+PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -d lightbulb_dev
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+\q
+
+# Restart backend
+npm run start:dev
+```
+
+### Problem: "null value in column 'id' of relation 'account' violates not-null constraint"
+
+**Symptoms:**
+- Account creation fails during Better Auth sign-up
+- Error specifically mentions the `id` column in the `account` table
+
+**Root Cause:**
+The adapter's `EntityMapper.mapAccountToApi()` method unconditionally includes `id: account.id` even when `id` is undefined. This sends `id: undefined` to the API, which tries to insert NULL into a NOT NULL column.
+
+**Solution:**
+
+This bug has been fixed in the adapter, but if you encounter it:
+
+**1. Update the adapter to latest version:**
+
+```bash
+cd frontend
+npm update @apso/better-auth-adapter
+```
+
+**2. If using a local version, fix the EntityMapper:**
+
+In `apso/packages/better-auth/src/response/EntityMapper.ts`:
+
+```typescript
+// BEFORE (line 391):
+const apsoAccount: ApsoAccount = {
+  id: account.id,  // ❌ Always included, even if undefined
+  userId: account.userId,
+  // ...
+}
+
+// AFTER (lines 390-400):
+const apsoAccount: ApsoAccount = {
+  // ✅ Only include ID if it has a meaningful value
+  ...(account.id && account.id !== '' && { id: account.id }),
+  userId: account.userId,
+  type: account.type || 'credential',
+  provider: account.provider || accountWithPassword.providerId || 'credential',
+  providerAccountId: account.providerAccountId ||
+    accountWithPassword.accountId ||
+    account.userId,
+  // ... rest of fields
+}
+```
+
+**3. Rebuild the adapter if using local version:**
+
+```bash
+cd ~/projects/mavric/apso/packages/better-auth
+npm run build
+```
+
+### Problem: DTOs Rejecting `id` Field
+
+**Symptoms:**
+- API returns 400 errors saying `id` field is not expected
+- Direct API tests work but Better Auth adapter calls fail
+
+**Root Cause:**
+Apso-generated DTOs might not include the `id` field in `Create` DTOs, expecting the backend to auto-generate it.
+
+**Solution:**
+
+**1. Add `id` field to your DTOs:**
+
+In `backend/src/autogen/User/dtos/User.dto.ts`:
+
+```typescript
+export class UserCreate {
+  @ApiProperty()
+  id: string;  // Add this field
+
+  @ApiProperty()
+  email: string;
+
+  // ... rest of fields
+}
+```
+
+In `backend/src/autogen/account/dtos/account.dto.ts`:
+
+```typescript
+export class accountCreate {
+  @ApiProperty()
+  id: string;  // Add this field
+
+  @ApiProperty()
+  userId: string;
+
+  // ... rest of fields
+}
+```
+
+**2. Restart the backend:**
+
+```bash
+npm run start:dev
+```
+
+### Best Practices for Apso + Better Auth Integration
+
+**1. Schema Design Checklist:**
+
+- [ ] Use `Organization` instead of `Account` for your business entities
+- [ ] Use `DiscoverySession`/`UserSession` instead of `Session` for your business entities
+- [ ] Keep `User`, `account`, `session`, `verification` names reserved for Better Auth
+- [ ] Make User optional fields nullable (`avatar_url`, `password_hash`, `oauth_*`)
+- [ ] Include `id` field in all DTOs (UserCreate, accountCreate, etc.)
+
+**2. Database Migration Checklist:**
+
+- [ ] Drop and recreate database after schema changes affecting nullable constraints
+- [ ] Verify TypeORM synchronize picked up all changes
+- [ ] Test both email/password AND OAuth signup flows
+- [ ] Check database directly to confirm constraint changes applied
+
+**3. Testing Checklist:**
+
+After setup, test these scenarios:
+
+```bash
+# Test 1: Email/password signup
+curl -X POST 'http://localhost:3003/api/auth/sign-up/email' \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"test@example.com","password":"Test123!","name":"Test User"}'
+
+# Test 2: Check database
+PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -d lightbulb_dev \
+  -c "SELECT id, email, name FROM \"user\" ORDER BY created_at DESC LIMIT 1;"
+
+# Test 3: Check account was created
+PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -d lightbulb_dev \
+  -c "SELECT id, \"userId\", provider FROM account ORDER BY id DESC LIMIT 1;"
+```
+
+**4. Common Pitfalls:**
+
+- **Don't** manually edit TypeORM-generated entity files - regenerate from `.apsorc`
+- **Don't** assume TypeORM will alter NOT NULL → NULL constraints (it won't in synchronize mode)
+- **Don't** forget to restart backend after DTO changes
+- **Do** drop the database when changing nullable constraints
+- **Do** test both auth methods (email/password AND OAuth)
+- **Do** check the database directly to verify changes
 
 ## Connection Issues
 
