@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## <small>2.0.1 (2025-11-29)</small>
+
+* fix: add missing tslib dependency for TypeScript importHelpers ([c40b53b](https://github.com/apsoai/better-auth/commit/c40b53b))
+* fix: add providerId field mapping for Better Auth credential authentication ([6f5795f](https://github.com/apsoai/better-auth/commit/6f5795f))
+* fix: make account id field conditional in EntityMapper to prevent NULL constraint violations ([a450bcd](https://github.com/apsoai/better-auth/commit/a450bcd))
+* fix: update Node.js version to 22 for semantic-release compatibility ([168840f](https://github.com/apsoai/better-auth/commit/168840f))
+* fixing security and linting issues ([27e585b](https://github.com/apsoai/better-auth/commit/27e585b))
+* refactor: improve account creation with UUID generation and better error handling ([5f75783](https://github.com/apsoai/better-auth/commit/5f75783))
+
 ## [2.0.0](https://github.com/apsoai/better-auth/compare/v1.0.0...v2.0.0) (2025-11-07)
 
 
