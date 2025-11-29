@@ -109,6 +109,14 @@ export class HttpClient implements IHttpClient {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
+    // ULTRA VERBOSE LOGGING
+    console.log('=== [HttpClient] REQUEST START ===');
+    console.log('[HttpClient] URL:', config.url);
+    console.log('[HttpClient] Method:', fetchOptions.method);
+    console.log('[HttpClient] Headers:', JSON.stringify(fetchOptions.headers, null, 2));
+    console.log('[HttpClient] Body:', fetchOptions.body);
+    console.log('=================================');
+
     try {
       const response = await fetch(config.url, {
         ...fetchOptions,
@@ -116,6 +124,11 @@ export class HttpClient implements IHttpClient {
       });
 
       clearTimeout(timeoutId);
+
+      console.log('=== [HttpClient] RESPONSE RECEIVED ===');
+      console.log('[HttpClient] Status:', response.status, response.statusText);
+      console.log('[HttpClient] Headers:', JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2));
+      console.log('======================================');
 
       // 5. Parse and validate response
       if (!response.ok) {
@@ -143,9 +156,9 @@ export class HttpClient implements IHttpClient {
       if (contentType && contentType.includes('application/json')) {
         // Get raw text first for debugging
         const rawText = await response.text();
-        console.log('[HttpClient] Raw response text:', rawText);
-        console.log('[HttpClient] Response length:', rawText.length);
-        console.log('[HttpClient] Char at position 52:', rawText.charAt(52));
+        // Log the character at the problematic position (68)
+        console.log('[HttpClient] Char at position 68:', rawText.charAt(68), 'code:', rawText.charCodeAt(68));
+        console.log('[HttpClient] Chars around pos 68:', rawText.substring(60, 80));
 
         try {
           return JSON.parse(rawText) as T;

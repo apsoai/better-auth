@@ -715,6 +715,9 @@ export interface BetterAuthAccount {
   userId: string;
   type: string;
   provider: string;
+  // CRITICAL: Better Auth runtime code uses providerId (not provider) to find credential accounts
+  // See: user.accounts.find((a) => a.providerId === "credential")
+  providerId?: string;
   providerAccountId: string;
   refresh_token?: string;
   access_token?: string;
@@ -742,7 +745,7 @@ export interface ApsoUser {
   id?: string;
   email: string;
   emailVerified: boolean;
-  hashedPassword?: string;
+  password_hash?: string; // Apso API uses password_hash (underscore), not hashedPassword
   name?: string;
   image?: string;
   created_at?: Date;
@@ -781,8 +784,8 @@ export interface ApsoAccount {
   id?: string; // Optional - backend can generate
   userId: string;
   type: string;
-  provider: string;
-  providerAccountId: string;
+  providerId: string;
+  accountId: string;
   password?: string;
   refresh_token?: string;
   access_token?: string;

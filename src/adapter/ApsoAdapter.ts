@@ -730,15 +730,27 @@ export class ApsoAdapter implements IApsoAdapter {
   async findOne<T>(params: FindOneParams): Promise<T | null> {
     const startTime = performance.now();
 
+    // DEBUG: Log all findOne calls to understand what Better Auth is requesting
+    console.log('🔍 [ADAPTER DEBUG] findOne called:', {
+      model: params.model,
+      where: JSON.stringify(params.where),
+      join: JSON.stringify((params as any).join),  // Check if join is being passed
+    });
+
     try {
       // Track request
       this.updateModelMetrics(params.model);
+
+      // Check if join is requested (Better Auth uses this for includeAccounts)
+      const joinParam = (params as any).join;
+      const includeAccounts = joinParam?.account === true;
 
       // Route to specialized operations for supported models
       switch (params.model.toLowerCase()) {
         case 'user':
           // Parse where clause using the new parser
           const userWhere = this.parseWhereClause(params.where);
+          let userResult: any = null;
 
           if (userWhere.id) {
             // For UUID lookups, use findManyUsers with filtering since direct ID lookup expects numeric
@@ -746,24 +758,36 @@ export class ApsoAdapter implements IApsoAdapter {
               where: { id: userWhere.id },
               pagination: { limit: 1 },
             });
-            const userResult = users.length > 0 ? users[0] : null;
-            this.updateSuccessMetrics(performance.now() - startTime);
-            return userResult as T;
+            userResult = users.length > 0 ? users[0] : null;
           } else if (userWhere.email) {
-            const userResult = await this.userOperations.findUserByEmail(
+            userResult = await this.userOperations.findUserByEmail(
               userWhere.email
             );
-            this.updateSuccessMetrics(performance.now() - startTime);
-            return userResult as T;
           } else {
             // For other user filters, use findManyUsers with limit 1
             const users = await this.userOperations.findManyUsers({
               where: params.where,
               pagination: { limit: 1 },
             });
-            this.updateSuccessMetrics(performance.now() - startTime);
-            return users.length > 0 ? (users[0] as T) : null;
+            userResult = users.length > 0 ? users[0] : null;
           }
+
+          // If includeAccounts is requested and we found a user, fetch their accounts
+          if (userResult && includeAccounts) {
+            console.log('🔍 [ADAPTER DEBUG] Fetching accounts for user:', userResult.id);
+            const accounts = await this.accountOperations.findManyAccounts({
+              where: { userId: userResult.id },
+            });
+            console.log('🔍 [ADAPTER DEBUG] Found accounts:', accounts.length, accounts.map((a: any) => ({ id: a.id, providerId: a.providerId, password: a.password ? 'present' : 'missing' })));
+            // Add accounts to the user object (Better Auth expects 'account' key)
+            userResult = {
+              ...userResult,
+              account: accounts,
+            };
+          }
+
+          this.updateSuccessMetrics(performance.now() - startTime);
+          return userResult as T;
 
         case 'session':
           // Parse where clause using the new parser

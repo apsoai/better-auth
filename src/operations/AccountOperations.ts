@@ -180,7 +180,8 @@ export class AccountOperations {
         );
       }
 
-      const url = `${this.config.baseUrl}/${this.apiPath}`;
+      // Use limit=10000 to fetch all accounts (pagination workaround)
+      const url = `${this.config.baseUrl}/${this.apiPath}?limit=10000`;
       console.log('🔍 [SIGN-IN DEBUG] Making API request to:', url);
 
       // Get all accounts and filter by userId (in a real implementation, we'd use query parameters)
@@ -264,30 +265,39 @@ export class AccountOperations {
     const startTime = performance.now();
 
     try {
-      const url = `${this.config.baseUrl}/${this.apiPath}`;
-      const response = await this.httpClient.get<
-        ApiResponseWithStatus<ApsoAccount[]>
-      >(url, {
+      // Use limit=10000 to fetch all accounts (pagination workaround)
+      const url = `${this.config.baseUrl}/${this.apiPath}?limit=10000`;
+      console.log('🔍 [SIGN-IN DEBUG] findManyAccounts request to:', url);
+
+      const response = await this.httpClient.get<{ data: ApsoAccount[] }>(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      if (response.status !== 200) {
-        throw new AdapterError(
-          AdapterErrorCode.API_ERROR,
-          `Account lookup failed with status ${response.status}`,
-          { options, status: response.status },
-          true,
-          response.status
-        );
-      }
+      console.log('🔍 [SIGN-IN DEBUG] findManyAccounts response:',
+        response && (response as any).data ? `Object with data array of ${(response as any).data.length} items` : typeof response);
 
+      // HttpClient returns the full API response {data: [...], meta: {...}}
+      // The normalizer expects this structure
       const normalizedResponse =
         this.responseNormalizer.normalizeArrayResponse(response);
-      const accounts = this.entityMapper.transformInbound(
-        'account',
-        normalizedResponse
-      ) as BetterAuthAccount[];
+
+      console.log('🔍 [SIGN-IN DEBUG] normalizedResponse type:', Array.isArray(normalizedResponse) ? 'array' : typeof normalizedResponse);
+      console.log('🔍 [SIGN-IN DEBUG] normalizedResponse length:', Array.isArray(normalizedResponse) ? normalizedResponse.length : 'N/A');
+
+      // transformInbound expects an array for bulk transforms
+      let accounts: BetterAuthAccount[];
+      if (Array.isArray(normalizedResponse)) {
+        accounts = normalizedResponse.map(item =>
+          this.entityMapper.transformInbound('account', item)
+        );
+      } else {
+        // Single item transform
+        accounts = [this.entityMapper.transformInbound('account', normalizedResponse)];
+      }
+
+      console.log('🔍 [SIGN-IN DEBUG] accounts type:', Array.isArray(accounts) ? 'array' : typeof accounts);
+      console.log('🔍 [SIGN-IN DEBUG] accounts length:', Array.isArray(accounts) ? accounts.length : 'N/A');
 
       // Apply filtering and pagination
       let filteredAccounts = accounts;
@@ -386,16 +396,7 @@ export class AccountOperations {
 
       console.log('🔍 [SIGN-IN DEBUG] Account creation response:', response);
 
-      if (response.status !== 201 && response.status !== 200) {
-        throw new AdapterError(
-          AdapterErrorCode.API_ERROR,
-          `Account creation failed with status ${response.status}`,
-          { accountData, status: response.status },
-          true,
-          response.status
-        );
-      }
-
+      // HttpClient already handles error responses internally, no need to check status
       const normalizedResponse =
         this.responseNormalizer.normalizeSingleResponse(response);
       const result = this.entityMapper.transformInbound(

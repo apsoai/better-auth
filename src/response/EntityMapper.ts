@@ -125,7 +125,8 @@ export class EntityMapper {
         ...(user.id && user.id !== '' && { id: user.id }),
         email: normalizedEmail,
         emailVerified: user.emailVerified,
-        // Do NOT include hashedPassword in User table (it belongs in Account table per Better Auth schema)
+        // Include hashedPassword in User table (mapped to password_hash in API)
+        ...(user.hashedPassword && { password_hash: user.hashedPassword }),
         ...(user.name !== undefined && user.name !== '' && { name: user.name }),
         ...(user.image !== undefined &&
           user.image !== '' && { image: user.image }),
@@ -173,7 +174,8 @@ export class EntityMapper {
         id: String(apiUser.id), // Convert numeric ID to string for Better Auth
         email: apiUser.email,
         emailVerified: apiUser.emailVerified,
-        // Password hash belongs in Account table per Better Auth schema, not User table
+        // Map password_hash from API back to hashedPassword for Better Auth
+        ...(apiUser.password_hash !== undefined && { hashedPassword: apiUser.password_hash }),
         ...(apiUser.name !== undefined && { name: apiUser.name }),
         ...(apiUser.image !== undefined && { image: apiUser.image }),
       };
@@ -387,14 +389,23 @@ export class EntityMapper {
 
       const currentTime = new Date();
       const accountWithPassword = account as BetterAuthAccountWithPassword;
+
+      // DEBUG: Log what Better Auth is sending us
+      console.log('[EntityMapper] mapAccountToApi - Received from Better Auth:');
+      console.log('[EntityMapper]   account.provider:', account.provider);
+      console.log('[EntityMapper]   account.providerAccountId:', account.providerAccountId);
+      console.log('[EntityMapper]   account.userId:', account.userId);
+      console.log('[EntityMapper]   account.type:', account.type);
+      console.log('[EntityMapper]   Full account object:', JSON.stringify(account, null, 2));
+
       const apsoAccount: ApsoAccount = {
         // Only include ID if it's a meaningful value (not empty string)
         ...(account.id && account.id !== '' && { id: account.id }),
         userId: account.userId,
         type: account.type || 'credential', // Default to 'credential' for email/password auth
-        provider:
+        providerId:
           account.provider || accountWithPassword.providerId || 'credential', // Handle providerId field
-        providerAccountId:
+        accountId:
           account.providerAccountId ||
           accountWithPassword.accountId ||
           account.userId,
@@ -456,11 +467,14 @@ export class EntityMapper {
         id: String(apiAccount.id), // Convert to string for Better Auth
         userId: apiAccount.userId,
         type: apiAccount.type,
-        provider: apiAccount.provider,
+        provider: apiAccount.providerId,
+        // CRITICAL: Better Auth runtime uses providerId (not provider) to find credential accounts!
+        // See: user.accounts.find((a) => a.providerId === "credential")
+        providerId: apiAccount.providerId,
         providerAccountId:
-          apiAccount.providerAccountId || String(apiAccount.id),
+          apiAccount.accountId || String(apiAccount.id),
         // Map to Better Auth field names
-        accountId: apiAccount.providerAccountId || String(apiAccount.id),
+        accountId: apiAccount.accountId || String(apiAccount.id),
         // Include password field for credential authentication
         ...(apiAccount.password !== undefined &&
           apiAccount.password !== null && {
@@ -784,12 +798,12 @@ export class EntityMapper {
     }
 
     if (
-      user.hashedPassword !== undefined &&
-      typeof user.hashedPassword !== 'string'
+      user.password_hash !== undefined &&
+      typeof user.password_hash !== 'string'
     ) {
       errors.push({
-        field: 'hashedPassword',
-        message: 'HashedPassword must be a string if provided',
+        field: 'password_hash',
+        message: 'password_hash must be a string if provided',
       });
     }
 
@@ -1174,20 +1188,20 @@ export class EntityMapper {
       });
     }
 
-    if (!account.provider || typeof account.provider !== 'string') {
+    if (!account.providerId || typeof account.providerId !== 'string') {
       errors.push({
-        field: 'provider',
-        message: 'Provider is required and must be a string',
+        field: 'providerId',
+        message: 'ProviderId is required and must be a string',
       });
     }
 
     if (
-      !account.providerAccountId ||
-      typeof account.providerAccountId !== 'string'
+      !account.accountId ||
+      typeof account.accountId !== 'string'
     ) {
       errors.push({
-        field: 'providerAccountId',
-        message: 'ProviderAccountId is required and must be a string',
+        field: 'accountId',
+        message: 'AccountId is required and must be a string',
       });
     }
 

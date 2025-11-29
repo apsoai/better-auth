@@ -331,10 +331,12 @@ export class UserOperations {
         { limit: 1 }
       );
 
-      const url = `${this.config.baseUrl}/${this.apiPath}`;
+      // Use limit=10000 to fetch all users (pagination workaround)
+      // In a production system, you'd use server-side filtering via query params
+      const url = `${this.config.baseUrl}/${this.apiPath}?limit=10000`;
 
       // For now, we'll get all users and filter (in a real implementation,
-      // we'd use query parameters)
+      // we'd use query parameters for server-side filtering)
       const response = await this.httpClient.get<ApsoUser[]>(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),

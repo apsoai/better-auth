@@ -145,6 +145,7 @@ export class SessionOperations {
       // Create API data with session token as ID (per Better Auth schema)
       const apiData = {
         id: sessionData.sessionToken, // Session token IS the ID in Better Auth
+        token: sessionData.sessionToken, // Apso schema has separate token field
         userId: sessionData.userId,
         expiresAt: sessionData.expiresAt,
         ipAddress: '', // Default value

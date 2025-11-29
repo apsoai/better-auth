@@ -548,6 +548,103 @@ const adapter = apsoAdapter({
 
 ## Authentication Problems
 
+### Problem: Login fails with "Invalid email or password" after successful signup
+
+**Symptoms:**
+- User signup succeeds and returns a token
+- Login immediately after fails with `INVALID_EMAIL_OR_PASSWORD`
+- Error log shows: `Credential account not found`
+
+**Root Cause:**
+This is a **critical architecture issue** with how Better Auth handles credential (email/password) authentication:
+
+1. **Passwords are stored in the `account` table**, NOT the `user` table
+2. Better Auth calls `findUserByEmail(email, { includeAccounts: true })` during sign-in
+3. The adapter must return the user WITH their accounts attached
+4. Better Auth then searches for a credential account using: `user.accounts.find((a) => a.providerId === "credential")`
+
+If the adapter doesn't:
+- Handle the `includeAccounts` parameter
+- Include the `providerId` field in account objects
+- Use proper pagination when fetching accounts
+
+...then login will fail even though signup succeeded.
+
+**Solution:**
+
+**1. Ensure the adapter handles the `join` parameter for includeAccounts:**
+
+The adapter's `findOne` method must check for `join: { account: true }` and fetch accounts:
+
+```typescript
+// In ApsoAdapter.findOne():
+const joinParam = (params as any).join;
+const includeAccounts = joinParam?.account === true;
+
+if (userResult && includeAccounts) {
+  const accounts = await this.accountOperations.findManyAccounts({
+    where: { userId: userResult.id },
+  });
+  userResult = {
+    ...userResult,
+    account: accounts,  // Better Auth expects 'account' key
+  };
+}
+```
+
+**2. Ensure `providerId` field is included in account mapping:**
+
+Better Auth's runtime code uses `providerId` (NOT `provider`) to find credential accounts:
+
+```typescript
+// In EntityMapper.mapAccountFromApi():
+const betterAuthAccount: BetterAuthAccount = {
+  id: String(apiAccount.id),
+  userId: apiAccount.userId,
+  type: apiAccount.type,
+  provider: apiAccount.providerId,
+  // CRITICAL: Better Auth runtime uses providerId, not provider!
+  providerId: apiAccount.providerId,  // Must include this!
+  // ...
+};
+```
+
+**3. Ensure proper pagination when fetching accounts:**
+
+The API may paginate results. Use `?limit=10000` or similar to fetch all accounts:
+
+```typescript
+const url = `${this.config.baseUrl}/accounts?limit=10000`;
+```
+
+**Debugging Steps:**
+
+```typescript
+// Add debug logging to see what's happening:
+console.log('🔍 [DEBUG] findOne called:', {
+  model: params.model,
+  where: JSON.stringify(params.where),
+  join: JSON.stringify((params as any).join),
+});
+
+// When fetching accounts:
+console.log('🔍 [DEBUG] Found accounts:', accounts.length,
+  accounts.map(a => ({
+    id: a.id,
+    providerId: a.providerId,  // Should be "credential"
+    password: a.password ? 'present' : 'missing'
+  }))
+);
+```
+
+**Key Points:**
+- The `providerId` field MUST be `"credential"` for email/password accounts
+- The `password` field in the account must contain the hashed password
+- Better Auth expects `user.account` (singular) to be an array of accounts
+- This is NOT a bug in Better Auth - it's the expected architecture
+
+---
+
 ### Problem: "Unauthorized" (401) errors
 
 **Symptoms:**
