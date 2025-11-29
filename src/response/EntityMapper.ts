@@ -175,7 +175,9 @@ export class EntityMapper {
         email: apiUser.email,
         emailVerified: apiUser.emailVerified,
         // Map password_hash from API back to hashedPassword for Better Auth
-        ...(apiUser.password_hash !== undefined && { hashedPassword: apiUser.password_hash }),
+        ...(apiUser.password_hash !== undefined && {
+          hashedPassword: apiUser.password_hash,
+        }),
         ...(apiUser.name !== undefined && { name: apiUser.name }),
         ...(apiUser.image !== undefined && { image: apiUser.image }),
       };
@@ -391,12 +393,20 @@ export class EntityMapper {
       const accountWithPassword = account as BetterAuthAccountWithPassword;
 
       // DEBUG: Log what Better Auth is sending us
-      console.log('[EntityMapper] mapAccountToApi - Received from Better Auth:');
+      console.log(
+        '[EntityMapper] mapAccountToApi - Received from Better Auth:'
+      );
       console.log('[EntityMapper]   account.provider:', account.provider);
-      console.log('[EntityMapper]   account.providerAccountId:', account.providerAccountId);
+      console.log(
+        '[EntityMapper]   account.providerAccountId:',
+        account.providerAccountId
+      );
       console.log('[EntityMapper]   account.userId:', account.userId);
       console.log('[EntityMapper]   account.type:', account.type);
-      console.log('[EntityMapper]   Full account object:', JSON.stringify(account, null, 2));
+      console.log(
+        '[EntityMapper]   Full account object:',
+        JSON.stringify(account, null, 2)
+      );
 
       const apsoAccount: ApsoAccount = {
         // Only include ID if it's a meaningful value (not empty string)
@@ -471,8 +481,7 @@ export class EntityMapper {
         // CRITICAL: Better Auth runtime uses providerId (not provider) to find credential accounts!
         // See: user.accounts.find((a) => a.providerId === "credential")
         providerId: apiAccount.providerId,
-        providerAccountId:
-          apiAccount.accountId || String(apiAccount.id),
+        providerAccountId: apiAccount.accountId || String(apiAccount.id),
         // Map to Better Auth field names
         accountId: apiAccount.accountId || String(apiAccount.id),
         // Include password field for credential authentication
@@ -1195,10 +1204,7 @@ export class EntityMapper {
       });
     }
 
-    if (
-      !account.accountId ||
-      typeof account.accountId !== 'string'
-    ) {
+    if (!account.accountId || typeof account.accountId !== 'string') {
       errors.push({
         field: 'accountId',
         message: 'AccountId is required and must be a string',

@@ -229,8 +229,9 @@ export class ApsoAdapter implements IApsoAdapter {
 
         case 'account':
           // Handle account creation - delegate to AccountOperations for UUID generation
-          const accountResult =
-            await this.accountOperations.createAccount(params.data);
+          const accountResult = await this.accountOperations.createAccount(
+            params.data
+          );
           this.updateSuccessMetrics(performance.now() - startTime);
           return accountResult as T;
 
@@ -734,7 +735,7 @@ export class ApsoAdapter implements IApsoAdapter {
     console.log('🔍 [ADAPTER DEBUG] findOne called:', {
       model: params.model,
       where: JSON.stringify(params.where),
-      join: JSON.stringify((params as any).join),  // Check if join is being passed
+      join: JSON.stringify((params as any).join), // Check if join is being passed
     });
 
     try {
@@ -774,11 +775,22 @@ export class ApsoAdapter implements IApsoAdapter {
 
           // If includeAccounts is requested and we found a user, fetch their accounts
           if (userResult && includeAccounts) {
-            console.log('🔍 [ADAPTER DEBUG] Fetching accounts for user:', userResult.id);
+            console.log(
+              '🔍 [ADAPTER DEBUG] Fetching accounts for user:',
+              userResult.id
+            );
             const accounts = await this.accountOperations.findManyAccounts({
               where: { userId: userResult.id },
             });
-            console.log('🔍 [ADAPTER DEBUG] Found accounts:', accounts.length, accounts.map((a: any) => ({ id: a.id, providerId: a.providerId, password: a.password ? 'present' : 'missing' })));
+            console.log(
+              '🔍 [ADAPTER DEBUG] Found accounts:',
+              accounts.length,
+              accounts.map((a: any) => ({
+                id: a.id,
+                providerId: a.providerId,
+                password: a.password ? 'present' : 'missing',
+              }))
+            );
             // Add accounts to the user object (Better Auth expects 'account' key)
             userResult = {
               ...userResult,

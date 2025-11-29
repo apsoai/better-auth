@@ -274,16 +274,26 @@ export class AccountOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      console.log('🔍 [SIGN-IN DEBUG] findManyAccounts response:',
-        response && (response as any).data ? `Object with data array of ${(response as any).data.length} items` : typeof response);
+      console.log(
+        '🔍 [SIGN-IN DEBUG] findManyAccounts response:',
+        response && (response as any).data
+          ? `Object with data array of ${(response as any).data.length} items`
+          : typeof response
+      );
 
       // HttpClient returns the full API response {data: [...], meta: {...}}
       // The normalizer expects this structure
       const normalizedResponse =
         this.responseNormalizer.normalizeArrayResponse(response);
 
-      console.log('🔍 [SIGN-IN DEBUG] normalizedResponse type:', Array.isArray(normalizedResponse) ? 'array' : typeof normalizedResponse);
-      console.log('🔍 [SIGN-IN DEBUG] normalizedResponse length:', Array.isArray(normalizedResponse) ? normalizedResponse.length : 'N/A');
+      console.log(
+        '🔍 [SIGN-IN DEBUG] normalizedResponse type:',
+        Array.isArray(normalizedResponse) ? 'array' : typeof normalizedResponse
+      );
+      console.log(
+        '🔍 [SIGN-IN DEBUG] normalizedResponse length:',
+        Array.isArray(normalizedResponse) ? normalizedResponse.length : 'N/A'
+      );
 
       // transformInbound expects an array for bulk transforms
       let accounts: BetterAuthAccount[];
@@ -293,11 +303,19 @@ export class AccountOperations {
         );
       } else {
         // Single item transform
-        accounts = [this.entityMapper.transformInbound('account', normalizedResponse)];
+        accounts = [
+          this.entityMapper.transformInbound('account', normalizedResponse),
+        ];
       }
 
-      console.log('🔍 [SIGN-IN DEBUG] accounts type:', Array.isArray(accounts) ? 'array' : typeof accounts);
-      console.log('🔍 [SIGN-IN DEBUG] accounts length:', Array.isArray(accounts) ? accounts.length : 'N/A');
+      console.log(
+        '🔍 [SIGN-IN DEBUG] accounts type:',
+        Array.isArray(accounts) ? 'array' : typeof accounts
+      );
+      console.log(
+        '🔍 [SIGN-IN DEBUG] accounts length:',
+        Array.isArray(accounts) ? accounts.length : 'N/A'
+      );
 
       // Apply filtering and pagination
       let filteredAccounts = accounts;

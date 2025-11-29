@@ -113,7 +113,10 @@ export class HttpClient implements IHttpClient {
     console.log('=== [HttpClient] REQUEST START ===');
     console.log('[HttpClient] URL:', config.url);
     console.log('[HttpClient] Method:', fetchOptions.method);
-    console.log('[HttpClient] Headers:', JSON.stringify(fetchOptions.headers, null, 2));
+    console.log(
+      '[HttpClient] Headers:',
+      JSON.stringify(fetchOptions.headers, null, 2)
+    );
     console.log('[HttpClient] Body:', fetchOptions.body);
     console.log('=================================');
 
@@ -127,7 +130,10 @@ export class HttpClient implements IHttpClient {
 
       console.log('=== [HttpClient] RESPONSE RECEIVED ===');
       console.log('[HttpClient] Status:', response.status, response.statusText);
-      console.log('[HttpClient] Headers:', JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2));
+      console.log(
+        '[HttpClient] Headers:',
+        JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)
+      );
       console.log('======================================');
 
       // 5. Parse and validate response
@@ -157,15 +163,25 @@ export class HttpClient implements IHttpClient {
         // Get raw text first for debugging
         const rawText = await response.text();
         // Log the character at the problematic position (68)
-        console.log('[HttpClient] Char at position 68:', rawText.charAt(68), 'code:', rawText.charCodeAt(68));
-        console.log('[HttpClient] Chars around pos 68:', rawText.substring(60, 80));
+        console.log(
+          '[HttpClient] Char at position 68:',
+          rawText.charAt(68),
+          'code:',
+          rawText.charCodeAt(68)
+        );
+        console.log(
+          '[HttpClient] Chars around pos 68:',
+          rawText.substring(60, 80)
+        );
 
         try {
           return JSON.parse(rawText) as T;
         } catch (parseError) {
           console.error('[HttpClient] JSON parse error:', parseError);
           console.error('[HttpClient] Failed to parse:', rawText);
-          throw new Error(`JSON parse failed: ${parseError instanceof Error ? parseError.message : 'Unknown error'}. Raw response: ${rawText.substring(0, 100)}`);
+          throw new Error(
+            `JSON parse failed: ${parseError instanceof Error ? parseError.message : 'Unknown error'}. Raw response: ${rawText.substring(0, 100)}`
+          );
         }
       } else {
         return (await response.text()) as unknown as T;
