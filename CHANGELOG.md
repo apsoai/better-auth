@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## <small>2.0.2 (2025-11-29)</small>
+
+* fix: correct package name from @apso/better-auth-apso-adapter to @apso/better-auth-adapter ([0f58aa6](https://github.com/apsoai/better-auth/commit/0f58aa6))
+
 ## <small>2.0.1 (2025-11-29)</small>
 
 * fix: add missing tslib dependency for TypeScript importHelpers ([c40b53b](https://github.com/apsoai/better-auth/commit/c40b53b))
