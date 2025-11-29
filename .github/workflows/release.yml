@@ -123,5 +123,5 @@ jobs:
               deployment_id: deployment.data.id,
               state: 'success',
               description: 'Successfully published v${{ steps.version.outputs.version }} to npm',
-              environment_url: 'https://www.npmjs.com/package/@apso/better-auth-apso-adapter'
+              environment_url: 'https://www.npmjs.com/package/@apso/better-auth-adapter'
             });

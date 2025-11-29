@@ -47,7 +47,7 @@ body:
       description: If applicable, add a minimal code sample to help explain your problem.
       render: typescript
       placeholder: |
-        import { apsoAdapter } from '@apso/better-auth-apso-adapter';
+        import { apsoAdapter } from '@apso/better-auth-adapter';
         
         const adapter = apsoAdapter({
           baseUrl: 'http://localhost:3000',

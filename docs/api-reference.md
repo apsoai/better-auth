@@ -26,7 +26,7 @@ Creates a standard Better Auth adapter for Apso APIs.
 
 **Example:**
 ```typescript
-import { apsoAdapter } from '@apso/better-auth-apso-adapter';
+import { apsoAdapter } from '@apso/better-auth-adapter';
 
 const adapter = apsoAdapter({
   baseUrl: 'https://api.example.com',
@@ -67,7 +67,7 @@ Creates an adapter optimized for reliability with enhanced retry logic and error
 
 **Example:**
 ```typescript
-import { createReliableApsoAdapter } from '@apso/better-auth-apso-adapter';
+import { createReliableApsoAdapter } from '@apso/better-auth-adapter';
 
 const adapter = createReliableApsoAdapter({
   baseUrl: 'https://api.example.com',
@@ -103,7 +103,7 @@ Creates an adapter optimized for high-throughput operations.
 
 **Example:**
 ```typescript
-import { createHighThroughputApsoAdapter } from '@apso/better-auth-apso-adapter';
+import { createHighThroughputApsoAdapter } from '@apso/better-auth-adapter';
 
 const adapter = createHighThroughputApsoAdapter({
   baseUrl: 'https://api.example.com',
@@ -131,7 +131,7 @@ Performs a health check on an adapter instance.
 
 **Example:**
 ```typescript
-import { apsoAdapter, checkAdapterHealth } from '@apso/better-auth-apso-adapter';
+import { apsoAdapter, checkAdapterHealth } from '@apso/better-auth-adapter';
 
 const adapter = apsoAdapter({ baseUrl: 'https://api.example.com' });
 
@@ -152,7 +152,7 @@ Returns all currently active adapter instances.
 
 **Example:**
 ```typescript
-import { getActiveAdapters } from '@apso/better-auth-apso-adapter';
+import { getActiveAdapters } from '@apso/better-auth-adapter';
 
 const adapters = getActiveAdapters();
 console.log(`Found ${adapters.length} active adapters`);
@@ -169,7 +169,7 @@ Closes all active adapter instances and cleans up resources.
 
 **Example:**
 ```typescript
-import { closeAllAdapters } from '@apso/better-auth-apso-adapter';
+import { closeAllAdapters } from '@apso/better-auth-adapter';
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
@@ -878,7 +878,7 @@ enum AdapterErrorCode {
 
 **Error Handling Example:**
 ```typescript
-import { AdapterError, AdapterErrorCode } from '@apso/better-auth-apso-adapter';
+import { AdapterError, AdapterErrorCode } from '@apso/better-auth-adapter';
 
 try {
   const user = await adapter.findOne({
@@ -1163,7 +1163,7 @@ import {
   AdapterErrorCode,
   type ApsoAdapterConfig,
   type Logger
-} from '@apso/better-auth-apso-adapter';
+} from '@apso/better-auth-adapter';
 
 // Custom logger
 const logger: Logger = {

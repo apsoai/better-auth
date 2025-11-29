@@ -5,7 +5,7 @@
 [![codecov](https://codecov.io/gh/your-org/apso/branch/main/graph/badge.svg)](https://codecov.io/gh/your-org/apso)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
-[![npm downloads](https://img.shields.io/npm/dm/@apso/better-auth-apso-adapter.svg)](https://www.npmjs.com/package/@apso/better-auth-apso-adapter)
+[![npm downloads](https://img.shields.io/npm/dm/@apso/better-auth-adapter.svg)](https://www.npmjs.com/package/@apso/better-auth-adapter)
 
 A production-ready database adapter for [Better Auth](https://better-auth.com) that seamlessly interfaces with Apso-generated CRUD REST endpoints. This adapter enables Better Auth to work with any REST API following Apso/nestjsx/crud conventions, providing enterprise-grade authentication for modern applications.
 
@@ -25,22 +25,22 @@ A production-ready database adapter for [Better Auth](https://better-auth.com) t
 ## Installation
 
 ```bash
-npm install @apso/better-auth-apso-adapter
+npm install @apso/better-auth-adapter
 ```
 
 ```bash
-yarn add @apso/better-auth-apso-adapter
+yarn add @apso/better-auth-adapter
 ```
 
 ```bash
-pnpm add @apso/better-auth-apso-adapter
+pnpm add @apso/better-auth-adapter
 ```
 
 ## Quick Start
 
 ```typescript
 import { betterAuth } from 'better-auth';
-import { apsoAdapter } from '@apso/better-auth-apso-adapter';
+import { apsoAdapter } from '@apso/better-auth-adapter';
 
 export const auth = betterAuth({
   database: apsoAdapter({
@@ -70,7 +70,7 @@ APSO_API_KEY=your-secret-api-key
 ### Production Setup
 
 ```typescript
-import { apsoAdapter } from '@apso/better-auth-apso-adapter';
+import { apsoAdapter } from '@apso/better-auth-adapter';
 
 const adapter = apsoAdapter({
   baseUrl: process.env.APSO_BASE_URL!,
@@ -134,7 +134,7 @@ const adapter = apsoAdapter({
 ### High-Throughput Setup
 
 ```typescript
-import { createHighThroughputApsoAdapter } from '@apso/better-auth-apso-adapter';
+import { createHighThroughputApsoAdapter } from '@apso/better-auth-adapter';
 
 const adapter = createHighThroughputApsoAdapter({
   baseUrl: process.env.APSO_BASE_URL!,
@@ -164,7 +164,7 @@ const adapter = createHighThroughputApsoAdapter({
 ```typescript
 // app/lib/auth.ts
 import { betterAuth } from 'better-auth';
-import { apsoAdapter } from '@apso/better-auth-apso-adapter';
+import { apsoAdapter } from '@apso/better-auth-adapter';
 
 export const auth = betterAuth({
   database: apsoAdapter({
@@ -191,7 +191,7 @@ export const { GET, POST } = auth.handler;
 // server.ts
 import express from 'express';
 import { betterAuth } from 'better-auth';
-import { apsoAdapter } from '@apso/better-auth-apso-adapter';
+import { apsoAdapter } from '@apso/better-auth-adapter';
 
 const app = express();
 
@@ -315,7 +315,7 @@ await auth.api.resetPassword({
 The adapter provides comprehensive error handling with specific error codes:
 
 ```typescript
-import { AdapterError, AdapterErrorCode } from '@apso/better-auth-apso-adapter';
+import { AdapterError, AdapterErrorCode } from '@apso/better-auth-adapter';
 
 try {
   await auth.api.signInEmail({
@@ -378,7 +378,7 @@ const users = await adapter.createMany({
 ### Connection Pooling
 
 ```typescript
-import { HttpClient } from '@apso/better-auth-apso-adapter';
+import { HttpClient } from '@apso/better-auth-adapter';
 
 const httpClient = new HttpClient({
   connectionPool: {
@@ -471,7 +471,7 @@ console.log({
 ### Custom Logger
 
 ```typescript
-import { Logger } from '@apso/better-auth-apso-adapter';
+import { Logger } from '@apso/better-auth-adapter';
 
 const customLogger: Logger = {
   debug: (message, meta) => console.debug(message, meta),

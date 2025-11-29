@@ -145,7 +145,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `🚀 Canary version published: \`${{ steps.version.outputs.version }}\`\n\nInstall with: \`npm install @apso/better-auth-apso-adapter@canary\``
+              body: `🚀 Canary version published: \`${{ steps.version.outputs.version }}\`\n\nInstall with: \`npm install @apso/better-auth-adapter@canary\``
             })
 
   publish-stable:
@@ -190,7 +190,7 @@ jobs:
       - name: Get package info
         id: package
         run: |
-          VERSION=$(npm view @apso/better-auth-apso-adapter version)
+          VERSION=$(npm view @apso/better-auth-adapter version)
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Create success notification

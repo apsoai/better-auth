@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * import { apsoAdapter } from '@apso/better-auth-apso-adapter';
+ * import { apsoAdapter } from '@apso/better-auth-adapter';
  *
  * const adapter = apsoAdapter({
  *   baseUrl: process.env.APSO_BASE_URL!,
