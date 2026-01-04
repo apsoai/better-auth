@@ -94,33 +94,29 @@ export class AccountOperations {
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;
       console.log('🔍 [SIGN-IN DEBUG] Making API request to:', url);
 
-      const response = await this.httpClient.get<
-        ApiResponseWithStatus<ApsoAccount>
-      >(url, {
-        headers: this.buildHeaders(),
-        ...(this.config.timeout && { timeout: this.config.timeout }),
-      });
-
-      console.log('🔍 [SIGN-IN DEBUG] API response status:', response.status);
-      console.log('🔍 [SIGN-IN DEBUG] API response data:', response.data);
-
-      if (response.status === 404) {
-        console.log('🔍 [SIGN-IN DEBUG] Account not found');
-        return null;
+      let apiData: ApsoAccount;
+      try {
+        apiData = await this.httpClient.get<ApsoAccount>(url, {
+          headers: this.buildHeaders(),
+          ...(this.config.timeout && { timeout: this.config.timeout }),
+        });
+      } catch (error) {
+        // HttpClient throws on non-2xx responses
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
+          console.log('🔍 [SIGN-IN DEBUG] Account not found');
+          return null;
+        }
+        throw error;
       }
 
-      if (response.status !== 200) {
-        throw new AdapterError(
-          AdapterErrorCode.API_ERROR,
-          `Account lookup failed with status ${response.status}`,
-          { id, status: response.status },
-          true,
-          response.status
-        );
-      }
+      console.log('🔍 [SIGN-IN DEBUG] API response data:', apiData);
+
+      // Wrap in expected format for normalizer
+      const wrappedResponse = { status: 200, data: apiData };
 
       const normalizedResponse =
-        this.responseNormalizer.normalizeSingleResponse(response);
+        this.responseNormalizer.normalizeSingleResponse(wrappedResponse);
       const result = this.entityMapper.transformInbound(
         'account',
         normalizedResponse
@@ -386,13 +382,11 @@ export class AccountOperations {
         JSON.stringify(accountData, null, 2)
       );
 
-      // Generate a proper UUID for the account ID if not provided
-      const accountId = accountData.id || this.generateUUID();
-
-      // Create account data with UUID
+      // Do NOT include ID - let the backend auto-generate it (SERIAL/integer)
+      // Create account data without ID to let backend generate it
       const accountDataWithId = {
         ...accountData,
-        id: accountId,
+        id: '', // Empty ID tells EntityMapper to skip ID in API request
       };
 
       // Transform account data to API format
@@ -454,31 +448,24 @@ export class AccountOperations {
     const startTime = performance.now();
 
     try {
-      const transformedData = this.entityMapper.transformOutbound(
-        'account',
-        updateData
-      );
+      // Use partial transform to avoid setting defaults for fields not being updated
+      const transformedData = this.entityMapper.mapAccountPartialToApi(updateData);
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;
 
-      const response = await this.httpClient.put<
-        ApiResponseWithStatus<ApsoAccount>
-      >(url, transformedData, {
+      console.log('🔧 [AccountOps] Updating account at:', url, 'with partial data:', transformedData);
+
+      // HttpClient returns raw JSON, not { status, data }
+      const apiData = await this.httpClient.patch<ApsoAccount>(url, transformedData, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      if (response.status !== 200) {
-        throw new AdapterError(
-          AdapterErrorCode.API_ERROR,
-          `Account update failed with status ${response.status}`,
-          { id, updateData, status: response.status },
-          true,
-          response.status
-        );
-      }
+      console.log('🔧 [AccountOps] Update response:', apiData);
 
+      // Wrap in expected format for normalizer
+      const wrappedResponse = { status: 200, data: apiData };
       const normalizedResponse =
-        this.responseNormalizer.normalizeSingleResponse(response);
+        this.responseNormalizer.normalizeSingleResponse(wrappedResponse);
       const result = this.entityMapper.transformInbound(
         'account',
         normalizedResponse
@@ -546,18 +533,6 @@ export class AccountOperations {
   // =============================================================================
   // Helper Methods
   // =============================================================================
-
-  /**
-   * Generate a proper UUID v4
-   */
-  private generateUUID(): string {
-    // Generate a proper UUID v4
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  }
 
   /**
    * Build HTTP headers for API requests

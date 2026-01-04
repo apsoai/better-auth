@@ -121,9 +121,6 @@ export class UserOperations {
         }
       }
 
-      // Generate a proper UUID for the user ID
-      const userId = this.generateUUID();
-
       // Handle password - Better Auth might pass it as 'password' or 'hashedPassword'
       let hashedPassword: string | undefined;
       if ((userData as any).password) {
@@ -136,9 +133,9 @@ export class UserOperations {
       }
 
       // Transform data to API format
-      // Note: Generate UUID for user ID to match database schema
+      // Note: Do NOT include ID - let the backend auto-generate it (SERIAL/integer)
       const betterAuthUser: BetterAuthUser = {
-        id: userId,
+        id: '', // Empty ID tells EntityMapper to skip ID in API request
         email: normalizedData.email!,
         emailVerified: normalizedData.emailVerified ?? false,
         ...(hashedPassword && { hashedPassword }),
@@ -512,27 +509,11 @@ export class UserOperations {
         }
       }
 
-      // Get existing user to merge updates
-      const existingUser = await this.findUserById(id);
-      if (!existingUser) {
-        throw new AdapterError(
-          AdapterErrorCode.NOT_FOUND,
-          `User with ID ${id} not found`,
-          { id },
-          false,
-          404
-        );
-      }
+      // Use partial transform to only send fields being updated (not the full user object)
+      // This prevents unique constraint violations on fields like cognito_id
+      const apiData = this.entityMapper.mapUserPartialToApi(normalizedUpdates);
 
-      // Merge updates with existing user data
-      const updatedUser: BetterAuthUser = {
-        ...existingUser,
-        ...normalizedUpdates,
-        ...(existingUser.id && { id: existingUser.id }), // Ensure ID cannot be changed
-      };
-
-      // Transform to API format
-      const apiData = this.entityMapper.mapUserToApi(updatedUser);
+      console.log('🔧 [UserOps] Updating user with partial data:', apiData);
 
       // Execute update request
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;
@@ -929,18 +910,6 @@ export class UserOperations {
         409
       );
     }
-  }
-
-  /**
-   * Generate a proper UUID v4
-   */
-  private generateUUID(): string {
-    // Generate a proper UUID v4
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
   }
 
   /**

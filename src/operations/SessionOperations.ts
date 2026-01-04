@@ -142,9 +142,9 @@ export class SessionOperations {
         await this.validateUserExists(sessionData.userId);
       }
 
-      // Create API data with session token as ID (per Better Auth schema)
+      // Create API data - do NOT include ID, let the backend auto-generate it (SERIAL/integer)
       const apiData = {
-        id: sessionData.sessionToken, // Session token IS the ID in Better Auth
+        // id omitted - backend will auto-generate
         token: sessionData.sessionToken, // Apso schema has separate token field
         userId: sessionData.userId,
         expiresAt: sessionData.expiresAt,

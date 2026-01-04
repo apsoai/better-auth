@@ -269,26 +269,49 @@ export class ApsoAdapter implements IApsoAdapter {
   async update<T>(params: UpdateParams): Promise<T> {
     const startTime = performance.now();
 
+    // Helper to extract value from where clause (handles both object and array formats)
+    const extractWhereValue = (where: any, field: string): string | number | undefined => {
+      if (!where) return undefined;
+      // Direct object format: { id: '102' }
+      if (where[field] !== undefined) return where[field];
+      // Array format: [{ field: 'id', value: '102' }]
+      if (Array.isArray(where)) {
+        const found = where.find((w: any) => w.field === field);
+        return found?.value;
+      }
+      return undefined;
+    };
+
+    // Debug logging
+    console.log('🔧 [ADAPTER UPDATE] Called with params:', {
+      model: params.model,
+      where: params.where,
+      whereKeys: Object.keys(params.where || {}),
+      update: params.update,
+    });
+
     try {
       this.updateModelMetrics(params.model);
+
+      // Extract id and email from where clause
+      const whereId = extractWhereValue(params.where, 'id');
+      const whereEmail = extractWhereValue(params.where, 'email');
 
       // Route to specialized operations for supported models
       switch (params.model.toLowerCase()) {
         case 'user':
-          // Handle user-specific updates
-          if (params.where.id && typeof params.where.id === 'string') {
+          // Handle user-specific updates (support both string and number IDs)
+          console.log('🔧 [ADAPTER UPDATE] User update - whereId:', whereId, 'type:', typeof whereId);
+          if (whereId && (typeof whereId === 'string' || typeof whereId === 'number')) {
             const userResult = await this.userOperations.updateUser(
-              params.where.id,
+              String(whereId),
               params.update
             );
             this.updateSuccessMetrics(performance.now() - startTime);
             return userResult as T;
-          } else if (
-            params.where.email &&
-            typeof params.where.email === 'string'
-          ) {
+          } else if (whereEmail && typeof whereEmail === 'string') {
             const userResult = await this.userOperations.updateUserByEmail(
-              params.where.email,
+              whereEmail,
               params.update
             );
             this.updateSuccessMetrics(performance.now() - startTime);
@@ -321,10 +344,10 @@ export class ApsoAdapter implements IApsoAdapter {
           }
 
         case 'session':
-          // Handle session-specific updates
-          if (params.where.id && typeof params.where.id === 'string') {
+          // Handle session-specific updates (support both string and number IDs)
+          if (params.where.id && (typeof params.where.id === 'string' || typeof params.where.id === 'number')) {
             const sessionResult = await this.sessionOperations.updateSession(
-              params.where.id,
+              String(params.where.id),
               params.update
             );
             this.updateSuccessMetrics(performance.now() - startTime);
@@ -443,6 +466,45 @@ export class ApsoAdapter implements IApsoAdapter {
               });
             this.updateSuccessMetrics(performance.now() - startTime);
             return tokenResult as T;
+          }
+
+        case 'account':
+          // Handle account-specific updates (support both string and number IDs, and array format where)
+          const accountWhereId = extractWhereValue(params.where, 'id');
+          console.log('🔧 [ADAPTER UPDATE] Account update - accountWhereId:', accountWhereId, 'type:', typeof accountWhereId);
+
+          if (accountWhereId && (typeof accountWhereId === 'string' || typeof accountWhereId === 'number')) {
+            const accountResult = await this.accountOperations.updateAccount(
+              String(accountWhereId),
+              params.update
+            );
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return accountResult as T;
+          } else {
+            // Find account first, then update by ID
+            const existingAccount = await this.findOne<T>({
+              model: params.model,
+              where: params.where,
+              ...(params.select && { select: params.select }),
+            });
+
+            if (!existingAccount) {
+              throw new AdapterError(
+                AdapterErrorCode.NOT_FOUND,
+                `No account found for update`,
+                params.where,
+                false,
+                404
+              );
+            }
+
+            const accountWithId = existingAccount as any;
+            const accountResult = await this.accountOperations.updateAccount(
+              String(accountWithId.id),
+              params.update
+            );
+            this.updateSuccessMetrics(performance.now() - startTime);
+            return accountResult as T;
           }
 
         default:
@@ -867,36 +929,46 @@ export class ApsoAdapter implements IApsoAdapter {
 
         case 'verificationtoken':
           // Handle verification token-specific lookups
-          if (params.where.token && typeof params.where.token === 'string') {
+          // Helper to extract value from where clause (handles both object and array formats)
+          const extractVerificationWhereValue = (where: any, field: string): string | undefined => {
+            if (!where) return undefined;
+            // Direct object format: { identifier: 'xxx' }
+            if (where[field] !== undefined) return where[field];
+            // Array format: [{ field: 'identifier', value: 'xxx' }]
+            if (Array.isArray(where)) {
+              const found = where.find((w: any) => w.field === field);
+              return found?.value;
+            }
+            return undefined;
+          };
+
+          const whereToken = extractVerificationWhereValue(params.where, 'token');
+          const whereIdentifier = extractVerificationWhereValue(params.where, 'identifier');
+
+          console.log('🔍 [ADAPTER findOne] verificationtoken lookup:', {
+            where: params.where,
+            whereToken,
+            whereIdentifier,
+          });
+
+          if (whereToken && typeof whereToken === 'string') {
             const tokenResult =
               await this.verificationTokenOperations.findVerificationTokenByToken(
-                params.where.token
+                whereToken
               );
             this.updateSuccessMetrics(performance.now() - startTime);
             return tokenResult as T;
-          } else if (
-            params.where.identifier &&
-            typeof params.where.identifier === 'string'
-          ) {
+          } else if (whereIdentifier && typeof whereIdentifier === 'string') {
             const tokens =
               await this.verificationTokenOperations.findVerificationTokensByIdentifier(
-                params.where.identifier,
+                whereIdentifier,
                 { activeOnly: true, limit: 1 }
               );
+            console.log('🔍 [ADAPTER findOne] verificationtoken found:', tokens.length > 0 ? tokens[0] : 'none');
             this.updateSuccessMetrics(performance.now() - startTime);
             return tokens.length > 0 ? (tokens[0] as T) : null;
           } else {
-            // For other token filters, find by identifier or return null
-            const identifier = params.where.identifier;
-            if (identifier) {
-              const tokens =
-                await this.verificationTokenOperations.findVerificationTokensByIdentifier(
-                  identifier,
-                  { activeOnly: true, limit: 1 }
-                );
-              this.updateSuccessMetrics(performance.now() - startTime);
-              return tokens.length > 0 ? (tokens[0] as T) : null;
-            }
+            console.log('🔍 [ADAPTER findOne] verificationtoken - no token or identifier found');
             this.updateSuccessMetrics(performance.now() - startTime);
             return null;
           }

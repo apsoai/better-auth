@@ -159,6 +159,43 @@ export class EntityMapper {
   }
 
   /**
+   * Transform partial user update data to API format (for PATCH operations)
+   * Unlike mapUserToApi, this does NOT include all fields - only fields explicitly provided
+   * @param updateData - Partial user data to update
+   * @returns Transformed partial data for API
+   */
+  mapUserPartialToApi(updateData: Partial<BetterAuthUser>): Partial<ApsoUser> {
+    console.log('[EntityMapper] mapUserPartialToApi - Input:', JSON.stringify(updateData, null, 2));
+
+    const result: Partial<ApsoUser> = {};
+
+    // Only include fields that are explicitly provided (not undefined)
+    if (updateData.email !== undefined) {
+      result.email = this.config.enableEmailNormalization
+        ? EmailNormalizer.normalize(updateData.email)
+        : updateData.email;
+    }
+    if (updateData.emailVerified !== undefined) {
+      result.emailVerified = updateData.emailVerified;
+    }
+    if (updateData.name !== undefined) {
+      result.name = updateData.name;
+    }
+    if (updateData.image !== undefined) {
+      result.image = updateData.image;
+    }
+    if (updateData.hashedPassword !== undefined) {
+      result.password_hash = updateData.hashedPassword;
+    }
+
+    // Add updated_at timestamp
+    result.updated_at = new Date();
+
+    console.log('[EntityMapper] mapUserPartialToApi - Output:', JSON.stringify(result, null, 2));
+    return result;
+  }
+
+  /**
    * Transform Apso API user to Better Auth format
    * @param apiUser - Apso API user entity
    * @returns Transformed Better Auth user entity
@@ -462,6 +499,68 @@ export class EntityMapper {
   }
 
   /**
+   * Transform partial account update data to API format (for PATCH operations)
+   * Unlike mapAccountToApi, this does NOT set defaults - only includes fields that are explicitly provided
+   * @param updateData - Partial account data to update
+   * @returns Transformed partial data for API
+   */
+  mapAccountPartialToApi(updateData: Partial<BetterAuthAccount>): Partial<ApsoAccount> {
+    console.log('[EntityMapper] mapAccountPartialToApi - Input:', JSON.stringify(updateData, null, 2));
+
+    const result: Partial<ApsoAccount> = {};
+
+    // Only include fields that are explicitly provided (not undefined)
+    if (updateData.userId !== undefined) {
+      result.userId = updateData.userId;
+    }
+    if (updateData.type !== undefined) {
+      result.type = updateData.type;
+    }
+    if (updateData.provider !== undefined) {
+      result.providerId = updateData.provider;
+    }
+    if ((updateData as any).providerId !== undefined) {
+      result.providerId = (updateData as any).providerId;
+    }
+    if (updateData.providerAccountId !== undefined) {
+      result.accountId = updateData.providerAccountId;
+    }
+    if ((updateData as any).accountId !== undefined) {
+      result.accountId = (updateData as any).accountId;
+    }
+    if ((updateData as any).password !== undefined) {
+      result.password = (updateData as any).password;
+    }
+    if (updateData.refresh_token !== undefined) {
+      result.refresh_token = updateData.refresh_token;
+    }
+    if (updateData.access_token !== undefined) {
+      result.access_token = updateData.access_token;
+    }
+    if (updateData.expires_at !== undefined) {
+      result.expires_at = updateData.expires_at;
+    }
+    if (updateData.token_type !== undefined) {
+      result.token_type = updateData.token_type;
+    }
+    if (updateData.scope !== undefined) {
+      result.scope = updateData.scope;
+    }
+    if (updateData.id_token !== undefined) {
+      result.id_token = updateData.id_token;
+    }
+    if (updateData.session_state !== undefined) {
+      result.session_state = updateData.session_state;
+    }
+
+    // Add updated_at timestamp
+    result.updated_at = new Date();
+
+    console.log('[EntityMapper] mapAccountPartialToApi - Output:', JSON.stringify(result, null, 2));
+    return result;
+  }
+
+  /**
    * Transform Apso API account to Better Auth format
    * @param apiAccount - Apso API account entity
    * @returns Transformed Better Auth account entity
@@ -475,7 +574,7 @@ export class EntityMapper {
 
       const betterAuthAccount: BetterAuthAccount = {
         id: String(apiAccount.id), // Convert to string for Better Auth
-        userId: apiAccount.userId,
+        userId: String(apiAccount.userId), // Convert to string for Better Auth
         type: apiAccount.type,
         provider: apiAccount.providerId,
         // CRITICAL: Better Auth runtime uses providerId (not provider) to find credential accounts!
