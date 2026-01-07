@@ -290,8 +290,8 @@ export class VerificationTokenOperations {
 
       // Use server-side filtering to find verification token
       // This is much more efficient than fetching all tokens and filtering client-side
-      // Note: Apso API uses 'token' field and 'eq' operator (not '$eq')
-      const filterValue = encodeURIComponent(`token||eq||${token}`);
+      // Note: Apso API stores the token/state value in 'identifier' field
+      const filterValue = encodeURIComponent(`identifier||eq||${token}`);
       const url = `${this.config.baseUrl}/${this.apiPath}?filter=${filterValue}&limit=1`;
 
       const response = await this.httpClient.get<ApsoVerificationToken[]>(url, {
@@ -792,9 +792,9 @@ export class VerificationTokenOperations {
         response
       ) as ApsoVerificationToken[];
 
-      // Search by the token value in the 'token' field
+      // Search by the token value in the 'identifier' field (Apso API stores token there)
       const rawToken = normalizedResults.find(
-        (t: ApsoVerificationToken) => t.token === token
+        (t: ApsoVerificationToken) => t.identifier === token
       );
 
       if (!rawToken) {
@@ -1288,9 +1288,9 @@ export class VerificationTokenOperations {
       const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
         response
       ) as ApsoVerificationToken[];
-      // Search by the token value in the 'token' field
+      // Search by the token value in the 'identifier' field (Apso API stores token there)
       const matchingToken = normalizedResults.find(
-        (t: ApsoVerificationToken) => t.token === token
+        (t: ApsoVerificationToken) => t.identifier === token
       );
 
       return matchingToken

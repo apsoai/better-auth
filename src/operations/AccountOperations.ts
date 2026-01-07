@@ -316,12 +316,25 @@ export class AccountOperations {
       // Apply filtering and pagination
       let filteredAccounts = accounts;
 
+      console.log('🔍 [AccountOps] findManyAccounts - all accounts:', accounts.map(a => ({
+        id: a.id,
+        providerId: a.providerId,
+        accountId: a.accountId,
+        userId: a.userId,
+      })));
+
       if (options.where) {
+        console.log('🔍 [AccountOps] Filtering with where:', options.where);
         filteredAccounts = accounts.filter(account => {
-          return Object.entries(options.where!).every(([key, value]) => {
-            return (account as any)[key] === value;
+          const matches = Object.entries(options.where!).every(([key, value]) => {
+            const accountValue = (account as any)[key];
+            const isMatch = accountValue === value;
+            console.log(`🔍 [AccountOps] Filter check: account.${key}=${accountValue} vs ${value} => ${isMatch}`);
+            return isMatch;
           });
+          return matches;
         });
+        console.log('🔍 [AccountOps] Filtered accounts:', filteredAccounts.length);
       }
 
       if (options.pagination?.limit) {
@@ -418,7 +431,35 @@ export class AccountOperations {
 
       this.logOperation('createAccount', performance.now() - startTime, true);
       return result;
-    } catch (error) {
+    } catch (error: any) {
+      // Handle duplicate key error - return existing account instead of failing
+      // This happens when the account already exists (e.g., re-linking OAuth)
+      const errorMessage = error?.message || error?.details?.message || String(error);
+      if (errorMessage.includes('duplicate key') || errorMessage.includes('unique constraint')) {
+        console.log('🔍 [AccountOps] Duplicate account detected, finding existing account...');
+
+        // Try to find the existing account by providerId + accountId
+        const providerId = accountData.providerId;
+        const accountId = accountData.accountId;
+
+        if (providerId && accountId) {
+          try {
+            const existingAccounts = await this.findManyAccounts({
+              where: { providerId, accountId },
+              pagination: { limit: 1 },
+            });
+
+            if (existingAccounts.length > 0 && existingAccounts[0]) {
+              console.log('🔍 [AccountOps] Found existing account:', existingAccounts[0].id);
+              this.logOperation('createAccount', performance.now() - startTime, true);
+              return existingAccounts[0]!;
+            }
+          } catch (findError) {
+            console.log('🔍 [AccountOps] Error finding existing account:', findError);
+          }
+        }
+      }
+
       this.logOperation(
         'createAccount',
         performance.now() - startTime,

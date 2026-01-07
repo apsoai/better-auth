@@ -56,6 +56,7 @@ export interface FindOneParams {
   model: string;
   where: Record<string, any>;
   select?: string[];
+  join?: Record<string, boolean> | string; // BetterAuth passes join config for related data
 }
 
 export interface FindManyParams {
