@@ -21,11 +21,6 @@
  * ```
  */
 
-console.log(
-  '[APSO ADAPTER] Loading @apso/better-auth-adapter from SYMLINKED version - timestamp:',
-  new Date().toISOString()
-);
-
 // Export all types
 export * from './types';
 
