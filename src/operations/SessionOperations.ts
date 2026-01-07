@@ -223,7 +223,8 @@ export class SessionOperations {
 
       // Use server-side filtering to find session by token
       // This is much more efficient than paginating through all sessions
-      const filterValue = encodeURIComponent(`sessionToken||$eq||${sessionToken}`);
+      // Note: Apso API uses 'token' field and 'eq' operator (not '$eq')
+      const filterValue = encodeURIComponent(`token||eq||${sessionToken}`);
       const url = `${this.config.baseUrl}/${this.apiPath}?filter=${filterValue}&limit=1`;
 
       const response = await this.httpClient.get<any>(url, {
