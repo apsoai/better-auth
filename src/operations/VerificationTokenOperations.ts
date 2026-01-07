@@ -119,7 +119,7 @@ export class VerificationTokenOperations {
   private readonly responseNormalizer: ResponseNormalizer;
   private readonly entityMapper: EntityMapper;
   private readonly config: ApsoAdapterConfig;
-  private readonly apiPath = 'verification-tokens';
+  private readonly apiPath = 'verifications';
 
   /** Default token validation rules */
   private readonly defaultTokenRules: TokenValidationRules = {
@@ -288,13 +288,12 @@ export class VerificationTokenOperations {
       // Validate token format
       this.validateTokenFormat(token);
 
-      // Build query to find token (for future query parameter implementation)
-      this.queryTranslator.buildFindQuery({ token }, { limit: 1 });
+      // Use server-side filtering to find verification token
+      // This is much more efficient than fetching all tokens and filtering client-side
+      // Note: Better Auth's 'token' maps to Apso's 'identifier' field
+      const filterValue = encodeURIComponent(`identifier||eq||${token}`);
+      const url = `${this.config.baseUrl}/${this.apiPath}?filter=${filterValue}&limit=1`;
 
-      const url = `${this.config.baseUrl}/${this.apiPath}`;
-
-      // For now, get all tokens and filter client-side
-      // In production, this would use query parameters
       const response = await this.httpClient.get<ApsoVerificationToken[]>(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
@@ -304,10 +303,8 @@ export class VerificationTokenOperations {
         response
       ) as ApsoVerificationToken[];
 
-      // Find token by exact match
-      const matchingToken = normalizedResults.find(
-        (t: ApsoVerificationToken) => t.token === token
-      );
+      // Get first matching token
+      const matchingToken = normalizedResults.length > 0 ? normalizedResults[0] : null;
 
       if (!matchingToken) {
         this.logOperation(
