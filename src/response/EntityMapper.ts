@@ -297,8 +297,9 @@ export class EntityMapper {
       const betterAuthSession: BetterAuthSession = {
         // Better Auth requires both id AND token fields for proper cookie handling
         id: apiSession.id, // Session token as database primary key
-        sessionToken: apiSession.sessionToken || apiSession.id, // Session token
-        token: apiSession.id, // Better Auth uses session.token for cookie value!
+        // Apso stores session token in 'token' field, check both for compatibility
+        sessionToken: apiSession.sessionToken || (apiSession as any).token || apiSession.id,
+        token: (apiSession as any).token || apiSession.id, // Better Auth uses session.token for cookie value!
         userId: apiSession.userId,
         expiresAt:
           apiSession.expiresAt instanceof Date

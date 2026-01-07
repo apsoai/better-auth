@@ -221,39 +221,23 @@ export class SessionOperations {
       // Validate token format for basic security
       this.validateSessionToken(sessionToken, false); // Don't throw on invalid format, just return null
 
-      // Build query to find by sessionToken
-      const url = `${this.config.baseUrl}/${this.apiPath}`;
+      // Use server-side filtering to find session by token
+      // This is much more efficient than paginating through all sessions
+      const filterValue = encodeURIComponent(`sessionToken||$eq||${sessionToken}`);
+      const url = `${this.config.baseUrl}/${this.apiPath}?filter=${filterValue}&limit=1`;
 
-      // Search across all pages to find the session by token
-      let matchingSession: ApsoSession | null = null;
-      let currentPage = 1;
-      let hasMorePages = true;
+      const response = await this.httpClient.get<any>(url, {
+        headers: this.buildHeaders(),
+        ...(this.config.timeout && { timeout: this.config.timeout }),
+      });
 
-      while (hasMorePages && !matchingSession) {
-        const pageUrl = `${url}?page=${currentPage}`;
+      const normalizedResults =
+        this.responseNormalizer.normalizeArrayResponse(
+          response
+        ) as ApsoSession[];
 
-        const response = await this.httpClient.get<any>(pageUrl, {
-          headers: this.buildHeaders(),
-          ...(this.config.timeout && { timeout: this.config.timeout }),
-        });
-
-        const normalizedResults =
-          this.responseNormalizer.normalizeArrayResponse(
-            response
-          ) as ApsoSession[];
-
-        // Find session by ID (session token is now the ID)
-        matchingSession =
-          normalizedResults.find(session => session.id === sessionToken) ||
-          null;
-
-        // Check if there are more pages
-        if (response.pageCount && currentPage < response.pageCount) {
-          currentPage++;
-        } else {
-          hasMorePages = false;
-        }
-      }
+      // Get first matching session
+      const matchingSession = normalizedResults.length > 0 ? normalizedResults[0] : null;
 
       if (!matchingSession) {
         this.logOperation(

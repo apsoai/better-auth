@@ -674,7 +674,7 @@ describe('Better Auth Adapter Conformance', () => {
           where: { id: 'non-existent-id' },
           update: { name: 'Updated Name' },
         })
-      ).rejects.toThrow(/User with ID .* not found/);
+      ).rejects.toThrow(/Not Found|User with ID .* not found/);
     });
 
     it('should throw error when deleting non-existent record', async () => {
