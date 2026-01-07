@@ -290,8 +290,8 @@ export class VerificationTokenOperations {
 
       // Use server-side filtering to find verification token
       // This is much more efficient than fetching all tokens and filtering client-side
-      // Note: Better Auth's 'token' maps to Apso's 'identifier' field
-      const filterValue = encodeURIComponent(`identifier||eq||${token}`);
+      // Note: Apso API uses 'token' field and 'eq' operator (not '$eq')
+      const filterValue = encodeURIComponent(`token||eq||${token}`);
       const url = `${this.config.baseUrl}/${this.apiPath}?filter=${filterValue}&limit=1`;
 
       const response = await this.httpClient.get<ApsoVerificationToken[]>(url, {
@@ -781,8 +781,23 @@ export class VerificationTokenOperations {
       }
 
       // Find the token first to get its ID and return it after deletion
-      const existingToken = await this.findTokenIncludingExpired(token);
-      if (!existingToken) {
+      // We need to query directly to get the raw Apso token with its internal ID
+      const queryUrl = `${this.config.baseUrl}/${this.apiPath}`;
+      const response = await this.httpClient.get<ApsoVerificationToken[]>(queryUrl, {
+        headers: this.buildHeaders(),
+        ...(this.config.timeout && { timeout: this.config.timeout }),
+      });
+
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
+        response
+      ) as ApsoVerificationToken[];
+
+      // Search by the token value in the 'token' field
+      const rawToken = normalizedResults.find(
+        (t: ApsoVerificationToken) => t.token === token
+      );
+
+      if (!rawToken) {
         throw new AdapterError(
           AdapterErrorCode.NOT_FOUND,
           `Verification token not found`,
@@ -792,14 +807,18 @@ export class VerificationTokenOperations {
         );
       }
 
-      // Delete using API path with token as identifier
-      // Note: In a real implementation, you might need the internal ID
-      const url = `${this.config.baseUrl}/${this.apiPath}/${encodeURIComponent(token)}`;
+      // Delete using the internal ID (not the token value)
+      // The ID should always be present for tokens retrieved from the API
+      const tokenId = rawToken.id || rawToken.identifier;
+      const url = `${this.config.baseUrl}/${this.apiPath}/${encodeURIComponent(tokenId)}`;
 
       await this.httpClient.delete(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
+
+      // Map the raw Apso token to BetterAuth format for return
+      const mappedToken = this.entityMapper.mapVerificationTokenFromApi(rawToken);
 
       this.logOperation(
         'deleteVerificationToken',
@@ -807,12 +826,12 @@ export class VerificationTokenOperations {
         true,
         {
           identifier: this.sanitizeIdentifierForLogging(
-            existingToken.identifier
+            mappedToken.identifier
           ),
         }
       );
 
-      return existingToken;
+      return mappedToken;
     } catch (error) {
       this.logOperation(
         'deleteVerificationToken',
@@ -1269,6 +1288,7 @@ export class VerificationTokenOperations {
       const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
         response
       ) as ApsoVerificationToken[];
+      // Search by the token value in the 'token' field
       const matchingToken = normalizedResults.find(
         (t: ApsoVerificationToken) => t.token === token
       );
