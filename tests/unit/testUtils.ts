@@ -68,12 +68,16 @@ export const createTestSessions = (
 
 export const createTestVerificationToken = (
   overrides: Partial<BetterAuthVerificationToken> = {}
-): BetterAuthVerificationToken => ({
-  identifier: 'test@example.com',
-  token: `verify_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`,
-  expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
-  ...overrides,
-});
+): BetterAuthVerificationToken => {
+  const tokenValue = `verify_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`;
+  return {
+    identifier: 'test@example.com',
+    value: tokenValue,
+    token: tokenValue, // Backward compat
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
+    ...overrides,
+  };
+};
 
 export const createTestVerificationTokens = (
   count: number
@@ -114,14 +118,18 @@ export const createTestApsoSession = (
 
 export const createTestApsoVerificationToken = (
   overrides: Partial<ApsoVerificationToken> = {}
-): ApsoVerificationToken => ({
-  id: `token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-  identifier: 'test@example.com',
-  token: `verify_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`,
-  expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-  created_at: new Date(),
-  ...overrides,
-});
+): ApsoVerificationToken => {
+  const tokenValue = `verify_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`;
+  return {
+    id: `token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    identifier: 'test@example.com',
+    value: tokenValue,
+    token: tokenValue, // Backward compat
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    created_at: new Date(),
+    ...overrides,
+  };
+};
 
 // =============================================================================
 // Test Configuration

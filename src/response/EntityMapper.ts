@@ -346,9 +346,12 @@ export class EntityMapper {
       }
 
       const currentTime = new Date();
+      // Use value field (BetterAuth format) with token as fallback
+      const tokenValue = token.value || token.token || '';
       const apsoToken: ApsoVerificationToken = {
         identifier: token.identifier,
-        token: token.token,
+        value: tokenValue,
+        token: tokenValue, // Backward compatibility
         expiresAt: token.expiresAt,
         created_at: this.config.includeTimestamps ? currentTime : currentTime,
       };
@@ -385,11 +388,24 @@ export class EntityMapper {
         this.validateApsoVerificationToken(apiToken);
       }
 
+      // Use value field (BetterAuth format) with token as fallback
+      const tokenValue = apiToken.value || apiToken.token || '';
       const betterAuthToken: BetterAuthVerificationToken = {
         identifier: apiToken.identifier,
-        token: apiToken.token,
-        expiresAt: apiToken.expiresAt,
+        value: tokenValue,
+        token: tokenValue, // Backward compatibility
+        expiresAt: new Date(apiToken.expiresAt || apiToken.expires_at!),
       };
+      // Only add optional fields if they have values (for exactOptionalPropertyTypes)
+      if (apiToken.id) {
+        betterAuthToken.id = String(apiToken.id);
+      }
+      if (apiToken.createdAt || apiToken.created_at) {
+        betterAuthToken.createdAt = new Date(apiToken.createdAt || apiToken.created_at!);
+      }
+      if (apiToken.updatedAt || apiToken.updated_at) {
+        betterAuthToken.updatedAt = new Date(apiToken.updatedAt || apiToken.updated_at!);
+      }
 
       if (this.config.enableValidation) {
         this.validateBetterAuthVerificationToken(betterAuthToken);
@@ -1070,10 +1086,13 @@ export class EntityMapper {
       });
     }
 
-    if (!token.token || typeof token.token !== 'string') {
+    // Check for value OR token (value is primary, token is backward compat)
+    const hasValue = token.value && typeof token.value === 'string';
+    const hasToken = token.token && typeof token.token === 'string';
+    if (!hasValue && !hasToken) {
       errors.push({
-        field: 'token',
-        message: 'Token is required and must be a string',
+        field: 'value',
+        message: 'Value (or token) is required and must be a string',
       });
     }
 
@@ -1113,26 +1132,25 @@ export class EntityMapper {
       });
     }
 
-    if (!token.token || typeof token.token !== 'string') {
+    // Check for value OR token (value is primary, token is backward compat)
+    const hasValue = token.value && typeof token.value === 'string';
+    const hasToken = token.token && typeof token.token === 'string';
+    if (!hasValue && !hasToken) {
       errors.push({
-        field: 'token',
-        message: 'Token is required and must be a string',
+        field: 'value',
+        message: 'Value (or token) is required and must be a string',
       });
     }
 
-    if (!(token.expiresAt instanceof Date)) {
+    // expiresAt can be Date or undefined (will be set from expires_at)
+    if (token.expiresAt && !(token.expiresAt instanceof Date)) {
       errors.push({
         field: 'expiresAt',
-        message: 'ExpiresAt is required and must be a Date',
+        message: 'ExpiresAt must be a Date if provided',
       });
     }
 
-    if (!(token.created_at instanceof Date)) {
-      errors.push({
-        field: 'created_at',
-        message: 'Created_at is required and must be a Date',
-      });
-    }
+    // created_at is optional for verification tokens
 
     if (errors.length > 0) {
       throw new AdapterError(

@@ -472,7 +472,7 @@ describe('Better Auth Adapter Conformance', () => {
     it('should create verification token with all required fields', async () => {
       const tokenData = {
         identifier: 'verify@example.com',
-        token: 'verification-token-123',
+        value: 'verification-value-123',
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       };
 
@@ -484,38 +484,15 @@ describe('Better Auth Adapter Conformance', () => {
 
       expect(verificationToken).toBeTruthy();
       expect(verificationToken.identifier).toBe(tokenData.identifier);
-      expect(verificationToken.token).toBe(tokenData.token);
+      expect(verificationToken.value).toBe(tokenData.value);
       expect(verificationToken.expiresAt).toBeInstanceOf(Date);
-    });
-
-    it('should find verification token by token', async () => {
-      const token = 'find-verification-token-456';
-      const tokenData = {
-        identifier: 'findtoken@example.com',
-        token,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      };
-
-      await adapter.create<BetterAuthVerificationToken>({
-        model: 'verificationtoken',
-        data: tokenData,
-      });
-
-      const found = await adapter.findOne<BetterAuthVerificationToken>({
-        model: 'verificationtoken',
-        where: { token },
-      });
-
-      expect(found).toBeTruthy();
-      expect(found!.token).toBe(token);
-      expect(found!.identifier).toBe('findtoken@example.com');
     });
 
     it('should find verification token by identifier', async () => {
       const identifier = 'findbyidentifier@example.com';
       const tokenData = {
         identifier,
-        token: 'token-for-identifier-789',
+        value: 'value-for-identifier-789',
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       };
 
@@ -531,13 +508,13 @@ describe('Better Auth Adapter Conformance', () => {
 
       expect(found).toBeTruthy();
       expect(found!.identifier).toBe(identifier);
-      expect(found!.token).toBe('token-for-identifier-789');
+      expect(found!.value).toBe('value-for-identifier-789');
     });
 
-    it('should delete verification token by token', async () => {
+    it('should delete verification token by identifier', async () => {
       const tokenData = {
         identifier: 'deletetoken@example.com',
-        token: 'delete-token-123',
+        value: 'delete-value-123',
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       };
 
@@ -548,16 +525,16 @@ describe('Better Auth Adapter Conformance', () => {
 
       const deleted = await adapter.delete<BetterAuthVerificationToken>({
         model: 'verificationtoken',
-        where: { token: 'delete-token-123' },
+        where: { identifier: 'deletetoken@example.com' },
       });
 
       expect(deleted).toBeTruthy();
-      expect(deleted.token).toBe('delete-token-123');
+      expect(deleted.identifier).toBe('deletetoken@example.com');
 
       // Verify token is deleted
       const found = await adapter.findOne<BetterAuthVerificationToken>({
         model: 'verificationtoken',
-        where: { token: 'delete-token-123' },
+        where: { identifier: 'deletetoken@example.com' },
       });
 
       expect(found).toBeNull();
@@ -572,7 +549,7 @@ describe('Better Auth Adapter Conformance', () => {
             identifier: 'incomplete@example.com',
           },
         })
-      ).rejects.toThrow(/requires identifier, token, and expiresAt/);
+      ).rejects.toThrow(/requires identifier and expiresAt/);
     });
   });
 
@@ -765,13 +742,13 @@ describe('Better Auth Adapter Conformance', () => {
         model: 'verificationtoken',
         data: {
           identifier: 'tokenformat@example.com',
-          token: 'format-verification-token',
+          value: 'format-verification-value',
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         },
       });
 
       expect(typeof token.identifier).toBe('string');
-      expect(typeof token.token).toBe('string');
+      expect(typeof token.value).toBe('string');
       expect(token.expiresAt).toBeInstanceOf(Date);
     });
 
@@ -782,7 +759,7 @@ describe('Better Auth Adapter Conformance', () => {
         model: 'verificationtoken',
         data: {
           identifier: 'datetest@example.com',
-          token: 'date-test-token',
+          value: 'date-test-value',
           expiresAt: expirationDate,
         },
       });

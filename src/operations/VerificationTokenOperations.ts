@@ -196,8 +196,10 @@ export class VerificationTokenOperations {
       await this.checkTokenConflict(tokenData.token);
 
       // Create the token data structure
+      // Set both 'value' (BetterAuth format) and 'token' (backward compat)
       const verificationToken: BetterAuthVerificationToken = {
         identifier: normalizedIdentifier,
+        value: tokenData.token,
         token: tokenData.token,
         expiresAt: new Date(tokenData.expiresAt),
       };
@@ -792,9 +794,9 @@ export class VerificationTokenOperations {
         response
       ) as ApsoVerificationToken[];
 
-      // Search by the token value in the 'identifier' field (Apso API stores token there)
+      // Search by the token value in the 'value' or 'token' field
       const rawToken = normalizedResults.find(
-        (t: ApsoVerificationToken) => t.identifier === token
+        (t: ApsoVerificationToken) => t.value === token || t.token === token
       );
 
       if (!rawToken) {
@@ -949,17 +951,17 @@ export class VerificationTokenOperations {
 
       // Delete each expired token
       let deletedCount = 0;
-      for (const token of expiredTokens) {
+      for (const tokenRecord of expiredTokens) {
         try {
-          await this.deleteVerificationToken(token.token);
+          await this.deleteVerificationToken(tokenRecord.value || tokenRecord.token || '');
           deletedCount++;
         } catch (error) {
           // Log individual errors but continue
           if (this.config.logger) {
             this.config.logger.warn('Failed to delete expired token', {
               error,
-              token: this.sanitizeTokenForLogging(token.token),
-              identifier: this.sanitizeIdentifierForLogging(token.identifier),
+              token: this.sanitizeTokenForLogging(tokenRecord.value || tokenRecord.token || ''),
+              identifier: this.sanitizeIdentifierForLogging(tokenRecord.identifier),
             });
           }
         }
@@ -1024,9 +1026,9 @@ export class VerificationTokenOperations {
 
       // Delete each token
       let deletedCount = 0;
-      for (const token of tokens) {
+      for (const tokenRecord of tokens) {
         try {
-          await this.deleteVerificationToken(token.token);
+          await this.deleteVerificationToken(tokenRecord.value || tokenRecord.token || '');
           deletedCount++;
         } catch (error) {
           // Log individual errors but continue
@@ -1034,7 +1036,7 @@ export class VerificationTokenOperations {
             this.config.logger.warn('Failed to delete token for identifier', {
               error,
               identifier: this.sanitizeIdentifierForLogging(identifier),
-              token: this.sanitizeTokenForLogging(token.token),
+              token: this.sanitizeTokenForLogging(tokenRecord.value || tokenRecord.token || ''),
             });
           }
         }

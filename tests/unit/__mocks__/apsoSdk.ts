@@ -157,8 +157,12 @@ export class MockDataStore {
             return entity[key] === value;
           }
           if (key === 'token' && typeof value === 'string') {
-            // Handle verification token matching
-            return entity[key] === value;
+            // Handle verification token matching (check both token and value fields)
+            return entity[key] === value || entity['value'] === value;
+          }
+          if (key === 'value' && typeof value === 'string') {
+            // Handle verification value matching (BetterAuth format)
+            return entity[key] === value || entity['token'] === value;
           }
           return entity[key] === value;
         });

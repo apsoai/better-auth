@@ -462,7 +462,7 @@ export class ApsoAdapter implements IApsoAdapter {
               await this.verificationTokenOperations.createVerificationToken({
                 identifier:
                   updatedTokenData.identifier || existingToken.identifier,
-                token: updatedTokenData.token || existingToken.token,
+                token: updatedTokenData.value || updatedTokenData.token || existingToken.value || existingToken.token || '',
                 expiresAt: updatedTokenData.expiresAt,
               });
             this.updateSuccessMetrics(performance.now() - startTime);
@@ -487,7 +487,7 @@ export class ApsoAdapter implements IApsoAdapter {
 
             const existingToken = existingTokens[0];
             await this.verificationTokenOperations.deleteVerificationToken(
-              existingToken!.token
+              existingToken!.value || existingToken!.token || ''
             );
             const updatedTokenData = {
               ...existingToken,
@@ -500,7 +500,7 @@ export class ApsoAdapter implements IApsoAdapter {
               await this.verificationTokenOperations.createVerificationToken({
                 identifier:
                   updatedTokenData.identifier || existingToken!.identifier,
-                token: updatedTokenData.token || existingToken!.token,
+                token: updatedTokenData.value || updatedTokenData.token || existingToken!.value || existingToken!.token || '',
                 expiresAt: updatedTokenData.expiresAt,
               });
             this.updateSuccessMetrics(performance.now() - startTime);
@@ -746,7 +746,7 @@ export class ApsoAdapter implements IApsoAdapter {
           if (tokens[0]) {
             const deletedToken =
               await this.verificationTokenOperations.deleteVerificationToken(
-                tokens[0].token
+                tokens[0].value || tokens[0].token || ''
               );
             this.updateSuccessMetrics(performance.now() - startTime);
             return deletedToken as T;

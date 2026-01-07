@@ -700,11 +700,17 @@ export interface BetterAuthSession {
 
 /**
  * Better Auth VerificationToken entity format
+ * Note: BetterAuth uses 'value' field which contains JSON for OAuth state
+ * The 'token' field is kept for backward compatibility
  */
 export interface BetterAuthVerificationToken {
+  id?: string;
   identifier: string;
-  token: string;
+  value: string;
+  token?: string; // Alias for value - kept for backward compatibility
   expiresAt: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 /**
@@ -773,9 +779,14 @@ export interface ApsoSession {
 export interface ApsoVerificationToken {
   id?: string;
   identifier: string;
-  token: string;
+  value: string;
+  token?: string; // Alias for backward compatibility
   expiresAt: Date;
-  created_at: Date;
+  expires_at?: Date;
+  created_at?: Date;
+  createdAt?: Date;
+  updated_at?: Date;
+  updatedAt?: Date;
 }
 
 /**
