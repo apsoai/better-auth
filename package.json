@@ -51,7 +51,7 @@
     "typescript"
   ],
   "author": "Mavric Team",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/apsoai/better-auth.git"
