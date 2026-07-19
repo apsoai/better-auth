@@ -44,6 +44,7 @@ describe('Better Auth Adapter Conformance', () => {
       expect(typeof adapter.findOne).toBe('function');
       expect(typeof adapter.findMany).toBe('function');
       expect(typeof adapter.count).toBe('function');
+      expect(typeof adapter.transaction).toBe('function');
     });
 
     it('should have correct method signatures and return types', async () => {
@@ -105,6 +106,74 @@ describe('Better Auth Adapter Conformance', () => {
 
       expect(found).toBeTruthy();
       expect((found as BetterAuthUser).email).toBe('minimal@example.com');
+    });
+  });
+
+  describe('Transaction Support', () => {
+    it('should execute the callback and return its result', async () => {
+      const result = await adapter.transaction(async () => 'tx-result');
+      expect(result).toBe('tx-result');
+    });
+
+    it('should pass a working adapter to the callback', async () => {
+      const user = await adapter.transaction(async (trx) => {
+        const created = (await trx.create({
+          model: 'user',
+          data: { email: 'trx@example.com', emailVerified: false },
+        })) as BetterAuthUser;
+
+        return trx.findOne<BetterAuthUser>({
+          model: 'user',
+          where: { id: created.id },
+        });
+      });
+
+      expect(user).toBeTruthy();
+      expect(user?.email).toBe('trx@example.com');
+    });
+
+    it('should make writes from the callback visible outside the transaction', async () => {
+      // The Apso backend has no transactions; writes apply immediately and
+      // sequentially. Verify the documented non-transactional semantics.
+      await adapter.transaction(async (trx) => {
+        await trx.create({
+          model: 'user',
+          data: { email: 'visible@example.com', emailVerified: false },
+        });
+      });
+
+      const found = await adapter.findOne<BetterAuthUser>({
+        model: 'user',
+        where: { email: 'visible@example.com' },
+      });
+      expect(found).toBeTruthy();
+    });
+
+    it('should propagate errors thrown by the callback', async () => {
+      await expect(
+        adapter.transaction(async () => {
+          throw new Error('tx failed');
+        })
+      ).rejects.toThrow('tx failed');
+    });
+
+    it('should not roll back earlier writes when a later operation fails', async () => {
+      await expect(
+        adapter.transaction(async (trx) => {
+          await trx.create({
+            model: 'user',
+            data: { email: 'no-rollback@example.com', emailVerified: false },
+          });
+          throw new Error('later failure');
+        })
+      ).rejects.toThrow('later failure');
+
+      // Sequential, non-transactional semantics: the first write persists.
+      const found = await adapter.findOne<BetterAuthUser>({
+        model: 'user',
+        where: { email: 'no-rollback@example.com' },
+      });
+      expect(found).toBeTruthy();
     });
   });
 
