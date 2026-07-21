@@ -745,10 +745,19 @@ export class ApsoAdapter implements IApsoAdapter {
             );
           }
           if (tokens[0]) {
-            const deletedToken =
-              await this.verificationTokenOperations.deleteVerificationToken(
-                tokens[0].value || tokens[0].token || ''
-              );
+            // Delete by the record's primary id (DELETE /verifications/:id).
+            // Passing tokens[0].value/token issued a DELETE with no id, which
+            // failed with "No verification token found for deletion" and broke
+            // the OAuth callback ("Failed to parse state" ->
+            // internal_server_error -> back to login).
+            const tokenId = (tokens[0] as any).id;
+            const deletedToken = tokenId
+              ? await this.verificationTokenOperations.deleteVerificationTokenById(
+                  String(tokenId)
+                )
+              : await this.verificationTokenOperations.deleteVerificationToken(
+                  tokens[0].value || tokens[0].token || ''
+                );
             this.updateSuccessMetrics(performance.now() - startTime);
             return deletedToken as T;
           } else {

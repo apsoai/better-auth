@@ -306,7 +306,8 @@ export class VerificationTokenOperations {
       ) as ApsoVerificationToken[];
 
       // Get first matching token
-      const matchingToken = normalizedResults.length > 0 ? normalizedResults[0] : null;
+      const matchingToken =
+        normalizedResults.length > 0 ? normalizedResults[0] : null;
 
       if (!matchingToken) {
         this.logOperation(
@@ -411,13 +412,19 @@ export class VerificationTokenOperations {
         }
       }
 
-      // Build query with identifier filter (for future query parameter implementation)
+      // Apply the identifier filter SERVER-SIDE. Previously this URL had no
+      // filter and relied on client-side filtering of only the first page of
+      // results, so once the verifications table accumulated more rows than one
+      // page the target token fell off the page and lookups (and thus OAuth
+      // token deletion) failed with "No verification token found for deletion".
       this.queryTranslator.buildFindQuery(
         { identifier: normalizedIdentifier },
         { limit: options.limit || 100 }
       );
 
-      const url = `${this.config.baseUrl}/${this.apiPath}`;
+      const url = `${this.config.baseUrl}/${this.apiPath}?filter=identifier||eq||${encodeURIComponent(
+        normalizedIdentifier
+      )}&limit=${options.limit || 100}`;
 
       // Execute request
       const response = await this.httpClient.get<ApsoVerificationToken[]>(url, {
@@ -785,10 +792,13 @@ export class VerificationTokenOperations {
       // Find the token first to get its ID and return it after deletion
       // We need to query directly to get the raw Apso token with its internal ID
       const queryUrl = `${this.config.baseUrl}/${this.apiPath}`;
-      const response = await this.httpClient.get<ApsoVerificationToken[]>(queryUrl, {
-        headers: this.buildHeaders(),
-        ...(this.config.timeout && { timeout: this.config.timeout }),
-      });
+      const response = await this.httpClient.get<ApsoVerificationToken[]>(
+        queryUrl,
+        {
+          headers: this.buildHeaders(),
+          ...(this.config.timeout && { timeout: this.config.timeout }),
+        }
+      );
 
       const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
         response
@@ -820,16 +830,15 @@ export class VerificationTokenOperations {
       });
 
       // Map the raw Apso token to BetterAuth format for return
-      const mappedToken = this.entityMapper.mapVerificationTokenFromApi(rawToken);
+      const mappedToken =
+        this.entityMapper.mapVerificationTokenFromApi(rawToken);
 
       this.logOperation(
         'deleteVerificationToken',
         performance.now() - startTime,
         true,
         {
-          identifier: this.sanitizeIdentifierForLogging(
-            mappedToken.identifier
-          ),
+          identifier: this.sanitizeIdentifierForLogging(mappedToken.identifier),
         }
       );
 
@@ -953,15 +962,21 @@ export class VerificationTokenOperations {
       let deletedCount = 0;
       for (const tokenRecord of expiredTokens) {
         try {
-          await this.deleteVerificationToken(tokenRecord.value || tokenRecord.token || '');
+          await this.deleteVerificationToken(
+            tokenRecord.value || tokenRecord.token || ''
+          );
           deletedCount++;
         } catch (error) {
           // Log individual errors but continue
           if (this.config.logger) {
             this.config.logger.warn('Failed to delete expired token', {
               error,
-              token: this.sanitizeTokenForLogging(tokenRecord.value || tokenRecord.token || ''),
-              identifier: this.sanitizeIdentifierForLogging(tokenRecord.identifier),
+              token: this.sanitizeTokenForLogging(
+                tokenRecord.value || tokenRecord.token || ''
+              ),
+              identifier: this.sanitizeIdentifierForLogging(
+                tokenRecord.identifier
+              ),
             });
           }
         }
@@ -1028,7 +1043,9 @@ export class VerificationTokenOperations {
       let deletedCount = 0;
       for (const tokenRecord of tokens) {
         try {
-          await this.deleteVerificationToken(tokenRecord.value || tokenRecord.token || '');
+          await this.deleteVerificationToken(
+            tokenRecord.value || tokenRecord.token || ''
+          );
           deletedCount++;
         } catch (error) {
           // Log individual errors but continue
@@ -1036,7 +1053,9 @@ export class VerificationTokenOperations {
             this.config.logger.warn('Failed to delete token for identifier', {
               error,
               identifier: this.sanitizeIdentifierForLogging(identifier),
-              token: this.sanitizeTokenForLogging(tokenRecord.value || tokenRecord.token || ''),
+              token: this.sanitizeTokenForLogging(
+                tokenRecord.value || tokenRecord.token || ''
+              ),
             });
           }
         }
