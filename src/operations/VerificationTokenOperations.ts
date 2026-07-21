@@ -412,13 +412,19 @@ export class VerificationTokenOperations {
         }
       }
 
-      // Build query with identifier filter (for future query parameter implementation)
+      // Apply the identifier filter SERVER-SIDE. Previously this URL had no
+      // filter and relied on client-side filtering of only the first page of
+      // results, so once the verifications table accumulated more rows than one
+      // page the target token fell off the page and lookups (and thus OAuth
+      // token deletion) failed with "No verification token found for deletion".
       this.queryTranslator.buildFindQuery(
         { identifier: normalizedIdentifier },
         { limit: options.limit || 100 }
       );
 
-      const url = `${this.config.baseUrl}/${this.apiPath}`;
+      const url = `${this.config.baseUrl}/${this.apiPath}?filter=identifier||eq||${encodeURIComponent(
+        normalizedIdentifier
+      )}&limit=${options.limit || 100}`;
 
       // Execute request
       const response = await this.httpClient.get<ApsoVerificationToken[]>(url, {
