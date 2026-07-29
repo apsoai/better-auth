@@ -232,13 +232,13 @@ export class SessionOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      const normalizedResults =
-        this.responseNormalizer.normalizeArrayResponse(
-          response
-        ) as ApsoSession[];
+      const normalizedResults = this.responseNormalizer.normalizeArrayResponse(
+        response
+      ) as ApsoSession[];
 
       // Get first matching session
-      const matchingSession = normalizedResults.length > 0 ? normalizedResults[0] : null;
+      const matchingSession =
+        normalizedResults.length > 0 ? normalizedResults[0] : null;
 
       if (!matchingSession) {
         this.logOperation(

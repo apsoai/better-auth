@@ -16,9 +16,7 @@ export interface BetterAuthAdapter {
   findOne<T>(params: FindOneParams): Promise<T | null>;
   findMany<T>(params: FindManyParams): Promise<T[]>;
   count(params: CountParams): Promise<number>;
-  transaction<R>(
-    callback: (trx: TransactionAdapter) => Promise<R>
-  ): Promise<R>;
+  transaction<R>(callback: (trx: TransactionAdapter) => Promise<R>): Promise<R>;
 }
 
 /**

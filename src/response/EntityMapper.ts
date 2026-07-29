@@ -165,7 +165,10 @@ export class EntityMapper {
    * @returns Transformed partial data for API
    */
   mapUserPartialToApi(updateData: Partial<BetterAuthUser>): Partial<ApsoUser> {
-    console.log('[EntityMapper] mapUserPartialToApi - Input:', JSON.stringify(updateData, null, 2));
+    console.log(
+      '[EntityMapper] mapUserPartialToApi - Input:',
+      JSON.stringify(updateData, null, 2)
+    );
 
     const result: Partial<ApsoUser> = {};
 
@@ -191,7 +194,10 @@ export class EntityMapper {
     // Add updated_at timestamp
     result.updated_at = new Date();
 
-    console.log('[EntityMapper] mapUserPartialToApi - Output:', JSON.stringify(result, null, 2));
+    console.log(
+      '[EntityMapper] mapUserPartialToApi - Output:',
+      JSON.stringify(result, null, 2)
+    );
     return result;
   }
 
@@ -298,7 +304,8 @@ export class EntityMapper {
         // Better Auth requires both id AND token fields for proper cookie handling
         id: apiSession.id, // Session token as database primary key
         // Apso stores session token in 'token' field, check both for compatibility
-        sessionToken: apiSession.sessionToken || (apiSession as any).token || apiSession.id,
+        sessionToken:
+          apiSession.sessionToken || (apiSession as any).token || apiSession.id,
         token: (apiSession as any).token || apiSession.id, // Better Auth uses session.token for cookie value!
         userId: apiSession.userId,
         expiresAt:
@@ -401,10 +408,14 @@ export class EntityMapper {
         betterAuthToken.id = String(apiToken.id);
       }
       if (apiToken.createdAt || apiToken.created_at) {
-        betterAuthToken.createdAt = new Date(apiToken.createdAt || apiToken.created_at!);
+        betterAuthToken.createdAt = new Date(
+          apiToken.createdAt || apiToken.created_at!
+        );
       }
       if (apiToken.updatedAt || apiToken.updated_at) {
-        betterAuthToken.updatedAt = new Date(apiToken.updatedAt || apiToken.updated_at!);
+        betterAuthToken.updatedAt = new Date(
+          apiToken.updatedAt || apiToken.updated_at!
+        );
       }
 
       if (this.config.enableValidation) {
@@ -521,8 +532,13 @@ export class EntityMapper {
    * @param updateData - Partial account data to update
    * @returns Transformed partial data for API
    */
-  mapAccountPartialToApi(updateData: Partial<BetterAuthAccount>): Partial<ApsoAccount> {
-    console.log('[EntityMapper] mapAccountPartialToApi - Input:', JSON.stringify(updateData, null, 2));
+  mapAccountPartialToApi(
+    updateData: Partial<BetterAuthAccount>
+  ): Partial<ApsoAccount> {
+    console.log(
+      '[EntityMapper] mapAccountPartialToApi - Input:',
+      JSON.stringify(updateData, null, 2)
+    );
 
     const result: Partial<ApsoAccount> = {};
 
@@ -573,7 +589,10 @@ export class EntityMapper {
     // Add updated_at timestamp
     result.updated_at = new Date();
 
-    console.log('[EntityMapper] mapAccountPartialToApi - Output:', JSON.stringify(result, null, 2));
+    console.log(
+      '[EntityMapper] mapAccountPartialToApi - Output:',
+      JSON.stringify(result, null, 2)
+    );
     return result;
   }
 
