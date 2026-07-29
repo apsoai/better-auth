@@ -116,7 +116,7 @@ describe('Better Auth Adapter Conformance', () => {
     });
 
     it('should pass a working adapter to the callback', async () => {
-      const user = await adapter.transaction(async (trx) => {
+      const user = await adapter.transaction(async trx => {
         const created = (await trx.create({
           model: 'user',
           data: { email: 'trx@example.com', emailVerified: false },
@@ -135,7 +135,7 @@ describe('Better Auth Adapter Conformance', () => {
     it('should make writes from the callback visible outside the transaction', async () => {
       // The Apso backend has no transactions; writes apply immediately and
       // sequentially. Verify the documented non-transactional semantics.
-      await adapter.transaction(async (trx) => {
+      await adapter.transaction(async trx => {
         await trx.create({
           model: 'user',
           data: { email: 'visible@example.com', emailVerified: false },
@@ -159,7 +159,7 @@ describe('Better Auth Adapter Conformance', () => {
 
     it('should not roll back earlier writes when a later operation fails', async () => {
       await expect(
-        adapter.transaction(async (trx) => {
+        adapter.transaction(async trx => {
           await trx.create({
             model: 'user',
             data: { email: 'no-rollback@example.com', emailVerified: false },
