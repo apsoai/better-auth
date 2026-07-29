@@ -29,18 +29,22 @@ jobs:
 
       - name: Run security audit
         run: |
-          npm audit --audit-level=high --json > audit-results.json
-          
+          # Scope the gate to production dependencies. Dev-only vulnerabilities
+          # (build/test tooling) never ship to adapter consumers, so they must
+          # not fail the gate or spam security issues. Runtime deps are also
+          # covered by Dependabot alerts.
+          npm audit --omit=dev --audit-level=high --json > audit-results.json
+
           # Check if there are any high or critical vulnerabilities
           HIGH_VULNS=$(cat audit-results.json | jq '.metadata.vulnerabilities.high // 0')
           CRITICAL_VULNS=$(cat audit-results.json | jq '.metadata.vulnerabilities.critical // 0')
-          
+
           echo "High vulnerabilities: $HIGH_VULNS"
           echo "Critical vulnerabilities: $CRITICAL_VULNS"
-          
+
           if [ "$HIGH_VULNS" -gt 0 ] || [ "$CRITICAL_VULNS" -gt 0 ]; then
             echo "Security vulnerabilities found!"
-            npm audit --audit-level=high
+            npm audit --omit=dev --audit-level=high
             exit 1
           fi
 
@@ -50,21 +54,45 @@ jobs:
         with:
           script: |
             const title = 'Security Alert: High/Critical Vulnerabilities Detected';
+
+            // De-dup: if an open auto-filed alert already exists, comment on it
+            // instead of opening a duplicate. Prevents the tracker from filling
+            // with one identical issue per failed run.
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'automated',
+              per_page: 100,
+            });
+            const open = existing.data.find(i => i.title === title && !i.pull_request);
+            const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+
+            if (open) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: open.number,
+                body: `Audit gate failed again on ${runUrl}.`,
+              });
+              return;
+            }
+
             const body = `## Security Audit Failed
-            
-            High or critical security vulnerabilities were detected in the project dependencies.
-            
+
+            High or critical security vulnerabilities were detected in the project's **production** dependencies.
+
             **Action Required:**
             1. Review the audit results in the failed workflow run
             2. Update vulnerable dependencies
             3. Test the updates thoroughly
             4. Create a security release if needed
-            
-            **Workflow Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            
+
+            **Workflow Run:** ${runUrl}
+
             This issue was automatically created by the maintenance workflow.`;
-            
-            github.rest.issues.create({
+
+            await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: title,
