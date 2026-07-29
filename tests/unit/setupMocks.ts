@@ -8,34 +8,38 @@
 import { MockDataStore, mockApsoClientFactory } from './__mocks__/apsoSdk';
 
 // Mock the entire @apso/sdk module
-jest.mock('@apso/sdk', () => {
-  const { mockApsoClientFactory } = require('./__mocks__/apsoSdk');
+jest.mock(
+  '@apso/sdk',
+  () => {
+    const { mockApsoClientFactory } = require('./__mocks__/apsoSdk');
 
-  return {
-    ApsoClient: jest
-      .fn()
-      .mockImplementation(() =>
-        mockApsoClientFactory.getClient({ baseURL: 'test', apiKey: 'test' })
-      ),
-    ApsoClientFactory: mockApsoClientFactory,
-    QueryBuilder: jest.fn().mockImplementation(() => ({
-      select: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      or: jest.fn().mockReturnThis(),
-      join: jest.fn().mockReturnThis(),
-      orderBy: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
-      offset: jest.fn().mockReturnThis(),
-      page: jest.fn().mockReturnThis(),
-      cache: jest.fn().mockReturnThis(),
-      build: jest.fn().mockReturnValue({
-        params: {},
-        useCache: false,
-        cacheDuration: 60,
-      }),
-    })),
-  };
-}, { virtual: true });
+    return {
+      ApsoClient: jest
+        .fn()
+        .mockImplementation(() =>
+          mockApsoClientFactory.getClient({ baseURL: 'test', apiKey: 'test' })
+        ),
+      ApsoClientFactory: mockApsoClientFactory,
+      QueryBuilder: jest.fn().mockImplementation(() => ({
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        or: jest.fn().mockReturnThis(),
+        join: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        offset: jest.fn().mockReturnThis(),
+        page: jest.fn().mockReturnThis(),
+        cache: jest.fn().mockReturnThis(),
+        build: jest.fn().mockReturnValue({
+          params: {},
+          useCache: false,
+          cacheDuration: 60,
+        }),
+      })),
+    };
+  },
+  { virtual: true }
+);
 
 // Set up global test hooks
 beforeEach(() => {

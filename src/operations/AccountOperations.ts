@@ -102,8 +102,12 @@ export class AccountOperations {
         });
       } catch (error) {
         // HttpClient throws on non-2xx responses
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        if (
+          errorMessage.includes('404') ||
+          errorMessage.includes('Not Found')
+        ) {
           console.log('🔍 [SIGN-IN DEBUG] Account not found');
           return null;
         }
@@ -316,25 +320,35 @@ export class AccountOperations {
       // Apply filtering and pagination
       let filteredAccounts = accounts;
 
-      console.log('🔍 [AccountOps] findManyAccounts - all accounts:', accounts.map(a => ({
-        id: a.id,
-        providerId: a.providerId,
-        accountId: a.accountId,
-        userId: a.userId,
-      })));
+      console.log(
+        '🔍 [AccountOps] findManyAccounts - all accounts:',
+        accounts.map(a => ({
+          id: a.id,
+          providerId: a.providerId,
+          accountId: a.accountId,
+          userId: a.userId,
+        }))
+      );
 
       if (options.where) {
         console.log('🔍 [AccountOps] Filtering with where:', options.where);
         filteredAccounts = accounts.filter(account => {
-          const matches = Object.entries(options.where!).every(([key, value]) => {
-            const accountValue = (account as any)[key];
-            const isMatch = accountValue === value;
-            console.log(`🔍 [AccountOps] Filter check: account.${key}=${accountValue} vs ${value} => ${isMatch}`);
-            return isMatch;
-          });
+          const matches = Object.entries(options.where!).every(
+            ([key, value]) => {
+              const accountValue = (account as any)[key];
+              const isMatch = accountValue === value;
+              console.log(
+                `🔍 [AccountOps] Filter check: account.${key}=${accountValue} vs ${value} => ${isMatch}`
+              );
+              return isMatch;
+            }
+          );
           return matches;
         });
-        console.log('🔍 [AccountOps] Filtered accounts:', filteredAccounts.length);
+        console.log(
+          '🔍 [AccountOps] Filtered accounts:',
+          filteredAccounts.length
+        );
       }
 
       if (options.pagination?.limit) {
@@ -434,9 +448,15 @@ export class AccountOperations {
     } catch (error: any) {
       // Handle duplicate key error - return existing account instead of failing
       // This happens when the account already exists (e.g., re-linking OAuth)
-      const errorMessage = error?.message || error?.details?.message || String(error);
-      if (errorMessage.includes('duplicate key') || errorMessage.includes('unique constraint')) {
-        console.log('🔍 [AccountOps] Duplicate account detected, finding existing account...');
+      const errorMessage =
+        error?.message || error?.details?.message || String(error);
+      if (
+        errorMessage.includes('duplicate key') ||
+        errorMessage.includes('unique constraint')
+      ) {
+        console.log(
+          '🔍 [AccountOps] Duplicate account detected, finding existing account...'
+        );
 
         // Try to find the existing account by providerId + accountId
         const providerId = accountData.providerId;
@@ -450,12 +470,22 @@ export class AccountOperations {
             });
 
             if (existingAccounts.length > 0 && existingAccounts[0]) {
-              console.log('🔍 [AccountOps] Found existing account:', existingAccounts[0].id);
-              this.logOperation('createAccount', performance.now() - startTime, true);
+              console.log(
+                '🔍 [AccountOps] Found existing account:',
+                existingAccounts[0].id
+              );
+              this.logOperation(
+                'createAccount',
+                performance.now() - startTime,
+                true
+              );
               return existingAccounts[0]!;
             }
           } catch (findError) {
-            console.log('🔍 [AccountOps] Error finding existing account:', findError);
+            console.log(
+              '🔍 [AccountOps] Error finding existing account:',
+              findError
+            );
           }
         }
       }
@@ -490,16 +520,26 @@ export class AccountOperations {
 
     try {
       // Use partial transform to avoid setting defaults for fields not being updated
-      const transformedData = this.entityMapper.mapAccountPartialToApi(updateData);
+      const transformedData =
+        this.entityMapper.mapAccountPartialToApi(updateData);
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;
 
-      console.log('🔧 [AccountOps] Updating account at:', url, 'with partial data:', transformedData);
+      console.log(
+        '🔧 [AccountOps] Updating account at:',
+        url,
+        'with partial data:',
+        transformedData
+      );
 
       // HttpClient returns raw JSON, not { status, data }
-      const apiData = await this.httpClient.patch<ApsoAccount>(url, transformedData, {
-        headers: this.buildHeaders(),
-        ...(this.config.timeout && { timeout: this.config.timeout }),
-      });
+      const apiData = await this.httpClient.patch<ApsoAccount>(
+        url,
+        transformedData,
+        {
+          headers: this.buildHeaders(),
+          ...(this.config.timeout && { timeout: this.config.timeout }),
+        }
+      );
 
       console.log('🔧 [AccountOps] Update response:', apiData);
 
