@@ -10,6 +10,9 @@ env:
   NODE_VERSION: '22'
   REGISTRY_URL: 'https://registry.npmjs.org'
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Test & Quality Checks
@@ -56,7 +59,7 @@ jobs:
         run: npm run test:coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@ab904c41d6ece82784817410c45d8b8c02684457 # v3
         with:
           file: ./coverage/lcov.info
           flags: unittests
@@ -74,6 +77,10 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     
     steps:
       - name: Checkout repository
@@ -159,6 +166,11 @@ jobs:
     name: Publish Stable Release
     needs: [test, security]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
     steps:
@@ -191,6 +203,9 @@ jobs:
     name: Notify on Success
     needs: [publish-stable]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
     if: success()
     
     steps:
