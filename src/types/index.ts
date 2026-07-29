@@ -16,7 +16,16 @@ export interface BetterAuthAdapter {
   findOne<T>(params: FindOneParams): Promise<T | null>;
   findMany<T>(params: FindManyParams): Promise<T[]>;
   count(params: CountParams): Promise<number>;
+  transaction<R>(
+    callback: (trx: TransactionAdapter) => Promise<R>
+  ): Promise<R>;
 }
+
+/**
+ * Adapter handed to a transaction callback. Better Auth 1.6 defines this as
+ * the adapter without its own `transaction` method (no nesting).
+ */
+export type TransactionAdapter = Omit<BetterAuthAdapter, 'transaction'>;
 
 // =============================================================================
 // Parameter Types for Adapter Methods
