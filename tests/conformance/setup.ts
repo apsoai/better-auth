@@ -14,7 +14,7 @@ import {
 // Mock the Apso SDK at module level
 jest.mock('@apso/sdk', () => {
   return mockApsoClientFactory;
-});
+}, { virtual: true });
 
 // Mock the HttpClient to use our test implementation
 jest.mock('../../src/client/HttpClient', () => {

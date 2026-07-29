@@ -35,7 +35,7 @@ jest.mock('@apso/sdk', () => {
       }),
     })),
   };
-});
+}, { virtual: true });
 
 // Set up global test hooks
 beforeEach(() => {
