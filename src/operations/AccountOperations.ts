@@ -32,6 +32,10 @@ export interface AccountOperationsConfig {
   enableRetries?: boolean;
   maxRetries?: number;
   retryDelay?: number;
+  /** Shared adapter key sent as a bearer token to authenticate adapter calls. */
+  apiKey?: string;
+  /** Header name for the adapter key (defaults to Authorization). */
+  authHeader?: string;
 }
 
 /**
@@ -619,10 +623,20 @@ export class AccountOperations {
    * Build HTTP headers for API requests
    */
   private buildHeaders(): Record<string, string> {
-    return {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     };
+
+    // Authenticate adapter calls the same way UserOperations does. Without
+    // this, account creation hits the server unauthenticated (401) once the
+    // server stops exposing /accounts publicly.
+    if (this.config.apiKey) {
+      const authHeader = this.config.authHeader || 'Authorization';
+      headers[authHeader] = `Bearer ${this.config.apiKey}`;
+    }
+
+    return headers;
   }
 
   /**

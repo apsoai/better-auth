@@ -20,6 +20,7 @@ import type {
   CountParams,
   CreateManyParams,
   AdapterMetrics,
+  TransactionAdapter,
 } from '../types';
 import { EntityType } from '../types';
 import { AdapterError, AdapterErrorCode } from '../types';
@@ -1392,6 +1393,16 @@ export class ApsoAdapter implements IApsoAdapter {
         throw this.handleError(error, 'count', params.model);
       }
     }
+  }
+
+  async transaction<R>(
+    callback: (trx: TransactionAdapter) => Promise<R>
+  ): Promise<R> {
+    // The Apso REST API has no transaction endpoint, so operations inside the
+    // callback run sequentially against this adapter and are not rolled back
+    // if a later one fails. This matches Better Auth's documented behavior for
+    // adapters without transaction support.
+    return callback(this);
   }
 
   // =============================================================================
