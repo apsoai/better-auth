@@ -8,10 +8,15 @@ env:
   NODE_VERSION: '22'
   REGISTRY_URL: 'https://registry.npmjs.org'
 
+permissions:
+  contents: read
+
 jobs:
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     
     steps:
       - name: Checkout repository
@@ -34,7 +39,7 @@ jobs:
 
       - name: Extract release notes
         id: extract-release-notes
-        uses: ffurrer2/extract-release-notes@v1
+        uses: ffurrer2/extract-release-notes@f2dd00dec4102dbc6d7bdf804dfd85546dfa1f0b # v1
         with:
           changelog_file: CHANGELOG.md
 
@@ -62,7 +67,7 @@ jobs:
         run: npm pack
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
           name: Release v${{ steps.version.outputs.version }}
           body: ${{ steps.extract-release-notes.outputs.release_notes }}
@@ -93,6 +98,9 @@ jobs:
     name: Notify Release Success
     needs: [create-release]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
     if: success()
     
     steps:
