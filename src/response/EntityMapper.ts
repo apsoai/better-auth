@@ -588,11 +588,6 @@ export class EntityMapper {
 
     // Add updated_at timestamp
     result.updated_at = new Date();
-
-    console.log(
-      '[EntityMapper] mapAccountPartialToApi - Output:',
-      JSON.stringify(result, null, 2)
-    );
     return result;
   }
 

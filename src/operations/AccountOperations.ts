@@ -324,16 +324,6 @@ export class AccountOperations {
       // Apply filtering and pagination
       let filteredAccounts = accounts;
 
-      console.log(
-        '🔍 [AccountOps] findManyAccounts - all accounts:',
-        accounts.map(a => ({
-          id: a.id,
-          providerId: a.providerId,
-          accountId: a.accountId,
-          userId: a.userId,
-        }))
-      );
-
       if (options.where) {
         console.log('🔍 [AccountOps] Filtering with where:', options.where);
         filteredAccounts = accounts.filter(account => {
@@ -527,13 +517,6 @@ export class AccountOperations {
       const transformedData =
         this.entityMapper.mapAccountPartialToApi(updateData);
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;
-
-      console.log(
-        '🔧 [AccountOps] Updating account at:',
-        url,
-        'with partial data:',
-        transformedData
-      );
 
       // HttpClient returns raw JSON, not { status, data }
       const apiData = await this.httpClient.patch<ApsoAccount>(

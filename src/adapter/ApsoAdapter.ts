@@ -762,10 +762,6 @@ export class ApsoAdapter implements IApsoAdapter {
         const whereId = whereClause?.id as string | undefined;
         if (whereId && typeof whereId === 'string') {
           // Delete by ID (this is how BetterAuth calls deleteVerificationValue)
-          console.log(
-            '🔍 [ADAPTER delete] Deleting verification by ID:',
-            whereId
-          );
           const deletedToken =
             await this.verificationTokenOperations.deleteVerificationTokenById(
               whereId
