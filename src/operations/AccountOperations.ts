@@ -21,6 +21,7 @@ import {
   AdapterError,
   AdapterErrorCode,
   ApiResponseWithStatus,
+  Logger,
 } from '../types/index';
 
 /**
@@ -36,6 +37,7 @@ export interface AccountOperationsConfig {
   apiKey?: string;
   /** Header name for the adapter key (defaults to Authorization). */
   authHeader?: string;
+  logger?: Logger;
 }
 
 /**
@@ -82,8 +84,6 @@ export class AccountOperations {
   async findAccountById(id: string): Promise<BetterAuthAccount | null> {
     const startTime = performance.now();
 
-    console.log('🔍 [SIGN-IN DEBUG] findAccountById called with id:', id);
-
     try {
       if (!id || typeof id !== 'string') {
         throw new AdapterError(
@@ -96,7 +96,6 @@ export class AccountOperations {
       }
 
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;
-      console.log('🔍 [SIGN-IN DEBUG] Making API request to:', url);
 
       let apiData: ApsoAccount;
       try {
@@ -112,13 +111,10 @@ export class AccountOperations {
           errorMessage.includes('404') ||
           errorMessage.includes('Not Found')
         ) {
-          console.log('🔍 [SIGN-IN DEBUG] Account not found');
           return null;
         }
         throw error;
       }
-
-      console.log('🔍 [SIGN-IN DEBUG] API response data:', apiData);
 
       // Wrap in expected format for normalizer
       const wrappedResponse = { status: 200, data: apiData };
@@ -128,13 +124,6 @@ export class AccountOperations {
       const result = this.entityMapper.transformInbound(
         'account',
         normalizedResponse
-      );
-
-      console.log(
-        '🔍 [SIGN-IN DEBUG] findAccountById result:',
-        result
-          ? { id: result.id, userId: result.userId, type: result.type }
-          : 'null'
       );
 
       this.logOperation('findAccountById', performance.now() - startTime, true);
@@ -168,11 +157,6 @@ export class AccountOperations {
   async findAccountByUserId(userId: string): Promise<BetterAuthAccount | null> {
     const startTime = performance.now();
 
-    console.log(
-      '🔍 [SIGN-IN DEBUG] findAccountByUserId called with userId:',
-      userId
-    );
-
     try {
       if (!userId || typeof userId !== 'string') {
         throw new AdapterError(
@@ -184,20 +168,16 @@ export class AccountOperations {
         );
       }
 
-      // Use limit=10000 to fetch all accounts (pagination workaround)
-      const url = `${this.config.baseUrl}/${this.apiPath}?limit=10000`;
-      console.log('🔍 [SIGN-IN DEBUG] Making API request to:', url);
+      // Filter server-side; the in-memory match below stays as a safety net.
+      const filter = encodeURIComponent(`userId||$eq||${userId}`);
+      const url = `${this.config.baseUrl}/${this.apiPath}?filter=${filter}&limit=1`;
 
-      // Get all accounts and filter by userId (in a real implementation, we'd use query parameters)
       const response = await this.httpClient.get<
         ApiResponseWithStatus<ApsoAccount[]>
       >(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-
-      console.log('🔍 [SIGN-IN DEBUG] API response status:', response.status);
-      console.log('🔍 [SIGN-IN DEBUG] API response data:', response.data);
 
       if (response.status !== 200) {
         throw new AdapterError(
@@ -219,21 +199,6 @@ export class AccountOperations {
       // Find account with matching userId
       const matchingAccount = accounts.find(
         account => account.userId === userId
-      );
-
-      console.log(
-        '🔍 [SIGN-IN DEBUG] findAccountByUserId - found accounts:',
-        accounts.map(a => ({ id: a.id, userId: a.userId, type: a.type }))
-      );
-      console.log(
-        '🔍 [SIGN-IN DEBUG] findAccountByUserId - matching account:',
-        matchingAccount
-          ? {
-              id: matchingAccount.id,
-              userId: matchingAccount.userId,
-              type: matchingAccount.type,
-            }
-          : 'null'
       );
 
       this.logOperation(
@@ -269,35 +234,29 @@ export class AccountOperations {
     const startTime = performance.now();
 
     try {
-      // Use limit=10000 to fetch all accounts (pagination workaround)
-      const url = `${this.config.baseUrl}/${this.apiPath}?limit=10000`;
-      console.log('🔍 [SIGN-IN DEBUG] findManyAccounts request to:', url);
+      // Filter server-side on the where clause (e.g. accountId + providerId on
+      // every OAuth sign-in) instead of downloading every account. The
+      // in-memory filter below stays as a safety net.
+      const params = Object.entries(options.where ?? {})
+        .filter(([, value]) => value !== undefined && value !== null)
+        .map(
+          ([key, value]) =>
+            `filter=${encodeURIComponent(`${key}||$eq||${String(value)}`)}`
+        );
+      // The pager below slices [offset, offset + limit), so fetch that many.
+      const { offset = 0, limit = 100 } = options.pagination ?? {};
+      params.push(`limit=${offset + limit}`);
+      const url = `${this.config.baseUrl}/${this.apiPath}?${params.join('&')}`;
 
       const response = await this.httpClient.get<{ data: ApsoAccount[] }>(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-      console.log(
-        '🔍 [SIGN-IN DEBUG] findManyAccounts response:',
-        response && (response as any).data
-          ? `Object with data array of ${(response as any).data.length} items`
-          : typeof response
-      );
-
       // HttpClient returns the full API response {data: [...], meta: {...}}
       // The normalizer expects this structure
       const normalizedResponse =
         this.responseNormalizer.normalizeArrayResponse(response);
-
-      console.log(
-        '🔍 [SIGN-IN DEBUG] normalizedResponse type:',
-        Array.isArray(normalizedResponse) ? 'array' : typeof normalizedResponse
-      );
-      console.log(
-        '🔍 [SIGN-IN DEBUG] normalizedResponse length:',
-        Array.isArray(normalizedResponse) ? normalizedResponse.length : 'N/A'
-      );
 
       // transformInbound expects an array for bulk transforms
       let accounts: BetterAuthAccount[];
@@ -312,37 +271,20 @@ export class AccountOperations {
         ];
       }
 
-      console.log(
-        '🔍 [SIGN-IN DEBUG] accounts type:',
-        Array.isArray(accounts) ? 'array' : typeof accounts
-      );
-      console.log(
-        '🔍 [SIGN-IN DEBUG] accounts length:',
-        Array.isArray(accounts) ? accounts.length : 'N/A'
-      );
-
       // Apply filtering and pagination
       let filteredAccounts = accounts;
 
       if (options.where) {
-        console.log('🔍 [AccountOps] Filtering with where:', options.where);
         filteredAccounts = accounts.filter(account => {
           const matches = Object.entries(options.where!).every(
             ([key, value]) => {
               const accountValue = (account as any)[key];
               const isMatch = accountValue === value;
-              console.log(
-                `🔍 [AccountOps] Filter check: account.${key}=${accountValue} vs ${value} => ${isMatch}`
-              );
               return isMatch;
             }
           );
           return matches;
         });
-        console.log(
-          '🔍 [AccountOps] Filtered accounts:',
-          filteredAccounts.length
-        );
       }
 
       if (options.pagination?.limit) {
@@ -398,11 +340,6 @@ export class AccountOperations {
     const startTime = performance.now();
 
     try {
-      console.log(
-        '🔍 [SIGN-IN DEBUG] createAccount called with data:',
-        JSON.stringify(accountData, null, 2)
-      );
-
       // Do NOT include ID - let the backend auto-generate it (SERIAL/integer)
       // Create account data without ID to let backend generate it
       const accountDataWithId = {
@@ -417,17 +354,12 @@ export class AccountOperations {
       );
       const url = `${this.config.baseUrl}/${this.apiPath}`;
 
-      console.log('🔍 [SIGN-IN DEBUG] Creating account at:', url);
-      console.log('🔍 [SIGN-IN DEBUG] Account data:', transformedData);
-
       const response = await this.httpClient.post<
         ApiResponseWithStatus<ApsoAccount>
       >(url, transformedData, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-
-      console.log('🔍 [SIGN-IN DEBUG] Account creation response:', response);
 
       // HttpClient already handles error responses internally, no need to check status
       const normalizedResponse =
@@ -448,10 +380,6 @@ export class AccountOperations {
         errorMessage.includes('duplicate key') ||
         errorMessage.includes('unique constraint')
       ) {
-        console.log(
-          '🔍 [AccountOps] Duplicate account detected, finding existing account...'
-        );
-
         // Try to find the existing account by providerId + accountId
         const providerId = accountData.providerId;
         const accountId = accountData.accountId;
@@ -464,10 +392,6 @@ export class AccountOperations {
             });
 
             if (existingAccounts.length > 0 && existingAccounts[0]) {
-              console.log(
-                '🔍 [AccountOps] Found existing account:',
-                existingAccounts[0].id
-              );
               this.logOperation(
                 'createAccount',
                 performance.now() - startTime,
@@ -475,11 +399,8 @@ export class AccountOperations {
               );
               return existingAccounts[0]!;
             }
-          } catch (findError) {
-            console.log(
-              '🔍 [AccountOps] Error finding existing account:',
-              findError
-            );
+          } catch {
+            // Lookup of an existing account is best-effort; create below.
           }
         }
       }
@@ -527,8 +448,6 @@ export class AccountOperations {
           ...(this.config.timeout && { timeout: this.config.timeout }),
         }
       );
-
-      console.log('🔧 [AccountOps] Update response:', apiData);
 
       // Wrap in expected format for normalizer
       const wrappedResponse = { status: 200, data: apiData };
@@ -631,15 +550,14 @@ export class AccountOperations {
     success: boolean,
     error?: any
   ): void {
+    const logData = { operation, duration, success };
     if (success) {
-      console.log(
-        `✅ [AccountOps] ${operation} completed in ${duration.toFixed(2)}ms`
-      );
+      this.config.logger?.debug('Account operation completed', logData);
     } else {
-      console.log(
-        `❌ [AccountOps] ${operation} failed in ${duration.toFixed(2)}ms:`,
-        error?.message || error
-      );
+      this.config.logger?.error('Account operation failed', {
+        ...logData,
+        error,
+      });
     }
   }
 
