@@ -322,18 +322,11 @@ export class UserOperations {
         );
       }
 
-      // Build query with email filter (for future query parameter implementation)
-      this.queryTranslator.buildFindQuery(
-        { email: normalizedEmail },
-        { limit: 1 }
-      );
+      // Case-insensitive server-side match ($eqL); the in-memory check below
+      // stays as a safety net.
+      const filter = encodeURIComponent(`email||$eqL||${normalizedEmail}`);
+      const url = `${this.config.baseUrl}/${this.apiPath}?filter=${filter}&limit=1`;
 
-      // Use limit=10000 to fetch all users (pagination workaround)
-      // In a production system, you'd use server-side filtering via query params
-      const url = `${this.config.baseUrl}/${this.apiPath}?limit=10000`;
-
-      // For now, we'll get all users and filter (in a real implementation,
-      // we'd use query parameters for server-side filtering)
       const response = await this.httpClient.get<ApsoUser[]>(url, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
@@ -513,7 +506,6 @@ export class UserOperations {
       // This prevents unique constraint violations on fields like cognito_id
       const apiData = this.entityMapper.mapUserPartialToApi(normalizedUpdates);
 
-      console.log('🔧 [UserOps] Updating user with partial data:', apiData);
 
       // Execute update request
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;

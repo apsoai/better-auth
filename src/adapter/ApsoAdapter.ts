@@ -206,10 +206,6 @@ export class ApsoAdapter implements IApsoAdapter {
 
         case 'verification': // BetterAuth uses 'verification' model name
         case 'verificationtoken':
-          console.log('🔍 [ADAPTER create] verification create:', {
-            model: params.model,
-            data: params.data,
-          });
 
           // BetterAuth sends verification data with:
           // - identifier: OAuth state value (used for lookup)
@@ -255,10 +251,6 @@ export class ApsoAdapter implements IApsoAdapter {
             this.responseNormalizer.normalizeSingleResponse(
               verificationResponse
             ) as any;
-          console.log(
-            '🔍 [ADAPTER create] verification created:',
-            normalizedVerification
-          );
 
           // Return in BetterAuth format
           const tokenResult = {
@@ -339,12 +331,6 @@ export class ApsoAdapter implements IApsoAdapter {
     };
 
     // Debug logging
-    console.log('🔧 [ADAPTER UPDATE] Called with params:', {
-      model: params.model,
-      where: params.where,
-      whereKeys: Object.keys(params.where || {}),
-      update: params.update,
-    });
 
     try {
       this.updateModelMetrics(params.model);
@@ -357,12 +343,6 @@ export class ApsoAdapter implements IApsoAdapter {
       switch (params.model.toLowerCase()) {
         case 'user':
           // Handle user-specific updates (support both string and number IDs)
-          console.log(
-            '🔧 [ADAPTER UPDATE] User update - whereId:',
-            whereId,
-            'type:',
-            typeof whereId
-          );
           if (
             whereId &&
             (typeof whereId === 'string' || typeof whereId === 'number')
@@ -557,12 +537,6 @@ export class ApsoAdapter implements IApsoAdapter {
         case 'account':
           // Handle account-specific updates (support both string and number IDs, and array format where)
           const accountWhereId = extractWhereValue(params.where, 'id');
-          console.log(
-            '🔧 [ADAPTER UPDATE] Account update - accountWhereId:',
-            accountWhereId,
-            'type:',
-            typeof accountWhereId
-          );
 
           if (
             accountWhereId &&
@@ -750,10 +724,6 @@ export class ApsoAdapter implements IApsoAdapter {
         verificationModelLower === 'verificationtoken' ||
         verificationModelLower === 'verification'
       ) {
-        console.log('🔍 [ADAPTER delete] verification delete:', {
-          model: params.model,
-          where: params.where,
-        });
 
         // Parse where clause to handle BetterAuth's array format
         const whereClause = this.parseWhereClause(params.where);
@@ -785,10 +755,6 @@ export class ApsoAdapter implements IApsoAdapter {
         // Check for 'identifier' field - BetterAuth uses this for deleteVerificationByIdentifier
         const whereIdentifier = whereClause?.identifier as string | undefined;
         if (whereIdentifier && typeof whereIdentifier === 'string') {
-          console.log(
-            '🔍 [ADAPTER delete] Deleting verification by identifier:',
-            whereIdentifier
-          );
           // Find token by identifier and delete
           const tokens =
             await this.verificationTokenOperations.findVerificationTokensByIdentifier(
@@ -921,11 +887,6 @@ export class ApsoAdapter implements IApsoAdapter {
     const startTime = performance.now();
 
     // DEBUG: Log all findOne calls to understand what Better Auth is requesting
-    console.log('🔍 [ADAPTER DEBUG] findOne called:', {
-      model: params.model,
-      where: JSON.stringify(params.where),
-      join: JSON.stringify((params as any).join), // Check if join is being passed
-    });
 
     try {
       // Track request
@@ -964,22 +925,9 @@ export class ApsoAdapter implements IApsoAdapter {
 
           // If includeAccounts is requested and we found a user, fetch their accounts
           if (userResult && includeAccounts) {
-            console.log(
-              '🔍 [ADAPTER DEBUG] Fetching accounts for user:',
-              userResult.id
-            );
             const accounts = await this.accountOperations.findManyAccounts({
               where: { userId: userResult.id },
             });
-            console.log(
-              '🔍 [ADAPTER DEBUG] Found accounts:',
-              accounts.length,
-              accounts.map((a: any) => ({
-                id: a.id,
-                providerId: a.providerId,
-                password: a.password ? 'present' : 'missing',
-              }))
-            );
             // Add accounts to the user object (Better Auth expects 'account' key)
             userResult = {
               ...userResult,
@@ -1025,10 +973,6 @@ export class ApsoAdapter implements IApsoAdapter {
                 : params.join;
             if (joinConfig?.user) {
               const userIdStr = String(sessionResult.userId);
-              console.log(
-                '🔍 [ADAPTER findOne] session with user join, fetching user:',
-                userIdStr
-              );
               try {
                 const user = await this.userOperations.findUserById(userIdStr);
                 if (user) {
@@ -1036,20 +980,9 @@ export class ApsoAdapter implements IApsoAdapter {
                     ...sessionResult,
                     user: user,
                   };
-                  console.log(
-                    '🔍 [ADAPTER findOne] session with user attached:',
-                    {
-                      sessionId: sessionResult.id,
-                      userId: user.id,
-                      userEmail: user.email,
-                    }
-                  );
                 }
-              } catch (userError) {
-                console.log(
-                  '🔍 [ADAPTER findOne] failed to fetch user for session:',
-                  userError
-                );
+              } catch {
+                // Session is still valid without the joined user; fall through.
               }
             }
           }
@@ -1061,10 +994,6 @@ export class ApsoAdapter implements IApsoAdapter {
           // Parse where clause using the new parser
           const accountWhere = this.parseWhereClause(params.where);
 
-          console.log('🔍 [ADAPTER findOne] account lookup:', {
-            rawWhere: params.where,
-            parsedWhere: accountWhere,
-          });
 
           if (accountWhere.id) {
             // Find account by ID
@@ -1083,30 +1012,12 @@ export class ApsoAdapter implements IApsoAdapter {
             return accountResult as T;
           } else if (accountWhere.providerId && accountWhere.accountId) {
             // Find account by providerId + accountId (for OAuth account linking)
-            console.log(
-              '🔍 [ADAPTER findOne] Looking up account by providerId + accountId:',
-              {
-                providerId: accountWhere.providerId,
-                accountId: accountWhere.accountId,
-              }
-            );
 
             const accounts = await this.accountOperations.findManyAccounts({
               where: accountWhere, // Pass the parsed where clause
               pagination: { limit: 1 },
             });
 
-            console.log(
-              '🔍 [ADAPTER findOne] Found accounts:',
-              accounts.length,
-              accounts.length > 0
-                ? {
-                    id: accounts[0]?.id,
-                    providerId: accounts[0]?.providerId,
-                    accountId: accounts[0]?.accountId,
-                  }
-                : 'none'
-            );
 
             this.updateSuccessMetrics(performance.now() - startTime);
             return accounts.length > 0 ? (accounts[0] as T) : null;
@@ -1148,11 +1059,6 @@ export class ApsoAdapter implements IApsoAdapter {
             'identifier'
           );
 
-          console.log('🔍 [ADAPTER findOne] verificationtoken lookup:', {
-            where: params.where,
-            whereToken,
-            whereIdentifier,
-          });
 
           if (whereToken && typeof whereToken === 'string') {
             const tokenResult =
@@ -1167,16 +1073,9 @@ export class ApsoAdapter implements IApsoAdapter {
                 whereIdentifier,
                 { activeOnly: true, limit: 1 }
               );
-            console.log(
-              '🔍 [ADAPTER findOne] verificationtoken found:',
-              tokens.length > 0 ? tokens[0] : 'none'
-            );
             this.updateSuccessMetrics(performance.now() - startTime);
             return tokens.length > 0 ? (tokens[0] as T) : null;
           } else {
-            console.log(
-              '🔍 [ADAPTER findOne] verificationtoken - no token or identifier found'
-            );
             this.updateSuccessMetrics(performance.now() - startTime);
             return null;
           }
@@ -1233,11 +1132,6 @@ export class ApsoAdapter implements IApsoAdapter {
       // and we need server-side filtering due to pagination issues
       const modelLower = params.model.toLowerCase();
       if (modelLower === 'verification' || modelLower === 'verificationtoken') {
-        console.log('🔍 [ADAPTER findMany] verification lookup:', {
-          model: params.model,
-          whereClause,
-          rawWhere: params.where,
-        });
 
         // Extract identifier from where clause
         const identifier = whereClause?.identifier as string | undefined;
@@ -1249,10 +1143,6 @@ export class ApsoAdapter implements IApsoAdapter {
           );
           const url = `${this.config.baseUrl}/verifications?filter=${filterValue}&limit=${params.pagination?.limit || 10}`;
 
-          console.log(
-            '🔍 [ADAPTER findMany] Using server-side filter URL:',
-            url
-          );
 
           const response = await this.httpClient.get<T[]>(url, {
             headers: this.buildHeaders(),
@@ -1262,10 +1152,6 @@ export class ApsoAdapter implements IApsoAdapter {
           const normalizedResults =
             this.responseNormalizer.normalizeArrayResponse(response);
 
-          console.log(
-            '🔍 [ADAPTER findMany] Found verification tokens:',
-            normalizedResults.length
-          );
 
           // Transform results to BetterAuth's verification format
           // BetterAuth expects: { id, identifier, value, expiresAt, createdAt, updatedAt }
@@ -1287,10 +1173,6 @@ export class ApsoAdapter implements IApsoAdapter {
                 : undefined,
           }));
 
-          console.log(
-            '🔍 [ADAPTER findMany] Transformed verification results:',
-            transformedResults
-          );
 
           this.updateSuccessMetrics(performance.now() - startTime);
           return transformedResults as T[];

@@ -165,10 +165,6 @@ export class EntityMapper {
    * @returns Transformed partial data for API
    */
   mapUserPartialToApi(updateData: Partial<BetterAuthUser>): Partial<ApsoUser> {
-    console.log(
-      '[EntityMapper] mapUserPartialToApi - Input:',
-      JSON.stringify(updateData, null, 2)
-    );
 
     const result: Partial<ApsoUser> = {};
 
@@ -194,10 +190,6 @@ export class EntityMapper {
     // Add updated_at timestamp
     result.updated_at = new Date();
 
-    console.log(
-      '[EntityMapper] mapUserPartialToApi - Output:',
-      JSON.stringify(result, null, 2)
-    );
     return result;
   }
 
@@ -458,20 +450,6 @@ export class EntityMapper {
       const accountWithPassword = account as BetterAuthAccountWithPassword;
 
       // DEBUG: Log what Better Auth is sending us
-      console.log(
-        '[EntityMapper] mapAccountToApi - Received from Better Auth:'
-      );
-      console.log('[EntityMapper]   account.provider:', account.provider);
-      console.log(
-        '[EntityMapper]   account.providerAccountId:',
-        account.providerAccountId
-      );
-      console.log('[EntityMapper]   account.userId:', account.userId);
-      console.log('[EntityMapper]   account.type:', account.type);
-      console.log(
-        '[EntityMapper]   Full account object:',
-        JSON.stringify(account, null, 2)
-      );
 
       const apsoAccount: ApsoAccount = {
         // Only include ID if it's a meaningful value (not empty string)
@@ -535,10 +513,6 @@ export class EntityMapper {
   mapAccountPartialToApi(
     updateData: Partial<BetterAuthAccount>
   ): Partial<ApsoAccount> {
-    console.log(
-      '[EntityMapper] mapAccountPartialToApi - Input:',
-      JSON.stringify(updateData, null, 2)
-    );
 
     const result: Partial<ApsoAccount> = {};
 
