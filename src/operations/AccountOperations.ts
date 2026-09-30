@@ -84,7 +84,6 @@ export class AccountOperations {
   async findAccountById(id: string): Promise<BetterAuthAccount | null> {
     const startTime = performance.now();
 
-
     try {
       if (!id || typeof id !== 'string') {
         throw new AdapterError(
@@ -117,7 +116,6 @@ export class AccountOperations {
         throw error;
       }
 
-
       // Wrap in expected format for normalizer
       const wrappedResponse = { status: 200, data: apiData };
 
@@ -127,7 +125,6 @@ export class AccountOperations {
         'account',
         normalizedResponse
       );
-
 
       this.logOperation('findAccountById', performance.now() - startTime, true);
       return result;
@@ -160,7 +157,6 @@ export class AccountOperations {
   async findAccountByUserId(userId: string): Promise<BetterAuthAccount | null> {
     const startTime = performance.now();
 
-
     try {
       if (!userId || typeof userId !== 'string') {
         throw new AdapterError(
@@ -183,7 +179,6 @@ export class AccountOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-
       if (response.status !== 200) {
         throw new AdapterError(
           AdapterErrorCode.API_ERROR,
@@ -205,7 +200,6 @@ export class AccountOperations {
       const matchingAccount = accounts.find(
         account => account.userId === userId
       );
-
 
       this.logOperation(
         'findAccountByUserId',
@@ -259,12 +253,10 @@ export class AccountOperations {
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
 
-
       // HttpClient returns the full API response {data: [...], meta: {...}}
       // The normalizer expects this structure
       const normalizedResponse =
         this.responseNormalizer.normalizeArrayResponse(response);
-
 
       // transformInbound expects an array for bulk transforms
       let accounts: BetterAuthAccount[];
@@ -278,7 +270,6 @@ export class AccountOperations {
           this.entityMapper.transformInbound('account', normalizedResponse),
         ];
       }
-
 
       // Apply filtering and pagination
       let filteredAccounts = accounts;
@@ -349,7 +340,6 @@ export class AccountOperations {
     const startTime = performance.now();
 
     try {
-
       // Do NOT include ID - let the backend auto-generate it (SERIAL/integer)
       // Create account data without ID to let backend generate it
       const accountDataWithId = {
@@ -364,14 +354,12 @@ export class AccountOperations {
       );
       const url = `${this.config.baseUrl}/${this.apiPath}`;
 
-
       const response = await this.httpClient.post<
         ApiResponseWithStatus<ApsoAccount>
       >(url, transformedData, {
         headers: this.buildHeaders(),
         ...(this.config.timeout && { timeout: this.config.timeout }),
       });
-
 
       // HttpClient already handles error responses internally, no need to check status
       const normalizedResponse =
@@ -392,7 +380,6 @@ export class AccountOperations {
         errorMessage.includes('duplicate key') ||
         errorMessage.includes('unique constraint')
       ) {
-
         // Try to find the existing account by providerId + accountId
         const providerId = accountData.providerId;
         const accountId = accountData.accountId;
@@ -461,7 +448,6 @@ export class AccountOperations {
           ...(this.config.timeout && { timeout: this.config.timeout }),
         }
       );
-
 
       // Wrap in expected format for normalizer
       const wrappedResponse = { status: 200, data: apiData };
@@ -568,7 +554,10 @@ export class AccountOperations {
     if (success) {
       this.config.logger?.debug('Account operation completed', logData);
     } else {
-      this.config.logger?.error('Account operation failed', { ...logData, error });
+      this.config.logger?.error('Account operation failed', {
+        ...logData,
+        error,
+      });
     }
   }
 

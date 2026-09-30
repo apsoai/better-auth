@@ -165,7 +165,6 @@ export class EntityMapper {
    * @returns Transformed partial data for API
    */
   mapUserPartialToApi(updateData: Partial<BetterAuthUser>): Partial<ApsoUser> {
-
     const result: Partial<ApsoUser> = {};
 
     // Only include fields that are explicitly provided (not undefined)
@@ -513,7 +512,6 @@ export class EntityMapper {
   mapAccountPartialToApi(
     updateData: Partial<BetterAuthAccount>
   ): Partial<ApsoAccount> {
-
     const result: Partial<ApsoAccount> = {};
 
     // Only include fields that are explicitly provided (not undefined)

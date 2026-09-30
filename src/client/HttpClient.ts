@@ -119,7 +119,6 @@ export class HttpClient implements IHttpClient {
 
       clearTimeout(timeoutId);
 
-
       // 5. Parse and validate response
       if (!response.ok) {
         let errorMessage = `HTTP ${response.status}: ${response.statusText}`;

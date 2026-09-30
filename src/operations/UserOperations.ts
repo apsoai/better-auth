@@ -506,7 +506,6 @@ export class UserOperations {
       // This prevents unique constraint violations on fields like cognito_id
       const apiData = this.entityMapper.mapUserPartialToApi(normalizedUpdates);
 
-
       // Execute update request
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;
       const response = await this.httpClient.patch<ApsoUser>(url, apiData, {

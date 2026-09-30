@@ -206,7 +206,6 @@ export class ApsoAdapter implements IApsoAdapter {
 
         case 'verification': // BetterAuth uses 'verification' model name
         case 'verificationtoken':
-
           // BetterAuth sends verification data with:
           // - identifier: OAuth state value (used for lookup)
           // - value: JSON string with callback URL, code verifier, etc.
@@ -724,7 +723,6 @@ export class ApsoAdapter implements IApsoAdapter {
         verificationModelLower === 'verificationtoken' ||
         verificationModelLower === 'verification'
       ) {
-
         // Parse where clause to handle BetterAuth's array format
         const whereClause = this.parseWhereClause(params.where);
 
@@ -1003,7 +1001,6 @@ export class ApsoAdapter implements IApsoAdapter {
           // Parse where clause using the new parser
           const accountWhere = this.parseWhereClause(params.where);
 
-
           if (accountWhere.id) {
             // Find account by ID
             const accountResult = await this.accountOperations.findAccountById(
@@ -1026,7 +1023,6 @@ export class ApsoAdapter implements IApsoAdapter {
               where: accountWhere, // Pass the parsed where clause
               pagination: { limit: 1 },
             });
-
 
             this.updateSuccessMetrics(performance.now() - startTime);
             return accounts.length > 0 ? (accounts[0] as T) : null;
@@ -1067,7 +1063,6 @@ export class ApsoAdapter implements IApsoAdapter {
             params.where,
             'identifier'
           );
-
 
           if (whereToken && typeof whereToken === 'string') {
             const tokenResult =
@@ -1141,7 +1136,6 @@ export class ApsoAdapter implements IApsoAdapter {
       // and we need server-side filtering due to pagination issues
       const modelLower = params.model.toLowerCase();
       if (modelLower === 'verification' || modelLower === 'verificationtoken') {
-
         // Extract identifier from where clause
         const identifier = whereClause?.identifier as string | undefined;
         if (identifier) {
@@ -1152,7 +1146,6 @@ export class ApsoAdapter implements IApsoAdapter {
           );
           const url = `${this.config.baseUrl}/verifications?filter=${filterValue}&limit=${params.pagination?.limit || 10}`;
 
-
           const response = await this.httpClient.get<T[]>(url, {
             headers: this.buildHeaders(),
             ...(this.config.timeout && { timeout: this.config.timeout }),
@@ -1160,7 +1153,6 @@ export class ApsoAdapter implements IApsoAdapter {
 
           const normalizedResults =
             this.responseNormalizer.normalizeArrayResponse(response);
-
 
           // Transform results to BetterAuth's verification format
           // BetterAuth expects: { id, identifier, value, expiresAt, createdAt, updatedAt }
@@ -1181,7 +1173,6 @@ export class ApsoAdapter implements IApsoAdapter {
                 ? new Date(item.updated_at)
                 : undefined,
           }));
-
 
           this.updateSuccessMetrics(performance.now() - startTime);
           return transformedResults as T[];
