@@ -25,6 +25,24 @@ import {
 } from '../types/index';
 
 /**
+ * Compare a stored field to a where-clause value. The API returns numeric ids
+ * (userId: 21) while BetterAuth passes strings ('21'), so strict equality
+ * missed every match and findMany({ userId }) returned [].
+ */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || a === undefined || b === null || b === undefined)
+    return false;
+  return String(a) === String(b);
+}
+
+/** Where-clause keys the API can't compare reliably; matched in memory. */
+const IN_MEMORY_ONLY_KEYS = new Set(['accountId']);
+const PAGE_SIZE = 100;
+/** Safety cap: 50 pages = 5,000 accounts per provider/user. */
+const MAX_PAGES = 50;
+
+/**
  * Configuration for AccountOperations
  */
 export interface AccountOperationsConfig {
@@ -197,8 +215,8 @@ export class AccountOperations {
       ) as BetterAuthAccount[];
 
       // Find account with matching userId
-      const matchingAccount = accounts.find(
-        account => account.userId === userId
+      const matchingAccount = accounts.find(account =>
+        sameValue(account.userId, userId)
       );
 
       this.logOperation(
@@ -234,41 +252,41 @@ export class AccountOperations {
     const startTime = performance.now();
 
     try {
-      // Filter server-side on the where clause (e.g. accountId + providerId on
-      // every OAuth sign-in) instead of downloading every account. The
-      // in-memory filter below stays as a safety net.
+      // Narrow server-side by the where clause, except accountId: OAuth
+      // provider account ids can be long digit strings (Google sends 21
+      // digits) that the API coerces to a number, losing precision and
+      // matching nothing, which broke Google sign-in in 2.0.18. accountId is
+      // matched in memory below. Page through results: the API caps pages at
+      // 100 rows, so a single request could miss the matching account.
       const params = Object.entries(options.where ?? {})
-        .filter(([, value]) => value !== undefined && value !== null)
+        .filter(
+          ([key, value]) =>
+            value !== undefined &&
+            value !== null &&
+            !IN_MEMORY_ONLY_KEYS.has(key)
+        )
         .map(
           ([key, value]) =>
             `filter=${encodeURIComponent(`${key}||$eq||${String(value)}`)}`
         );
-      // The pager below slices [offset, offset + limit), so fetch that many.
-      const { offset = 0, limit = 100 } = options.pagination ?? {};
-      params.push(`limit=${offset + limit}`);
-      const url = `${this.config.baseUrl}/${this.apiPath}?${params.join('&')}`;
 
-      const response = await this.httpClient.get<{ data: ApsoAccount[] }>(url, {
-        headers: this.buildHeaders(),
-        ...(this.config.timeout && { timeout: this.config.timeout }),
-      });
-
-      // HttpClient returns the full API response {data: [...], meta: {...}}
-      // The normalizer expects this structure
-      const normalizedResponse =
-        this.responseNormalizer.normalizeArrayResponse(response);
-
-      // transformInbound expects an array for bulk transforms
-      let accounts: BetterAuthAccount[];
-      if (Array.isArray(normalizedResponse)) {
-        accounts = normalizedResponse.map(item =>
-          this.entityMapper.transformInbound('account', item)
+      const accounts: BetterAuthAccount[] = [];
+      for (let page = 1; page <= MAX_PAGES; page++) {
+        const url = `${this.config.baseUrl}/${this.apiPath}?${[...params, `limit=${PAGE_SIZE}`, `page=${page}`].join('&')}`;
+        const response = await this.httpClient.get<{ data: ApsoAccount[] }>(
+          url,
+          {
+            headers: this.buildHeaders(),
+            ...(this.config.timeout && { timeout: this.config.timeout }),
+          }
         );
-      } else {
-        // Single item transform
-        accounts = [
-          this.entityMapper.transformInbound('account', normalizedResponse),
-        ];
+        const normalized =
+          this.responseNormalizer.normalizeArrayResponse(response);
+        const rows = Array.isArray(normalized) ? normalized : [normalized];
+        for (const item of rows) {
+          accounts.push(this.entityMapper.transformInbound('account', item));
+        }
+        if (rows.length < PAGE_SIZE) break;
       }
 
       // Apply filtering and pagination
@@ -279,7 +297,7 @@ export class AccountOperations {
           const matches = Object.entries(options.where!).every(
             ([key, value]) => {
               const accountValue = (account as any)[key];
-              const isMatch = accountValue === value;
+              const isMatch = sameValue(accountValue, value);
               return isMatch;
             }
           );

@@ -1179,6 +1179,20 @@ export class ApsoAdapter implements IApsoAdapter {
         }
       }
 
+      // Accounts: filtered server-side on safe keys, paged past the API's
+      // 100-row cap, compared type-safely. The generic path below fetched only
+      // the first page unfiltered and compared with !==, so listing a user's
+      // accounts by userId (number from the API, string from BetterAuth)
+      // returned [] on the provider-linking sign-in path.
+      if (modelLower === 'account') {
+        const accounts = await this.accountOperations.findManyAccounts({
+          where: whereClause as Record<string, any>,
+          ...(params.pagination && { pagination: params.pagination }),
+        });
+        this.updateSuccessMetrics(performance.now() - startTime);
+        return accounts as unknown as T[];
+      }
+
       // Build query parameters (for potential future use with query string)
       this.queryTranslator.buildFindQuery(
         whereClause,
@@ -1206,7 +1220,16 @@ export class ApsoAdapter implements IApsoAdapter {
       if (whereClause && Object.keys(whereClause).length > 0) {
         filteredResults = normalizedResults.filter((item: any) => {
           for (const [field, value] of Object.entries(whereClause)) {
-            if (item[field] !== value) {
+            // API ids are numbers, BetterAuth passes strings: compare as strings.
+            const actual = item[field];
+            if (
+              actual !== value &&
+              (actual === null ||
+                actual === undefined ||
+                value === null ||
+                value === undefined ||
+                String(actual) !== String(value))
+            ) {
               return false;
             }
           }
