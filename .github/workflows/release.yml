@@ -63,6 +63,17 @@ jobs:
           npm run test
           npm run build
 
+      - name: Run staging integration suite
+        # Same gate as ci-cd.yml; fails closed if the secrets are missing.
+        env:
+          STAGING_API_URL: ${{ secrets.STAGING_API_URL }}
+          STAGING_ADAPTER_KEY: ${{ secrets.STAGING_ADAPTER_KEY }}
+        run: |
+          if [ -z "$STAGING_API_URL" ] || [ -z "$STAGING_ADAPTER_KEY" ]; then
+            echo "::error::Repository secrets STAGING_API_URL and STAGING_ADAPTER_KEY are required"; exit 1
+          fi
+          npm run test:integration
+
       - name: Create package tarball
         run: npm pack
 

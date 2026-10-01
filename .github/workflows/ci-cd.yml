@@ -113,9 +113,48 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
 
+  integration:
+    name: Integration (staging API)
+    runs-on: ubuntu-latest
+    # Real HTTP against the staging API with production-shaped fixtures
+    # (tests/integration/staging). Unit tests mock HTTP; this is the gate
+    # that would have stopped 2.0.18's Google sign-in break.
+    # Fork PRs get no secrets on `pull_request`, so they skip here; the push
+    # to main after merge still runs this job and gates publish-stable.
+    # Never switch this to pull_request_target: it would hand the staging
+    # key to code from the fork.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    concurrency:
+      group: integration-staging-${{ github.ref }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run staging integration suite
+        # Fail closed: a missing secret fails the job instead of skipping.
+        env:
+          STAGING_API_URL: ${{ secrets.STAGING_API_URL }}
+          STAGING_ADAPTER_KEY: ${{ secrets.STAGING_ADAPTER_KEY }}
+        run: |
+          if [ -z "$STAGING_API_URL" ] || [ -z "$STAGING_ADAPTER_KEY" ]; then
+            echo "::error::Repository secrets STAGING_API_URL and STAGING_ADAPTER_KEY are required"; exit 1
+          fi
+          npm run test:integration
+
   publish-canary:
     name: Publish Canary (Development)
-    needs: [test, security]
+    needs: [test, security, integration]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
     
@@ -164,7 +203,7 @@ jobs:
 
   publish-stable:
     name: Publish Stable Release
-    needs: [test, security]
+    needs: [test, security, integration]
     runs-on: ubuntu-latest
     permissions:
       contents: write
