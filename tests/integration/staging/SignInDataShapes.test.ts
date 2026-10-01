@@ -217,12 +217,18 @@ describeIT('sign-in against staging with production-shaped data', () => {
     // BetterAuth calls findMany({ model: 'account', where: [userId] }) when an
     // existing email signs in with a provider that isn't linked yet. The API
     // returns userId as a number; BetterAuth passes a string.
-    const { user, account } = await signUpWithProvider('list-by-user', 'google', googleId());
+    const { user, account } = await signUpWithProvider(
+      'list-by-user',
+      'google',
+      googleId()
+    );
     const accounts = await adapter.findMany<any>({
       model: 'account',
       where: [eq('userId', String(user.id))],
     } as any);
-    expect(accounts.map((a: any) => String(a.id))).toContain(String(account.id));
+    expect(accounts.map((a: any) => String(a.id))).toContain(
+      String(account.id)
+    );
   });
 
   it('does not match a different provider with the same accountId', async () => {

@@ -31,7 +31,8 @@ import {
  */
 function sameValue(a: unknown, b: unknown): boolean {
   if (a === b) return true;
-  if (a === null || a === undefined || b === null || b === undefined) return false;
+  if (a === null || a === undefined || b === null || b === undefined)
+    return false;
   return String(a) === String(b);
 }
 
@@ -214,8 +215,8 @@ export class AccountOperations {
       ) as BetterAuthAccount[];
 
       // Find account with matching userId
-      const matchingAccount = accounts.find(
-        account => sameValue(account.userId, userId)
+      const matchingAccount = accounts.find(account =>
+        sameValue(account.userId, userId)
       );
 
       this.logOperation(
@@ -260,7 +261,9 @@ export class AccountOperations {
       const params = Object.entries(options.where ?? {})
         .filter(
           ([key, value]) =>
-            value !== undefined && value !== null && !IN_MEMORY_ONLY_KEYS.has(key)
+            value !== undefined &&
+            value !== null &&
+            !IN_MEMORY_ONLY_KEYS.has(key)
         )
         .map(
           ([key, value]) =>
@@ -270,11 +273,15 @@ export class AccountOperations {
       const accounts: BetterAuthAccount[] = [];
       for (let page = 1; page <= MAX_PAGES; page++) {
         const url = `${this.config.baseUrl}/${this.apiPath}?${[...params, `limit=${PAGE_SIZE}`, `page=${page}`].join('&')}`;
-        const response = await this.httpClient.get<{ data: ApsoAccount[] }>(url, {
-          headers: this.buildHeaders(),
-          ...(this.config.timeout && { timeout: this.config.timeout }),
-        });
-        const normalized = this.responseNormalizer.normalizeArrayResponse(response);
+        const response = await this.httpClient.get<{ data: ApsoAccount[] }>(
+          url,
+          {
+            headers: this.buildHeaders(),
+            ...(this.config.timeout && { timeout: this.config.timeout }),
+          }
+        );
+        const normalized =
+          this.responseNormalizer.normalizeArrayResponse(response);
         const rows = Array.isArray(normalized) ? normalized : [normalized];
         for (const item of rows) {
           accounts.push(this.entityMapper.transformInbound('account', item));

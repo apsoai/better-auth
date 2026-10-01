@@ -43,7 +43,12 @@ describe('AccountOperations - server-side filtering', () => {
   it('finds a Google account whose 21-digit id the API cannot filter on', async () => {
     // Regression: 2.0.18 sent accountId||$eq||<id>; the API coerced the long
     // digit string to a number and matched nothing, breaking Google sign-in.
-    const google = { id: '3', userId: '21', accountId: '100133098180415113425', providerId: 'google' };
+    const google = {
+      id: '3',
+      userId: '21',
+      accountId: '100133098180415113425',
+      providerId: 'google',
+    };
     get.mockResolvedValue({ status: 200, data: [google] });
 
     const result = await ops.findManyAccounts({
@@ -62,12 +67,18 @@ describe('AccountOperations - server-side filtering', () => {
   });
 
   it('pages past the API 100-row cap to find the account', async () => {
-    const filler = Array.from({ length: 100 }, (_, i) => ({ ...account, id: `f${i}`, accountId: `other-${i}` }));
+    const filler = Array.from({ length: 100 }, (_, i) => ({
+      ...account,
+      id: `f${i}`,
+      accountId: `other-${i}`,
+    }));
     get
       .mockResolvedValueOnce({ status: 200, data: filler })
       .mockResolvedValueOnce({ status: 200, data: [account] });
 
-    const result = await ops.findManyAccounts({ where: { accountId: 'gh-42', providerId: 'github' } });
+    const result = await ops.findManyAccounts({
+      where: { accountId: 'gh-42', providerId: 'github' },
+    });
 
     expect(get).toHaveBeenCalledTimes(2);
     expect(decodeURIComponent(get.mock.calls[1][0])).toContain('page=2');
