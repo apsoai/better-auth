@@ -29,20 +29,42 @@ describe('AccountOperations - server-side filtering', () => {
 
   const calledUrl = () => decodeURIComponent(get.mock.calls[0][0]);
 
-  it('findManyAccounts sends every where-clause field as a filter', async () => {
+  it('filters providerId server-side but matches accountId in memory', async () => {
     const result = await ops.findManyAccounts({
       where: { accountId: 'gh-42', providerId: 'github' },
     });
 
     expect(calledUrl()).toBe(
-      'https://api.test/accounts?filter=accountId||$eq||gh-42&filter=providerId||$eq||github&limit=100'
+      'https://api.test/accounts?filter=providerId||$eq||github&limit=100&page=1'
     );
     expect(result).toEqual([account]);
   });
 
-  it('findManyAccounts fetches offset + limit rows for the in-memory pager', async () => {
-    await ops.findManyAccounts({ pagination: { limit: 10, offset: 20 } });
-    expect(calledUrl()).toBe('https://api.test/accounts?limit=30');
+  it('finds a Google account whose 21-digit id the API cannot filter on', async () => {
+    // Regression: 2.0.18 sent accountId||$eq||<id>; the API coerced the long
+    // digit string to a number and matched nothing, breaking Google sign-in.
+    const google = { id: '3', userId: '21', accountId: '100133098180415113425', providerId: 'google' };
+    get.mockResolvedValue({ status: 200, data: [google] });
+
+    const result = await ops.findManyAccounts({
+      where: { accountId: '100133098180415113425', providerId: 'google' },
+    });
+
+    expect(calledUrl()).not.toContain('accountId');
+    expect(result).toEqual([google]);
+  });
+
+  it('pages past the API 100-row cap to find the account', async () => {
+    const filler = Array.from({ length: 100 }, (_, i) => ({ ...account, id: `f${i}`, accountId: `other-${i}` }));
+    get
+      .mockResolvedValueOnce({ status: 200, data: filler })
+      .mockResolvedValueOnce({ status: 200, data: [account] });
+
+    const result = await ops.findManyAccounts({ where: { accountId: 'gh-42', providerId: 'github' } });
+
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(decodeURIComponent(get.mock.calls[1][0])).toContain('page=2');
+    expect(result).toEqual([account]);
   });
 
   it('findAccountByUserId filters by userId', async () => {
