@@ -54,6 +54,13 @@ describe('AccountOperations - server-side filtering', () => {
     expect(result).toEqual([google]);
   });
 
+  it('matches a numeric userId from the API against a string where value', async () => {
+    // Regression: the API returns userId as a number; BetterAuth passes '21'.
+    get.mockResolvedValue({ status: 200, data: [{ ...account, userId: 21 }] });
+    const result = await ops.findManyAccounts({ where: { userId: '21' } });
+    expect(result).toHaveLength(1);
+  });
+
   it('pages past the API 100-row cap to find the account', async () => {
     const filler = Array.from({ length: 100 }, (_, i) => ({ ...account, id: `f${i}`, accountId: `other-${i}` }));
     get

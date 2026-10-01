@@ -24,6 +24,17 @@ import {
   Logger,
 } from '../types/index';
 
+/**
+ * Compare a stored field to a where-clause value. The API returns numeric ids
+ * (userId: 21) while BetterAuth passes strings ('21'), so strict equality
+ * missed every match and findMany({ userId }) returned [].
+ */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || a === undefined || b === null || b === undefined) return false;
+  return String(a) === String(b);
+}
+
 /** Where-clause keys the API can't compare reliably; matched in memory. */
 const IN_MEMORY_ONLY_KEYS = new Set(['accountId']);
 const PAGE_SIZE = 100;
@@ -204,7 +215,7 @@ export class AccountOperations {
 
       // Find account with matching userId
       const matchingAccount = accounts.find(
-        account => account.userId === userId
+        account => sameValue(account.userId, userId)
       );
 
       this.logOperation(
@@ -279,7 +290,7 @@ export class AccountOperations {
           const matches = Object.entries(options.where!).every(
             ([key, value]) => {
               const accountValue = (account as any)[key];
-              const isMatch = accountValue === value;
+              const isMatch = sameValue(accountValue, value);
               return isMatch;
             }
           );
