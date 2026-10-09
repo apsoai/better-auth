@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.20](https://github.com/apsoai/better-auth/compare/v2.0.19...v2.0.20) (2026-10-09)
+
+* fix: pass string ids in the update-by-other-field fallbacks, so session refresh no longer fails with "Session ID must be a non-empty string"
+
 ## [2.0.19](https://github.com/apsoai/better-auth/compare/v2.0.18...v2.0.19) (2026-10-01)
 
 ## [2.0.18](https://github.com/apsoai/better-auth/compare/v2.0.17...v2.0.18) (2026-09-30)
