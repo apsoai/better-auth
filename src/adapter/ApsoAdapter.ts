@@ -378,8 +378,9 @@ export class ApsoAdapter implements IApsoAdapter {
             }
 
             const recordWithId = existing as any;
+            // The API returns numeric ids; the operations require a string.
             const userResult = await this.userOperations.updateUser(
-              recordWithId.id,
+              String(recordWithId.id),
               params.update
             );
             this.updateSuccessMetrics(performance.now() - startTime);
@@ -429,8 +430,9 @@ export class ApsoAdapter implements IApsoAdapter {
             }
 
             const recordWithId = existing as any;
+            // The API returns numeric ids; the operations require a string.
             const sessionResult = await this.sessionOperations.updateSession(
-              recordWithId.id,
+              String(recordWithId.id),
               params.update
             );
             this.updateSuccessMetrics(performance.now() - startTime);
