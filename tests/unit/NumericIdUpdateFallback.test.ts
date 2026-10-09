@@ -6,7 +6,9 @@ import { ApsoAdapterFactory } from '../../src/adapter/ApsoAdapterFactory';
 // strings, so every session refresh failed.
 describe('update by a non-id field with a numeric record id', () => {
   const make = () => {
-    const adapter = ApsoAdapterFactory.createAdapter({ baseUrl: 'https://api.example.com' }) as any;
+    const adapter = ApsoAdapterFactory.createAdapter({
+      baseUrl: 'https://api.example.com',
+    }) as any;
     adapter.findOne = jest.fn().mockResolvedValue({ id: 42, token: 'tok' });
     return adapter;
   };
