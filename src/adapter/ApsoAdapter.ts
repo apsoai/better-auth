@@ -1306,8 +1306,23 @@ export class ApsoAdapter implements IApsoAdapter {
    * consumers can both read the row. Needs a server-side consume endpoint.
    */
   async consumeOne<T>(params: DeleteParams): Promise<T | null> {
-    const row = await this.findOne<T & { id?: string | number }>(params);
+    // Better Auth consumes by id, and findOne has no id lookup for
+    // verification rows (2.0.21 returned null, so every reset was "Invalid token").
+    const { id } = this.parseWhereClause(params.where);
+    const row = (
+      id != null
+        ? await this.findById(params.model, String(id))
+        : await this.findOne(params)
+    ) as
+      | (T & {
+          id?: string | number;
+          expiresAt?: unknown;
+          expires_at?: unknown;
+        })
+      | null;
     if (!row) return null;
+    const expires = row.expiresAt ?? row.expires_at;
+    if (expires != null) row.expiresAt = new Date(expires as string);
     const where =
       row.id != null ? [{ field: 'id', value: String(row.id) }] : params.where;
     await this.delete({ model: params.model, where });
@@ -1517,12 +1532,15 @@ export class ApsoAdapter implements IApsoAdapter {
         this.responseNormalizer.normalizeSingleResponse(response);
       return this.entityMapper.transformInbound(model, normalizedResponse);
     } catch (error) {
-      // If it's a 404, return null instead of throwing
+      // If it's a 404, return null instead of throwing. HttpClient throws a
+      // plain Error carrying only the API message ("verification not found"
+      // or "HTTP 404: ..."), so match that too.
       if (
-        error &&
-        typeof error === 'object' &&
-        'statusCode' in error &&
-        error.statusCode === 404
+        (error &&
+          typeof error === 'object' &&
+          'statusCode' in error &&
+          error.statusCode === 404) ||
+        /not found|HTTP 404/i.test((error as Error)?.message ?? '')
       ) {
         return null;
       }
