@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.21](https://github.com/apsoai/better-auth/compare/v2.0.20...v2.0.21) (2026-11-09)
+
+* fix: implement `consumeOne`, which better-auth 1.6 uses for password reset, magic link and email verification tokens. Every password reset returned 500 "consumeOne is not a function".
+
 ## [2.0.20](https://github.com/apsoai/better-auth/compare/v2.0.19...v2.0.20) (2026-10-09)
 
 * fix: pass string ids in the update-by-other-field fallbacks, so session refresh by token no longer fails with "Session ID must be a non-empty string" (prod Sentry PLATFORM-CLIENT-3J)

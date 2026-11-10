@@ -13,6 +13,7 @@ export interface BetterAuthAdapter {
   updateMany(params: UpdateManyParams): Promise<number>;
   delete<T>(params: DeleteParams): Promise<T>;
   deleteMany(params: DeleteManyParams): Promise<number>;
+  consumeOne<T>(params: DeleteParams): Promise<T | null>;
   findOne<T>(params: FindOneParams): Promise<T | null>;
   findMany<T>(params: FindManyParams): Promise<T[]>;
   count(params: CountParams): Promise<number>;
