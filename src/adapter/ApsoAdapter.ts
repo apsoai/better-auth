@@ -987,7 +987,7 @@ export class ApsoAdapter implements IApsoAdapter {
                 if (user) {
                   sessionResult = {
                     ...sessionResult,
-                    user: user,
+                    user,
                   };
                 }
               } catch {
@@ -1296,6 +1296,22 @@ export class ApsoAdapter implements IApsoAdapter {
         throw this.handleError(error, 'count', params.model);
       }
     }
+  }
+
+  /**
+   * Better Auth 1.6 reads single-use rows (password reset, magic link and
+   * email verification tokens) through consumeOne: return the row and delete
+   * it. Without it every reset failed with "consumeOne is not a function".
+   * ponytail: find-then-delete over REST is not atomic; two concurrent
+   * consumers can both read the row. Needs a server-side consume endpoint.
+   */
+  async consumeOne<T>(params: DeleteParams): Promise<T | null> {
+    const row = await this.findOne<T & { id?: string | number }>(params);
+    if (!row) return null;
+    const where =
+      row.id != null ? [{ field: 'id', value: String(row.id) }] : params.where;
+    await this.delete({ model: params.model, where });
+    return row;
   }
 
   async transaction<R>(
