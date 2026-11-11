@@ -113,6 +113,36 @@ const adapter = apsoAdapter({
 });
 ```
 
+### Query dialect
+
+The adapter looks rows up with filtered list requests, for example a user by email or a session by token. `queryDialect` chooses the query syntax of those requests.
+
+| `queryDialect` | A user by email is requested as | Use it for |
+|----------------|--------------------------------|------------|
+| not set, or `'nestjsx'` | `GET /users?filter=email\|\|$eqL\|\|a@b.co&limit=1` | The Apso platform server, and any service that still accepts the nestjsx syntax. This is what the adapter has always sent. |
+| `'postgrest'` | `GET /users?email=ilike.a@b.co&limit=1` | A generated service that accepts the PostgREST query syntax only. It answers 400 to a `filter=` parameter. |
+
+For a generated TypeScript service, set both options:
+
+```typescript
+const adapter = apsoAdapter({
+  baseUrl: process.env.APSO_BASE_URL!,
+  apiKey: process.env.APSO_API_KEY,
+  authHeader: 'x-api-key',
+  queryDialect: 'postgrest',
+});
+```
+
+With `'postgrest'` the adapter also:
+
+- sends `X-Crud-Dialect: postgrest` on every request, so a service that accepts both syntaxes answers a list with a bare JSON array;
+- pages with `limit` and `offset` in place of `limit` and `page`;
+- sends a string that the service would otherwise read as a number, a boolean or null (`+15551234567`, `0042`, a 21-digit provider account id) as a quoted value, `and=(identifier.eq."+15551234567")`, so it is compared as text;
+- reads `count()` from the `Content-Range` response header of a `limit=0` request sent with `Prefer: count=exact`;
+- asks for 100 rows, and filters by `id` or `userId` on the server, where it otherwise lists a collection and filters in memory. A generated service returns 25 rows to a list with no `limit`.
+
+Do not set `'postgrest'` for the Apso platform server. It reads the nestjsx syntax.
+
 ### Multi-Tenant Configuration
 
 ```typescript
@@ -221,6 +251,7 @@ Creates a Better Auth adapter that interfaces with Apso CRUD APIs.
 | `baseUrl` | `string` | ✅ | Base URL of your Apso API |
 | `apiKey` | `string` | ❌ | API key for authentication |
 | `authHeader` | `string` | ❌ | Header that carries `apiKey` (default: `Authorization`, sent as `Bearer <key>`). Set `'x-api-key'` for Apso-generated services; the key is then sent bare |
+| `queryDialect` | `'nestjsx' \| 'postgrest'` | ❌ | Query syntax of list requests (default: `'nestjsx'`). Set `'postgrest'` for a generated service that accepts the PostgREST query syntax only. See [Query dialect](#query-dialect) |
 | `timeout` | `number` | ❌ | Request timeout in milliseconds (default: 10000) |
 | `retryConfig` | `RetryConfig` | ❌ | Retry configuration for failed requests |
 | `cacheConfig` | `CacheConfig` | ❌ | Response caching configuration |
