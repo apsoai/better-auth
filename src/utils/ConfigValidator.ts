@@ -669,6 +669,22 @@ export class ConfigValidator {
         }),
       });
     }
+
+    if (
+      config.queryDialect !== undefined &&
+      config.queryDialect !== 'nestjsx' &&
+      config.queryDialect !== 'postgrest'
+    ) {
+      errors.push({
+        field: 'queryDialect',
+        message: "queryDialect must be 'nestjsx' or 'postgrest'",
+        code: ConfigErrorCode.INVALID_VALUE,
+        details: this.sanitizeErrorDetails({
+          suggestion:
+            "Leave it unset for the Apso platform server; set 'postgrest' for a generated service that accepts the PostgREST query syntax only",
+        }),
+      });
+    }
   }
 
   private static validateHttpConfig(

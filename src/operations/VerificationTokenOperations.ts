@@ -26,6 +26,7 @@ import type {
 import { AdapterError, AdapterErrorCode } from '../types/index';
 import { HttpClient } from '../client/HttpClient';
 import { buildAuthHeaders } from '../utils/authHeaders';
+import { listUrl } from '../query/listUrl';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper } from '../response/EntityMapper';
@@ -294,8 +295,10 @@ export class VerificationTokenOperations {
       // Use server-side filtering to find verification token
       // This is much more efficient than fetching all tokens and filtering client-side
       // Note: Apso API stores the token/state value in 'identifier' field
-      const filterValue = encodeURIComponent(`identifier||eq||${token}`);
-      const url = `${this.config.baseUrl}/${this.apiPath}?filter=${filterValue}&limit=1`;
+      const url = listUrl(this.config, this.apiPath, {
+        filters: [{ field: 'identifier', op: 'eq', value: token }],
+        limit: 1,
+      });
 
       const response = await this.httpClient.get<ApsoVerificationToken[]>(url, {
         headers: this.buildHeaders(),
@@ -423,9 +426,13 @@ export class VerificationTokenOperations {
         { limit: options.limit || 100 }
       );
 
-      const url = `${this.config.baseUrl}/${this.apiPath}?filter=identifier||eq||${encodeURIComponent(
-        normalizedIdentifier
-      )}&limit=${options.limit || 100}`;
+      const url = listUrl(this.config, this.apiPath, {
+        filters: [
+          { field: 'identifier', op: 'eq', value: normalizedIdentifier },
+        ],
+        limit: options.limit || 100,
+        rawSeparators: true,
+      });
 
       // Execute request
       const response = await this.httpClient.get<ApsoVerificationToken[]>(url, {

@@ -27,6 +27,7 @@ import { AdapterError, AdapterErrorCode } from '../types';
 import { ConfigValidator } from '../utils/ConfigValidator';
 import { HttpClient } from '../client/HttpClient';
 import { buildAuthHeaders } from '../utils/authHeaders';
+import { contentRangeTotal, listUrl, scanUrl } from '../query/listUrl';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper } from '../response/EntityMapper';
@@ -1144,10 +1145,10 @@ export class ApsoAdapter implements IApsoAdapter {
         if (identifier) {
           // Use server-side filtering for verification tokens
           // The Apso API stores the OAuth state in the 'identifier' field
-          const filterValue = encodeURIComponent(
-            `identifier||eq||${identifier}`
-          );
-          const url = `${this.config.baseUrl}/verifications?filter=${filterValue}&limit=${params.pagination?.limit || 10}`;
+          const url = listUrl(this.config, 'verifications', {
+            filters: [{ field: 'identifier', op: 'eq', value: identifier }],
+            limit: params.pagination?.limit || 10,
+          });
 
           const response = await this.httpClient.get<T[]>(url, {
             headers: this.buildHeaders(),
@@ -1205,7 +1206,7 @@ export class ApsoAdapter implements IApsoAdapter {
 
       // Get API path
       const apiPath = this.entityMapper.getApiPath(params.model);
-      const url = `${this.config.baseUrl}/${apiPath}`;
+      const url = scanUrl(this.config, apiPath, whereClause);
 
       // Execute request
       const response = await this.httpClient.get<T[]>(url, {
@@ -1268,6 +1269,46 @@ export class ApsoAdapter implements IApsoAdapter {
       // Get API path
       const apiPath = this.entityMapper.getApiPath(params.model);
       const url = `${this.config.baseUrl}/${apiPath}`;
+
+      // A PostgREST list is a bare array with no total in the body: ask for
+      // the count alone and read it from Content-Range. Equality conditions
+      // on plain values are sent; anything else falls back to findMany below.
+      if (this.config.queryDialect === 'postgrest') {
+        const where = this.parseWhereClause(params.where || {});
+        const values = Object.entries(where);
+        if (
+          values.some(
+            ([, v]) =>
+              !['string', 'number', 'boolean'].includes(typeof v) ||
+              v instanceof Date
+          )
+        ) {
+          throw new Error('count: condition needs the findMany fallback');
+        }
+        let total: number | undefined;
+        await this.httpClient.get(
+          listUrl(this.config, apiPath, {
+            filters: values.map(([field, value]) => ({
+              field,
+              op: 'eq' as const,
+              value: value as string | number | boolean,
+            })),
+            limit: 0,
+          }),
+          {
+            headers: { ...this.buildHeaders(), Prefer: 'count=exact' },
+            ...(this.config.timeout && { timeout: this.config.timeout }),
+            onHeaders: headers => {
+              total = contentRangeTotal(headers.get('content-range'));
+            },
+          }
+        );
+        if (total === undefined) {
+          throw new Error('count: no total in Content-Range');
+        }
+        this.updateSuccessMetrics(performance.now() - startTime);
+        return total;
+      }
 
       // Execute request
       const response = await this.httpClient.get(url, {
