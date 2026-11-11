@@ -71,6 +71,11 @@ export interface FindManyParams {
   model: string;
   where?: Record<string, any>;
   select?: string[];
+  /** Better Auth's names for paging and ordering. */
+  limit?: number;
+  offset?: number;
+  sortBy?: { field: string; direction: 'asc' | 'desc' };
+  /** Older names for the same options. */
   pagination?: PaginationOptions;
   orderBy?: Record<string, 'asc' | 'desc'>;
 }
