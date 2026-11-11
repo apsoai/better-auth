@@ -220,6 +220,7 @@ Creates a Better Auth adapter that interfaces with Apso CRUD APIs.
 |-----------|------|----------|-------------|
 | `baseUrl` | `string` | ✅ | Base URL of your Apso API |
 | `apiKey` | `string` | ❌ | API key for authentication |
+| `authHeader` | `string` | ❌ | Header that carries `apiKey` (default: `Authorization`, sent as `Bearer <key>`). Set `'x-api-key'` for Apso-generated services; the key is then sent bare |
 | `timeout` | `number` | ❌ | Request timeout in milliseconds (default: 10000) |
 | `retryConfig` | `RetryConfig` | ❌ | Retry configuration for failed requests |
 | `cacheConfig` | `CacheConfig` | ❌ | Response caching configuration |
