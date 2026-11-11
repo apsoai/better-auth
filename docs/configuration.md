@@ -120,13 +120,23 @@ API key for authenticating requests to your Apso API.
 
 #### `authHeader` (Optional)
 
-Custom authorization header name. Defaults to `'Authorization'`.
+Name of the header that carries `apiKey`. Defaults to `'Authorization'`.
+
+| `authHeader` | Header sent |
+|--------------|-------------|
+| not set, or `'Authorization'` | `Authorization: Bearer your-api-key` |
+| any other name, for example `'x-api-key'` | `x-api-key: your-api-key` (the bare key, no `Bearer ` prefix) |
+
+Apso-generated services and services hosted behind the Apso gateway read the key from `x-api-key` and treat `Authorization: Bearer` as a user token, so set `authHeader: 'x-api-key'` for them:
 
 ```typescript
 {
-  authHeader: 'X-API-Key' // Will send: X-API-Key: Bearer your-api-key
+  apiKey: process.env.APSO_API_KEY,
+  authHeader: 'x-api-key' // Will send: x-api-key: your-api-key
 }
 ```
+
+Before 2.0.23 a custom header still carried `Bearer your-api-key`, which no Apso service accepts under `x-api-key`.
 
 #### `timeout` (Optional)
 
@@ -760,7 +770,7 @@ const secureConfig = {
 const customAuthConfig = {
   baseUrl: 'https://api.yourdomain.com',
   apiKey: process.env.APSO_API_KEY,
-  authHeader: 'X-API-Key', // Custom header
+  authHeader: 'x-api-key', // Sends the bare key, as Apso-generated services expect
 };
 ```
 

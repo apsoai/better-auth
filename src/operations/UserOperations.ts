@@ -23,6 +23,7 @@ import type {
 } from '../types';
 import { AdapterError, AdapterErrorCode } from '../types';
 import { HttpClient } from '../client/HttpClient';
+import { buildAuthHeaders } from '../utils/authHeaders';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper } from '../response/EntityMapper';
@@ -913,10 +914,7 @@ export class UserOperations {
     };
 
     // Add API key if configured
-    if (this.config.apiKey) {
-      const authHeader = this.config.authHeader || 'Authorization';
-      headers[authHeader] = `Bearer ${this.config.apiKey}`;
-    }
+    Object.assign(headers, buildAuthHeaders(this.config));
 
     // Add tenant context if available and multi-tenancy is enabled
     if (this.config.multiTenancy?.enabled) {

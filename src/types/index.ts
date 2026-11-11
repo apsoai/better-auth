@@ -96,6 +96,11 @@ export interface ApsoAdapterConfig {
 
   // Authentication
   apiKey?: string;
+  /**
+   * Header that carries `apiKey`. Default `Authorization`, sent as
+   * `Bearer <apiKey>`. Any other name (use `x-api-key` for Apso-generated
+   * services) is sent as the bare key.
+   */
   authHeader?: string;
 
   // HTTP Client
