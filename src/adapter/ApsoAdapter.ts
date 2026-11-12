@@ -626,9 +626,10 @@ export class ApsoAdapter implements IApsoAdapter {
           }
 
           const recordWithId = existing as any;
+          // The API returns numeric ids; the branch above needs a string.
           return this.update({
             ...params,
-            where: { id: recordWithId.id },
+            where: { id: String(recordWithId.id) },
           });
       }
     } catch (error) {
@@ -643,13 +644,11 @@ export class ApsoAdapter implements IApsoAdapter {
     try {
       this.updateModelMetrics(params.model);
 
-      // Convert model name to EntityType enum
-      const entityType = this.getEntityType(params.model);
-
-      // Use BulkOperations for efficient batch processing
+      // BulkOperations matches rows against the where clause and refuses an
+      // empty one, so it is passed through exactly as Better Auth sent it.
       const updateManyOptions = {
-        model: entityType,
-        where: params.where || {},
+        model: params.model,
+        where: params.where,
         update: params.update,
       } as any;
 
@@ -848,15 +847,13 @@ export class ApsoAdapter implements IApsoAdapter {
     try {
       this.updateModelMetrics(params.model);
 
-      // Convert model name to EntityType enum
-      const entityType = this.getEntityType(params.model);
-
-      // Use BulkOperations for efficient batch processing
-      // Enable cascade deletion for users by default for data integrity
+      // BulkOperations matches rows against the where clause and refuses an
+      // empty one, so it is passed through exactly as Better Auth sent it.
+      // Deleting users also deletes their sessions.
       const deleteManyOptions = {
-        model: entityType,
-        where: params.where || {},
-        cascadeDelete: entityType === EntityType.USER, // Enable cascade for users
+        model: params.model,
+        where: params.where,
+        cascadeDelete: params.model.toLowerCase() === 'user',
       } as any;
 
       if (this.config.batchConfig?.batchSize) {
@@ -924,12 +921,11 @@ export class ApsoAdapter implements IApsoAdapter {
               userWhere.email
             );
           } else {
-            // For other user filters, use findManyUsers with limit 1
-            const users = await this.userOperations.findManyUsers({
-              where: params.where,
-              pagination: { limit: 1 },
-            });
-            userResult = users.length > 0 ? users[0] : null;
+            // Any other filter: the first row matching the full where clause
+            userResult = await this.findFirstMatching<any>(
+              'user',
+              params.where
+            );
           }
 
           // If includeAccounts is requested and we found a user, fetch their accounts
@@ -966,12 +962,11 @@ export class ApsoAdapter implements IApsoAdapter {
               sessionWhere.token
             );
           } else {
-            // For other session filters, use findManySessions with limit 1
-            const sessions = await this.sessionOperations.findManySessions({
-              where: sessionWhere,
-              pagination: { limit: 1 },
-            });
-            sessionResult = sessions.length > 0 ? sessions[0] : null;
+            // Any other filter: the first row matching the full where clause
+            sessionResult = await this.findFirstMatching<any>(
+              'session',
+              params.where
+            );
           }
 
           // Handle join: { user: true } - BetterAuth needs user data with session
@@ -1010,14 +1005,6 @@ export class ApsoAdapter implements IApsoAdapter {
             );
             this.updateSuccessMetrics(performance.now() - startTime);
             return accountResult as T;
-          } else if (accountWhere.userId) {
-            // Find account by user ID
-            const accountResult =
-              await this.accountOperations.findAccountByUserId(
-                accountWhere.userId
-              );
-            this.updateSuccessMetrics(performance.now() - startTime);
-            return accountResult as T;
           } else if (accountWhere.providerId && accountWhere.accountId) {
             // Find account by providerId + accountId (for OAuth account linking)
 
@@ -1029,13 +1016,15 @@ export class ApsoAdapter implements IApsoAdapter {
             this.updateSuccessMetrics(performance.now() - startTime);
             return accounts.length > 0 ? (accounts[0] as T) : null;
           } else {
-            // For other account filters, use findManyAccounts with limit 1
-            const accounts = await this.accountOperations.findManyAccounts({
-              where: accountWhere, // Use parsed where clause for consistent field names
-              pagination: { limit: 1 },
-            });
+            // Any other filter, including userId with further conditions:
+            // the first row matching the full where clause. A lookup by
+            // userId alone used to ignore every other condition.
+            const accountResult = await this.findFirstMatching(
+              'account',
+              params.where
+            );
             this.updateSuccessMetrics(performance.now() - startTime);
-            return accounts.length > 0 ? (accounts[0] as T) : null;
+            return accountResult as T;
           }
 
         case 'verification': // BetterAuth uses 'verification' model name
@@ -1095,26 +1084,11 @@ export class ApsoAdapter implements IApsoAdapter {
             return this.findById<T>(params.model, genericWhere.id);
           }
 
-          this.queryTranslator.buildFindQuery(params.where, { limit: 1 });
-          const apiPath = this.entityMapper.getApiPath(params.model);
-          const url = `${this.config.baseUrl}/${apiPath}`;
-
-          const response = await this.httpClient.get<T[]>(url, {
-            headers: this.buildHeaders(),
-            ...(this.config.timeout && { timeout: this.config.timeout }),
-          });
-
-          const normalizedResults =
-            this.responseNormalizer.normalizeArrayResponse(response);
-
-          if (!normalizedResults || normalizedResults.length === 0) {
-            this.updateSuccessMetrics(performance.now() - startTime);
-            return null;
-          }
-
-          const result = this.entityMapper.transformInbound(
+          // The first row matching the full where clause. This used to
+          // return the first row of the table whatever the clause said.
+          const result = await this.findFirstMatching<T>(
             params.model,
-            normalizedResults[0]
+            params.where
           );
           this.updateSuccessMetrics(performance.now() - startTime);
           return result;
@@ -1131,121 +1105,50 @@ export class ApsoAdapter implements IApsoAdapter {
     try {
       this.updateModelMetrics(params.model);
 
-      // Parse where clause for filtering
-      const whereClause = this.parseWhereClause(params.where || {});
-
-      // Handle verification tokens specially - BetterAuth uses 'verification' model name
-      // and we need server-side filtering due to pagination issues
-      const modelLower = params.model.toLowerCase();
-      if (modelLower === 'verification' || modelLower === 'verificationtoken') {
-        // Extract identifier from where clause
-        const identifier = whereClause?.identifier as string | undefined;
-        if (identifier) {
-          // Use server-side filtering for verification tokens
-          // The Apso API stores the OAuth state in the 'identifier' field
-          const filterValue = encodeURIComponent(
-            `identifier||eq||${identifier}`
-          );
-          const url = `${this.config.baseUrl}/verifications?filter=${filterValue}&limit=${params.pagination?.limit || 10}`;
-
-          const response = await this.httpClient.get<T[]>(url, {
-            headers: this.buildHeaders(),
-            ...(this.config.timeout && { timeout: this.config.timeout }),
-          });
-
-          const normalizedResults =
-            this.responseNormalizer.normalizeArrayResponse(response);
-
-          // Transform results to BetterAuth's verification format
-          // BetterAuth expects: { id, identifier, value, expiresAt, createdAt, updatedAt }
-          // The API returns: { id, identifier, value, expiresAt/expires_at, created_at, updated_at }
-          const transformedResults = normalizedResults.map((item: any) => ({
-            id: String(item.id),
-            identifier: item.identifier,
-            value: item.value, // JSON string with callback URL, code verifier, etc.
-            expiresAt: new Date(item.expiresAt || item.expires_at),
-            createdAt: item.createdAt
-              ? new Date(item.createdAt)
-              : item.created_at
-                ? new Date(item.created_at)
-                : undefined,
-            updatedAt: item.updatedAt
-              ? new Date(item.updatedAt)
-              : item.updated_at
-                ? new Date(item.updated_at)
-                : undefined,
-          }));
-
-          this.updateSuccessMetrics(performance.now() - startTime);
-          return transformedResults as T[];
-        }
-      }
-
-      // Accounts: filtered server-side on safe keys, paged past the API's
-      // 100-row cap, compared type-safely. The generic path below fetched only
-      // the first page unfiltered and compared with !==, so listing a user's
-      // accounts by userId (number from the API, string from BetterAuth)
-      // returned [] on the provider-linking sign-in path.
-      if (modelLower === 'account') {
-        const accounts = await this.accountOperations.findManyAccounts({
-          where: whereClause as Record<string, any>,
-          ...(params.pagination && { pagination: params.pagination }),
-        });
-        this.updateSuccessMetrics(performance.now() - startTime);
-        return accounts as unknown as T[];
-      }
-
-      // Build query parameters (for potential future use with query string)
-      this.queryTranslator.buildFindQuery(
-        whereClause,
-        params.pagination,
-        params.orderBy
+      // Same matcher as updateMany and deleteMany: every page of candidates,
+      // the full where clause (all operators and connectors) applied in
+      // memory. An absent where clause lists every row.
+      let rows = await this.bulkOperations.findMatching(
+        params.model,
+        params.where
       );
 
-      // Get API path
-      const apiPath = this.entityMapper.getApiPath(params.model);
-      const url = `${this.config.baseUrl}/${apiPath}`;
-
-      // Execute request
-      const response = await this.httpClient.get<T[]>(url, {
-        headers: this.buildHeaders(),
-        ...(this.config.timeout && { timeout: this.config.timeout }),
-        // TODO: Add query params to URL for filtering
-      });
-
-      // Normalize response (handle both array and paginated responses)
-      const normalizedResults =
-        this.responseNormalizer.normalizeArrayResponse(response);
-
-      // Client-side filtering since we don't have query params yet
-      let filteredResults = normalizedResults;
-      if (whereClause && Object.keys(whereClause).length > 0) {
-        filteredResults = normalizedResults.filter((item: any) => {
-          for (const [field, value] of Object.entries(whereClause)) {
-            // API ids are numbers, BetterAuth passes strings: compare as strings.
-            const actual = item[field];
-            if (
-              actual !== value &&
-              (actual === null ||
-                actual === undefined ||
-                value === null ||
-                value === undefined ||
-                String(actual) !== String(value))
-            ) {
-              return false;
-            }
-          }
-          return true;
+      // Better Auth passes sortBy/limit/offset; orderBy/pagination are the
+      // older names. Sort before paging so "latest row" lookups are right.
+      const sortBy =
+        params.sortBy ??
+        Object.entries(params.orderBy ?? {}).map(([field, direction]) => ({
+          field,
+          direction,
+        }))[0];
+      if (sortBy) {
+        const sign = sortBy.direction === 'desc' ? -1 : 1;
+        const key = (row: any) => {
+          const value = row[sortBy.field];
+          return value instanceof Date ? value.getTime() : value;
+        };
+        rows = [...rows].sort((a, b) => {
+          const x = key(a);
+          const y = key(b);
+          if (x === y) return 0;
+          if (x === undefined || x === null) return 1;
+          if (y === undefined || y === null) return -1;
+          return (x < y ? -1 : 1) * sign;
         });
       }
-
-      // Transform each result
-      const transformedResults = filteredResults.map(item =>
-        this.entityMapper.transformInbound(params.model, item)
-      );
+      const limit = params.limit ?? params.pagination?.limit;
+      const offset =
+        params.offset ??
+        params.pagination?.offset ??
+        (limit && params.pagination?.page
+          ? (params.pagination.page - 1) * limit
+          : 0);
+      if (offset || limit) {
+        rows = rows.slice(offset, limit ? offset + limit : undefined);
+      }
 
       this.updateSuccessMetrics(performance.now() - startTime);
-      return transformedResults;
+      return rows as T[];
     } catch (error) {
       this.updateErrorMetrics(error, performance.now() - startTime);
       throw this.handleError(error, 'findMany', params.model);
@@ -1257,44 +1160,15 @@ export class ApsoAdapter implements IApsoAdapter {
 
     try {
       this.updateModelMetrics(params.model);
-
-      // Build query parameters (for potential future use with query string)
-      this.queryTranslator.buildFindQuery(
-        params.where || {},
-        { limit: 1 } // We only need count, not the data
+      const rows = await this.bulkOperations.findMatching(
+        params.model,
+        params.where
       );
-
-      // Get API path
-      const apiPath = this.entityMapper.getApiPath(params.model);
-      const url = `${this.config.baseUrl}/${apiPath}`;
-
-      // Execute request
-      const response = await this.httpClient.get(url, {
-        headers: this.buildHeaders(),
-        ...(this.config.timeout && { timeout: this.config.timeout }),
-        // TODO: Add query params to URL
-      });
-
-      // Try to get count from response metadata
-      const normalizedResponse =
-        this.responseNormalizer.normalizeCountResponse(response);
-
       this.updateSuccessMetrics(performance.now() - startTime);
-      return normalizedResponse;
+      return rows.length;
     } catch (error) {
-      // Fallback: get all records and count them
-      try {
-        const allRecords = await this.findMany({
-          model: params.model,
-          ...(params.where && { where: params.where }),
-        });
-
-        this.updateSuccessMetrics(performance.now() - startTime);
-        return allRecords.length;
-      } catch (fallbackError) {
-        this.updateErrorMetrics(error, performance.now() - startTime);
-        throw this.handleError(error, 'count', params.model);
-      }
+      this.updateErrorMetrics(error, performance.now() - startTime);
+      throw this.handleError(error, 'count', params.model);
     }
   }
 
@@ -1513,6 +1387,17 @@ export class ApsoAdapter implements IApsoAdapter {
 
     // If not array, assume it's already in correct format
     return where as Record<string, any>;
+  }
+
+  /**
+   * First row of a model that matches the full where clause, or null.
+   */
+  private async findFirstMatching<T>(
+    model: string,
+    where: unknown
+  ): Promise<T | null> {
+    const rows = await this.bulkOperations.findMatching(model, where);
+    return (rows[0] as T) ?? null;
   }
 
   /**
