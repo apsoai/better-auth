@@ -27,7 +27,6 @@ import { AdapterError, AdapterErrorCode } from '../types';
 import { ConfigValidator } from '../utils/ConfigValidator';
 import { HttpClient } from '../client/HttpClient';
 import { buildAuthHeaders } from '../utils/authHeaders';
-import { contentRangeTotal, listUrl, scanUrl } from '../query/listUrl';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper } from '../response/EntityMapper';

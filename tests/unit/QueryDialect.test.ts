@@ -9,6 +9,10 @@
  * syntax only answers 400 to those, so `queryDialect: 'postgrest'` sends the
  * second form.
  *
+ * findMany and count read their rows through the bulk matcher
+ * (BulkOperations.findMatching) since 2.0.23: pages of 100 in id order,
+ * narrowed on the server only by values the service compares reliably.
+ *
  * Fixtures are shaped like production values: a 21-digit Google account id,
  * an email with a plus sign and mixed case, identifiers holding commas,
  * parentheses, dots and characters that need URL encoding.
@@ -75,8 +79,8 @@ const CASES: Case[] = [
         model: 'account',
         where: [{ field: 'userId', value: '21' }],
       }),
-    nestjsx: `${BASE}/accounts?filter=userId%7C%7C%24eq%7C%7C21&limit=100&page=1`,
-    postgrest: `${BASE}/accounts?userId=eq.21&limit=100`,
+    nestjsx: `${BASE}/accounts?filter=userId%7C%7C%24eq%7C%7C21&limit=100&page=1&sort=id,ASC`,
+    postgrest: `${BASE}/accounts?userId=eq.21&limit=100&order=id.asc`,
   },
   {
     name: 'accounts of a user for one provider',
@@ -88,22 +92,18 @@ const CASES: Case[] = [
           { field: 'providerId', value: 'credential' },
         ],
       }),
-    nestjsx: `${BASE}/accounts?filter=userId%7C%7C%24eq%7C%7C21&filter=providerId%7C%7C%24eq%7C%7Ccredential&limit=100&page=1`,
-    postgrest: `${BASE}/accounts?userId=eq.21&providerId=eq.credential&limit=100`,
+    nestjsx: `${BASE}/accounts?filter=userId%7C%7C%24eq%7C%7C21&filter=providerId%7C%7C%24eq%7C%7Ccredential&limit=100&page=1&sort=id,ASC`,
+    postgrest: `${BASE}/accounts?userId=eq.21&providerId=eq.credential&limit=100&order=id.asc`,
   },
   {
     name: 'one account by user id',
-    // This lookup throws after its request in both dialects (it reads a
-    // status field from the response body). Only the URL is under test.
     run: a =>
-      a
-        .findOne({
-          model: 'account',
-          where: [{ field: 'userId', value: '21' }],
-        })
-        .catch(() => undefined),
-    nestjsx: `${BASE}/accounts?filter=userId%7C%7C%24eq%7C%7C21&limit=1`,
-    postgrest: `${BASE}/accounts?userId=eq.21&limit=1`,
+      a.findOne({
+        model: 'account',
+        where: [{ field: 'userId', value: '21' }],
+      }),
+    nestjsx: `${BASE}/accounts?filter=userId%7C%7C%24eq%7C%7C21&limit=100&page=1&sort=id,ASC`,
+    postgrest: `${BASE}/accounts?userId=eq.21&limit=100&order=id.asc`,
   },
   {
     name: 'session by token',
@@ -126,16 +126,18 @@ const CASES: Case[] = [
     postgrest: `${BASE}/sessions?and=(token.eq.%22${DIGIT_TOKEN}%22)&limit=1`,
   },
   {
+    // A value with a comma is not sent as a filter: rows are matched in memory.
     name: 'verifications by an identifier with commas, parentheses, dots and reserved URL characters',
     run: a =>
       a.findMany({
         model: 'verification',
         where: [{ field: 'identifier', value: OAUTH_STATE }],
       }),
-    nestjsx: `${BASE}/verifications?filter=identifier%7C%7Ceq%7C%7Creset-password%3Aa(1)%2Cb.2%20%26%3D%3F%23%2B%2F%25&limit=10`,
-    postgrest: `${BASE}/verifications?identifier=eq.reset-password%3Aa(1)%2Cb.2%20%26%3D%3F%23%2B%2F%25&limit=10`,
+    nestjsx: `${BASE}/verifications?limit=100&page=1&sort=id,ASC`,
+    postgrest: `${BASE}/verifications?limit=100&order=id.asc`,
   },
   {
+    // The service would read this value back as a number, so it is not sent.
     name: 'verifications by a phone number, which must keep its plus sign',
     run: a =>
       a.findMany({
@@ -143,8 +145,8 @@ const CASES: Case[] = [
         where: [{ field: 'identifier', value: PHONE }],
         limit: 1,
       }),
-    nestjsx: `${BASE}/verifications?filter=identifier%7C%7Ceq%7C%7C%2B15551234567&limit=10`,
-    postgrest: `${BASE}/verifications?and=(identifier.eq.%22%2B15551234567%22)&limit=10`,
+    nestjsx: `${BASE}/verifications?limit=100&page=1&sort=id,ASC`,
+    postgrest: `${BASE}/verifications?limit=100&order=id.asc`,
   },
   {
     name: 'one verification by an email identifier with mixed case',
@@ -177,14 +179,14 @@ const CASES: Case[] = [
     postgrest: `${BASE}/users?id=eq.21&limit=100`,
   },
   {
-    name: 'sessions of a user (rows filtered in memory)',
+    name: 'sessions of a user',
     run: a =>
       a.findMany({
         model: 'session',
         where: [{ field: 'userId', value: '21' }],
       }),
-    nestjsx: `${BASE}/sessions`,
-    postgrest: `${BASE}/sessions?userId=eq.21&limit=100`,
+    nestjsx: `${BASE}/sessions?filter=userId%7C%7C%24eq%7C%7C21&limit=100&page=1&sort=id,ASC`,
+    postgrest: `${BASE}/sessions?userId=eq.21&limit=100&order=id.asc`,
   },
 ];
 
@@ -286,8 +288,8 @@ describe('list request URLs', () => {
         where: [{ field: 'providerId', value: 'github' }],
       });
       expect(sent.map(r => r.url)).toEqual([
-        `${BASE}/accounts?providerId=eq.github&limit=100`,
-        `${BASE}/accounts?providerId=eq.github&limit=100&offset=100`,
+        `${BASE}/accounts?providerId=eq.github&limit=100&order=id.asc`,
+        `${BASE}/accounts?providerId=eq.github&limit=100&offset=100&order=id.asc`,
       ]);
       expect(rows).toHaveLength(100);
     });
@@ -314,24 +316,71 @@ describe('list request URLs', () => {
       expect(session).toMatchObject({ token: SESSION_TOKEN });
     });
 
-    test('count asks for the total alone and reads it from Content-Range', async () => {
-      mockFetch(true, 42);
+    test('count reads the rows and counts the ones that match', async () => {
+      sent = [];
+      global.fetch = jest.fn(async (url: any) => {
+        sent.push({ url: String(url), headers: {} });
+        return new Response(
+          JSON.stringify([
+            { id: 21, email: 'maria.lopez@example.com', emailVerified: true },
+            { id: 22, email: 'dev_ops@example.com', emailVerified: false },
+          ]),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }) as any;
       const total = await adapter({ queryDialect: 'postgrest' }).count({
         model: 'user',
         where: [{ field: 'emailVerified', value: true }],
       });
-      expect(total).toBe(42);
+      expect(total).toBe(1);
       expect(sent.map(r => r.url)).toEqual([
-        `${BASE}/users?emailVerified=eq.true&limit=0`,
+        `${BASE}/users?limit=100&order=id.asc`,
       ]);
-      expect(sent[0]!.headers['prefer']).toBe('count=exact');
+    });
+
+    test('a date bound is not sent; the rows are still matched in memory', async () => {
+      sent = [];
+      const now = Date.now();
+      global.fetch = jest.fn(async (url: any) => {
+        sent.push({ url: String(url), headers: {} });
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'a3f1c2d4-5b6e-4f70-8a91-b2c3d4e5f601',
+              userId: 21,
+              token: SESSION_TOKEN,
+              expiresAt: new Date(now + 3600_000).toISOString(),
+            },
+            {
+              id: 'b4e2d3c5-6a7f-4081-9b02-c3d4e5f6a702',
+              userId: 21,
+              token: DIGIT_TOKEN,
+              expiresAt: new Date(now - 3600_000).toISOString(),
+            },
+          ]),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }) as any;
+      const live = await adapter({ queryDialect: 'postgrest' }).findMany({
+        model: 'session',
+        where: [
+          { field: 'userId', value: '21' },
+          { field: 'expiresAt', operator: 'gt', value: new Date(now) },
+        ],
+      });
+      expect(sent.map(r => r.url)).toEqual([
+        `${BASE}/sessions?userId=eq.21&limit=100&order=id.asc`,
+      ]);
+      expect(live.map((s: any) => s.token)).toEqual([SESSION_TOKEN]);
     });
   });
 
-  test('count in the default dialect is the request it was before', async () => {
+  test('count in the default dialect sends the request 2.0.23 sends', async () => {
     mockFetch(false, 42);
     await adapter().count({ model: 'user' });
-    expect(sent.map(r => r.url)).toEqual([`${BASE}/users`]);
+    expect(sent.map(r => r.url)).toEqual([
+      `${BASE}/users?limit=100&page=1&sort=id,ASC`,
+    ]);
     expect(sent[0]!.headers).not.toHaveProperty('prefer');
   });
 });

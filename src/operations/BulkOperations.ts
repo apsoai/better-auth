@@ -83,6 +83,7 @@ import {
   serverFilters,
 } from '../query/whereMatcher';
 import { buildAuthHeaders } from '../utils/authHeaders';
+import { listUrl, type ListFilter } from '../query/listUrl';
 import { UserOperations } from './UserOperations';
 import { SessionOperations } from './SessionOperations';
 import { VerificationTokenOperations } from './VerificationTokenOperations';
@@ -613,10 +614,25 @@ export class BulkOperations {
     }
 
     const key = modelKey(model);
-    const baseUrl = `${this.config.baseUrl}/${this.entityMapper.getApiPath(key)}`;
-    const filters = serverFilters(conditions).map(
+    const apiPath = this.entityMapper.getApiPath(key);
+    const baseUrl = `${this.config.baseUrl}/${apiPath}`;
+    const narrowing = serverFilters(conditions);
+    const filters = narrowing.map(
       filter => `filter=${encodeURIComponent(filter)}`
     );
+    // A service that accepts the PostgREST syntax only answers 400 to
+    // `filter=`. Equality filters are sent in its syntax; the others ($in,
+    // date bounds) are left out, which only widens the candidate set, and
+    // matchesWhere still decides every row.
+    const postgrest = this.config.queryDialect === 'postgrest';
+    const equalities: ListFilter[] = narrowing
+      .map(filter => filter.split('||'))
+      .filter(([, op]) => op === '$eq')
+      .map(([field, , ...value]) => ({
+        field: field as string,
+        op: 'eq' as const,
+        value: value.join('||'),
+      }));
 
     const matches: any[] = [];
     const seen = new Set<string>();
@@ -637,7 +653,9 @@ export class BulkOperations {
         'sort=id,ASC',
       ].join('&');
       const response = await this.httpClient.get<any>(
-        `${baseUrl}?${query}`,
+        postgrest
+          ? `${listUrl(this.config, apiPath, { filters: equalities, limit: PAGE_SIZE, page })}&order=id.asc`
+          : `${baseUrl}?${query}`,
         this.buildRequestConfig()
       );
       const rows =
