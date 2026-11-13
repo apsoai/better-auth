@@ -3,7 +3,8 @@ import { ApsoAdapterFactory } from '../../src/adapter/ApsoAdapterFactory';
 // better-auth 1.6 calls adapter.consumeOne({ where: [{ field: 'id' }] }) for
 // password reset tokens. 2.0.20 lacked the method (500); 2.0.21 routed it
 // through findOne, which has no id lookup for verification rows (always
-// "Invalid token"). It must fetch by id.
+// "Invalid token"). It must fetch by id. The row is then deleted with one
+// DELETE by id, whose answer says whether this caller consumed it.
 describe('consumeOne', () => {
   const make = (row: unknown) => {
     const adapter = ApsoAdapterFactory.createAdapter({
@@ -11,7 +12,7 @@ describe('consumeOne', () => {
     }) as any;
     adapter.httpClient.get = jest.fn().mockResolvedValue(row);
     adapter.findOne = jest.fn().mockResolvedValue(row);
-    adapter.delete = jest.fn().mockResolvedValue(row);
+    adapter.httpClient.delete = jest.fn().mockResolvedValue(row);
     return adapter;
   };
   const byId = [{ field: 'id', value: '7' }];
@@ -33,10 +34,9 @@ describe('consumeOne', () => {
     );
     expect(row).toMatchObject({ id: 7, value: 'u1' });
     expect(row.expiresAt).toBeInstanceOf(Date);
-    expect(adapter.delete).toHaveBeenCalledWith({
-      model: 'verification',
-      where: [{ field: 'id', value: '7' }],
-    });
+    expect(adapter.httpClient.delete.mock.calls.map((c: any) => c[0])).toEqual([
+      'https://api.example.com/verifications/7',
+    ]);
   });
 
   test('returns null and deletes nothing when the row is gone', async () => {
@@ -47,7 +47,7 @@ describe('consumeOne', () => {
     expect(
       await adapter.consumeOne({ model: 'verification', where: byId })
     ).toBeNull();
-    expect(adapter.delete).not.toHaveBeenCalled();
+    expect(adapter.httpClient.delete).not.toHaveBeenCalled();
   });
 
   test('falls back to findOne without an id, and works in a transaction', async () => {
@@ -57,6 +57,6 @@ describe('consumeOne', () => {
       trx.consumeOne({ model: 'verification', where })
     );
     expect(adapter.findOne).toHaveBeenCalled();
-    expect(adapter.delete).toHaveBeenCalled();
+    expect(adapter.httpClient.delete).toHaveBeenCalledTimes(1);
   });
 });

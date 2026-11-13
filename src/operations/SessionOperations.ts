@@ -31,7 +31,7 @@ import { buildAuthHeaders } from '../utils/authHeaders';
 import { listUrl, scanUrl } from '../query/listUrl';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
-import { EntityMapper } from '../response/EntityMapper';
+import { EntityMapper, sessionExtras } from '../response/EntityMapper';
 
 /**
  * Options for finding multiple sessions
@@ -497,8 +497,12 @@ export class SessionOperations {
         id: existingSession.id, // Ensure ID cannot be changed
       };
 
-      // Transform to API format
-      const apiData = this.entityMapper.mapSessionToApi(updatedSession);
+      // Transform to API format. Plugin fields in the update (the
+      // organization plugin's activeOrganizationId) are sent as they are.
+      const apiData = {
+        ...this.entityMapper.mapSessionToApi(updatedSession),
+        ...sessionExtras(updates),
+      };
 
       // Execute update request
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;

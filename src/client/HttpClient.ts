@@ -138,7 +138,11 @@ export class HttpClient implements IHttpClient {
           // Ignore parsing errors, use default message
         }
 
-        throw new Error(errorMessage);
+        // The status travels with the error: consumeOne reads a 404 on
+        // DELETE as "another caller consumed this row".
+        throw Object.assign(new Error(errorMessage), {
+          statusCode: response.status,
+        });
       }
 
       config.onHeaders?.(response.headers);

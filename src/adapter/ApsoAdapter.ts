@@ -56,6 +56,22 @@ export interface EntityOperations {
   accountOperations: AccountOperations;
 }
 
+/**
+ * Did the API answer 404? HttpClient puts the status on the error, and the
+ * status decides when it is there. An error from a custom client may carry
+ * only the API message ("verification not found" or "HTTP 404: ..."), so
+ * that is matched when there is no status.
+ */
+function isNotFound(error: unknown): boolean {
+  const { statusCode, message } = (error ?? {}) as {
+    statusCode?: unknown;
+    message?: unknown;
+  };
+  return typeof statusCode === 'number'
+    ? statusCode === 404
+    : /not found|HTTP 404/i.test(String(message ?? ''));
+}
+
 export class ApsoAdapter implements IApsoAdapter {
   public readonly config: ApsoAdapterConfig;
   private readonly httpClient: HttpClient;
@@ -1081,18 +1097,17 @@ export class ApsoAdapter implements IApsoAdapter {
           const genericWhere = this.parseWhereClause(params.where);
 
           // Fall back to generic implementation for unsupported models
-          if (genericWhere.id && typeof genericWhere.id === 'string') {
-            return this.findById<T>(params.model, genericWhere.id);
-          }
-
-          // The first row matching the full where clause. This used to
-          // return the first row of the table whatever the clause said.
-          const result = await this.findFirstMatching<T>(
-            params.model,
-            params.where
-          );
+          const found =
+            genericWhere.id && typeof genericWhere.id === 'string'
+              ? await this.findById<T>(params.model, genericWhere.id)
+              : // The first row matching the full where clause. This used to
+                // return the first row of the table whatever the clause said.
+                await this.findFirstMatching<T>(params.model, params.where);
+          const [result = null] = found
+            ? await this.withJoins([found], (params as any).join)
+            : [];
           this.updateSuccessMetrics(performance.now() - startTime);
-          return result;
+          return result as T | null;
       }
     } catch (error) {
       this.updateErrorMetrics(error, performance.now() - startTime);
@@ -1147,6 +1162,7 @@ export class ApsoAdapter implements IApsoAdapter {
       if (offset || limit) {
         rows = rows.slice(offset, limit ? offset + limit : undefined);
       }
+      rows = await this.withJoins(rows, (params as any).join);
 
       this.updateSuccessMetrics(performance.now() - startTime);
       return rows as T[];
@@ -1177,8 +1193,14 @@ export class ApsoAdapter implements IApsoAdapter {
    * Better Auth 1.6 reads single-use rows (password reset, magic link and
    * email verification tokens) through consumeOne: return the row and delete
    * it. Without it every reset failed with "consumeOne is not a function".
-   * ponytail: find-then-delete over REST is not atomic; two concurrent
-   * consumers can both read the row. Needs a server-side consume endpoint.
+   *
+   * Two consumers can both read the row, in this process or in another one.
+   * The DELETE decides which of them consumed it: the service answers 404 to
+   * a DELETE of a row that is already gone, and that caller gets null. This
+   * needs a service whose DELETE answers 404 in that case: a generated
+   * service on @apso/crud-typeorm later than 1.1.0 (apsoai/apso-packages#88).
+   * An older service answers 200 to both, and both callers get the row, as
+   * before.
    */
   async consumeOne<T>(params: DeleteParams): Promise<T | null> {
     // Better Auth consumes by id, and findOne has no id lookup for
@@ -1198,10 +1220,91 @@ export class ApsoAdapter implements IApsoAdapter {
     if (!row) return null;
     const expires = row.expiresAt ?? row.expires_at;
     if (expires != null) row.expiresAt = new Date(expires as string);
-    const where =
-      row.id != null ? [{ field: 'id', value: String(row.id) }] : params.where;
-    await this.delete({ model: params.model, where });
+    if (row.id == null) {
+      await this.delete({ model: params.model, where: params.where });
+      return row;
+    }
+    const apiPath = this.entityMapper.getApiPath(params.model);
+    try {
+      await this.httpClient.delete(
+        `${this.config.baseUrl}/${apiPath}/${row.id}`,
+        {
+          headers: this.buildHeaders(),
+          ...(this.config.timeout && { timeout: this.config.timeout }),
+        }
+      );
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw this.handleError(error, 'consumeOne', params.model);
+    }
     return row;
+  }
+
+  /**
+   * Better Auth 1.7 changes a row only if it still matches: refresh token
+   * rotation sets `revoked` where it is still null. Returns the updated row,
+   * or null when no row matched.
+   * ponytail: find-then-update over REST is not atomic; two concurrent
+   * callers can both match. Needs a conditional update on the service.
+   */
+  async incrementOne<T>(params: {
+    model: string;
+    where: any;
+    increment: Record<string, number>;
+    set?: Record<string, unknown>;
+  }): Promise<T | null> {
+    // The whole where clause decides, not the id alone: findOne looks a row
+    // up by id and ignores the other conditions.
+    const row = await this.findFirstMatching<Record<string, any>>(
+      params.model,
+      params.where
+    );
+    if (!row) return null;
+    const update: Record<string, unknown> = { ...params.set };
+    for (const [field, by] of Object.entries(params.increment ?? {})) {
+      update[field] = (Number(row[field]) || 0) + by;
+    }
+    if (Object.keys(update).length === 0) return row as T;
+    return this.update<T>({
+      model: params.model,
+      where: { id: String(row.id) },
+      update,
+    });
+  }
+
+  /**
+   * Attach the row Better Auth asked to join when this row holds its id:
+   * `join: { user: true }` on a member reads the user named by member.userId.
+   * The organization plugin reads a member with its user this way and treats
+   * the member as missing when the user is absent.
+   * ponytail: one request per row, and only a join found through
+   * `<model>Id` on the row. A join in the other direction (an organization
+   * with its members) is left out, as it was before. Add it when a flow
+   * needs it.
+   */
+  private async withJoins<T>(
+    rows: T[],
+    join?: Record<string, unknown>
+  ): Promise<T[]> {
+    const wanted = Object.keys(join ?? {}).filter(other => join?.[other]);
+    if (wanted.length === 0) return rows;
+    return Promise.all(
+      rows.map(async (row: any) => {
+        const joined: Record<string, unknown> = {};
+        for (const other of wanted) {
+          const id = row[`${other}Id`];
+          if (id === undefined) continue;
+          joined[other] =
+            id === null
+              ? null
+              : await this.findOne({
+                  model: other,
+                  where: [{ field: 'id', value: String(id) }] as any,
+                });
+        }
+        return { ...row, ...joined };
+      })
+    );
   }
 
   async transaction<R>(
@@ -1418,18 +1521,7 @@ export class ApsoAdapter implements IApsoAdapter {
         this.responseNormalizer.normalizeSingleResponse(response);
       return this.entityMapper.transformInbound(model, normalizedResponse);
     } catch (error) {
-      // If it's a 404, return null instead of throwing. HttpClient throws a
-      // plain Error carrying only the API message ("verification not found"
-      // or "HTTP 404: ..."), so match that too.
-      if (
-        (error &&
-          typeof error === 'object' &&
-          'statusCode' in error &&
-          error.statusCode === 404) ||
-        /not found|HTTP 404/i.test((error as Error)?.message ?? '')
-      ) {
-        return null;
-      }
+      if (isNotFound(error)) return null;
       throw error;
     }
   }
