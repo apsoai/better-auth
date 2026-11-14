@@ -27,7 +27,8 @@ import { AdapterError, AdapterErrorCode } from '../types';
 import { ConfigValidator } from '../utils/ConfigValidator';
 import { HttpClient } from '../client/HttpClient';
 import { buildAuthHeaders } from '../utils/authHeaders';
-import { contentRangeTotal, listUrl, scanUrl } from '../query/listUrl';
+import { guardQuery } from '../query/listUrl';
+import { normalizeWhere } from '../query/whereMatcher';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper } from '../response/EntityMapper';
@@ -55,6 +56,22 @@ export interface EntityOperations {
   sessionOperations: SessionOperations;
   verificationTokenOperations: VerificationTokenOperations;
   accountOperations: AccountOperations;
+}
+
+/**
+ * Did the API answer 404? HttpClient puts the status on the error, and the
+ * status decides when it is there. An error from a custom client may carry
+ * only the API message ("verification not found" or "HTTP 404: ..."), so
+ * that is matched when there is no status.
+ */
+function isNotFound(error: unknown): boolean {
+  const { statusCode, message } = (error ?? {}) as {
+    statusCode?: unknown;
+    message?: unknown;
+  };
+  return typeof statusCode === 'number'
+    ? statusCode === 404
+    : /not found|HTTP 404/i.test(String(message ?? ''));
 }
 
 export class ApsoAdapter implements IApsoAdapter {
@@ -628,9 +645,10 @@ export class ApsoAdapter implements IApsoAdapter {
           }
 
           const recordWithId = existing as any;
+          // The API returns numeric ids; the branch above needs a string.
           return this.update({
             ...params,
-            where: { id: recordWithId.id },
+            where: { id: String(recordWithId.id) },
           });
       }
     } catch (error) {
@@ -645,13 +663,11 @@ export class ApsoAdapter implements IApsoAdapter {
     try {
       this.updateModelMetrics(params.model);
 
-      // Convert model name to EntityType enum
-      const entityType = this.getEntityType(params.model);
-
-      // Use BulkOperations for efficient batch processing
+      // BulkOperations matches rows against the where clause and refuses an
+      // empty one, so it is passed through exactly as Better Auth sent it.
       const updateManyOptions = {
-        model: entityType,
-        where: params.where || {},
+        model: params.model,
+        where: params.where,
         update: params.update,
       } as any;
 
@@ -850,15 +866,13 @@ export class ApsoAdapter implements IApsoAdapter {
     try {
       this.updateModelMetrics(params.model);
 
-      // Convert model name to EntityType enum
-      const entityType = this.getEntityType(params.model);
-
-      // Use BulkOperations for efficient batch processing
-      // Enable cascade deletion for users by default for data integrity
+      // BulkOperations matches rows against the where clause and refuses an
+      // empty one, so it is passed through exactly as Better Auth sent it.
+      // Deleting users also deletes their sessions.
       const deleteManyOptions = {
-        model: entityType,
-        where: params.where || {},
-        cascadeDelete: entityType === EntityType.USER, // Enable cascade for users
+        model: params.model,
+        where: params.where,
+        cascadeDelete: params.model.toLowerCase() === 'user',
       } as any;
 
       if (this.config.batchConfig?.batchSize) {
@@ -926,12 +940,11 @@ export class ApsoAdapter implements IApsoAdapter {
               userWhere.email
             );
           } else {
-            // For other user filters, use findManyUsers with limit 1
-            const users = await this.userOperations.findManyUsers({
-              where: params.where,
-              pagination: { limit: 1 },
-            });
-            userResult = users.length > 0 ? users[0] : null;
+            // Any other filter: the first row matching the full where clause
+            userResult = await this.findFirstMatching<any>(
+              'user',
+              params.where
+            );
           }
 
           // If includeAccounts is requested and we found a user, fetch their accounts
@@ -968,12 +981,11 @@ export class ApsoAdapter implements IApsoAdapter {
               sessionWhere.token
             );
           } else {
-            // For other session filters, use findManySessions with limit 1
-            const sessions = await this.sessionOperations.findManySessions({
-              where: sessionWhere,
-              pagination: { limit: 1 },
-            });
-            sessionResult = sessions.length > 0 ? sessions[0] : null;
+            // Any other filter: the first row matching the full where clause
+            sessionResult = await this.findFirstMatching<any>(
+              'session',
+              params.where
+            );
           }
 
           // Handle join: { user: true } - BetterAuth needs user data with session
@@ -1012,14 +1024,6 @@ export class ApsoAdapter implements IApsoAdapter {
             );
             this.updateSuccessMetrics(performance.now() - startTime);
             return accountResult as T;
-          } else if (accountWhere.userId) {
-            // Find account by user ID
-            const accountResult =
-              await this.accountOperations.findAccountByUserId(
-                accountWhere.userId
-              );
-            this.updateSuccessMetrics(performance.now() - startTime);
-            return accountResult as T;
           } else if (accountWhere.providerId && accountWhere.accountId) {
             // Find account by providerId + accountId (for OAuth account linking)
 
@@ -1031,13 +1035,15 @@ export class ApsoAdapter implements IApsoAdapter {
             this.updateSuccessMetrics(performance.now() - startTime);
             return accounts.length > 0 ? (accounts[0] as T) : null;
           } else {
-            // For other account filters, use findManyAccounts with limit 1
-            const accounts = await this.accountOperations.findManyAccounts({
-              where: accountWhere, // Use parsed where clause for consistent field names
-              pagination: { limit: 1 },
-            });
+            // Any other filter, including userId with further conditions:
+            // the first row matching the full where clause. A lookup by
+            // userId alone used to ignore every other condition.
+            const accountResult = await this.findFirstMatching(
+              'account',
+              params.where
+            );
             this.updateSuccessMetrics(performance.now() - startTime);
-            return accounts.length > 0 ? (accounts[0] as T) : null;
+            return accountResult as T;
           }
 
         case 'verification': // BetterAuth uses 'verification' model name
@@ -1093,33 +1099,17 @@ export class ApsoAdapter implements IApsoAdapter {
           const genericWhere = this.parseWhereClause(params.where);
 
           // Fall back to generic implementation for unsupported models
-          if (genericWhere.id && typeof genericWhere.id === 'string') {
-            return this.findById<T>(params.model, genericWhere.id);
-          }
-
-          this.queryTranslator.buildFindQuery(params.where, { limit: 1 });
-          const apiPath = this.entityMapper.getApiPath(params.model);
-          const url = `${this.config.baseUrl}/${apiPath}`;
-
-          const response = await this.httpClient.get<T[]>(url, {
-            headers: this.buildHeaders(),
-            ...(this.config.timeout && { timeout: this.config.timeout }),
-          });
-
-          const normalizedResults =
-            this.responseNormalizer.normalizeArrayResponse(response);
-
-          if (!normalizedResults || normalizedResults.length === 0) {
-            this.updateSuccessMetrics(performance.now() - startTime);
-            return null;
-          }
-
-          const result = this.entityMapper.transformInbound(
-            params.model,
-            normalizedResults[0]
-          );
+          const found =
+            genericWhere.id && typeof genericWhere.id === 'string'
+              ? await this.findById<T>(params.model, genericWhere.id)
+              : // The first row matching the full where clause. This used to
+                // return the first row of the table whatever the clause said.
+                await this.findFirstMatching<T>(params.model, params.where);
+          const [result = null] = found
+            ? await this.withJoins([found], (params as any).join)
+            : [];
           this.updateSuccessMetrics(performance.now() - startTime);
-          return result;
+          return result as T | null;
       }
     } catch (error) {
       this.updateErrorMetrics(error, performance.now() - startTime);
@@ -1133,121 +1123,51 @@ export class ApsoAdapter implements IApsoAdapter {
     try {
       this.updateModelMetrics(params.model);
 
-      // Parse where clause for filtering
-      const whereClause = this.parseWhereClause(params.where || {});
-
-      // Handle verification tokens specially - BetterAuth uses 'verification' model name
-      // and we need server-side filtering due to pagination issues
-      const modelLower = params.model.toLowerCase();
-      if (modelLower === 'verification' || modelLower === 'verificationtoken') {
-        // Extract identifier from where clause
-        const identifier = whereClause?.identifier as string | undefined;
-        if (identifier) {
-          // Use server-side filtering for verification tokens
-          // The Apso API stores the OAuth state in the 'identifier' field
-          const url = listUrl(this.config, 'verifications', {
-            filters: [{ field: 'identifier', op: 'eq', value: identifier }],
-            limit: params.pagination?.limit || 10,
-          });
-
-          const response = await this.httpClient.get<T[]>(url, {
-            headers: this.buildHeaders(),
-            ...(this.config.timeout && { timeout: this.config.timeout }),
-          });
-
-          const normalizedResults =
-            this.responseNormalizer.normalizeArrayResponse(response);
-
-          // Transform results to BetterAuth's verification format
-          // BetterAuth expects: { id, identifier, value, expiresAt, createdAt, updatedAt }
-          // The API returns: { id, identifier, value, expiresAt/expires_at, created_at, updated_at }
-          const transformedResults = normalizedResults.map((item: any) => ({
-            id: String(item.id),
-            identifier: item.identifier,
-            value: item.value, // JSON string with callback URL, code verifier, etc.
-            expiresAt: new Date(item.expiresAt || item.expires_at),
-            createdAt: item.createdAt
-              ? new Date(item.createdAt)
-              : item.created_at
-                ? new Date(item.created_at)
-                : undefined,
-            updatedAt: item.updatedAt
-              ? new Date(item.updatedAt)
-              : item.updated_at
-                ? new Date(item.updated_at)
-                : undefined,
-          }));
-
-          this.updateSuccessMetrics(performance.now() - startTime);
-          return transformedResults as T[];
-        }
-      }
-
-      // Accounts: filtered server-side on safe keys, paged past the API's
-      // 100-row cap, compared type-safely. The generic path below fetched only
-      // the first page unfiltered and compared with !==, so listing a user's
-      // accounts by userId (number from the API, string from BetterAuth)
-      // returned [] on the provider-linking sign-in path.
-      if (modelLower === 'account') {
-        const accounts = await this.accountOperations.findManyAccounts({
-          where: whereClause as Record<string, any>,
-          ...(params.pagination && { pagination: params.pagination }),
-        });
-        this.updateSuccessMetrics(performance.now() - startTime);
-        return accounts as unknown as T[];
-      }
-
-      // Build query parameters (for potential future use with query string)
-      this.queryTranslator.buildFindQuery(
-        whereClause,
-        params.pagination,
-        params.orderBy
+      // Same matcher as updateMany and deleteMany: every page of candidates,
+      // the full where clause (all operators and connectors) applied in
+      // memory. An absent where clause lists every row.
+      let rows = await this.bulkOperations.findMatching(
+        params.model,
+        params.where
       );
 
-      // Get API path
-      const apiPath = this.entityMapper.getApiPath(params.model);
-      const url = scanUrl(this.config, apiPath, whereClause);
-
-      // Execute request
-      const response = await this.httpClient.get<T[]>(url, {
-        headers: this.buildHeaders(),
-        ...(this.config.timeout && { timeout: this.config.timeout }),
-        // TODO: Add query params to URL for filtering
-      });
-
-      // Normalize response (handle both array and paginated responses)
-      const normalizedResults =
-        this.responseNormalizer.normalizeArrayResponse(response);
-
-      // Client-side filtering since we don't have query params yet
-      let filteredResults = normalizedResults;
-      if (whereClause && Object.keys(whereClause).length > 0) {
-        filteredResults = normalizedResults.filter((item: any) => {
-          for (const [field, value] of Object.entries(whereClause)) {
-            // API ids are numbers, BetterAuth passes strings: compare as strings.
-            const actual = item[field];
-            if (
-              actual !== value &&
-              (actual === null ||
-                actual === undefined ||
-                value === null ||
-                value === undefined ||
-                String(actual) !== String(value))
-            ) {
-              return false;
-            }
-          }
-          return true;
+      // Better Auth passes sortBy/limit/offset; orderBy/pagination are the
+      // older names. Sort before paging so "latest row" lookups are right.
+      const sortBy =
+        params.sortBy ??
+        Object.entries(params.orderBy ?? {}).map(([field, direction]) => ({
+          field,
+          direction,
+        }))[0];
+      if (sortBy) {
+        const sign = sortBy.direction === 'desc' ? -1 : 1;
+        const key = (row: any) => {
+          const value = row[sortBy.field];
+          return value instanceof Date ? value.getTime() : value;
+        };
+        rows = [...rows].sort((a, b) => {
+          const x = key(a);
+          const y = key(b);
+          if (x === y) return 0;
+          if (x === undefined || x === null) return 1;
+          if (y === undefined || y === null) return -1;
+          return (x < y ? -1 : 1) * sign;
         });
       }
-
-      // Transform each result
-      const transformedResults = filteredResults.map(item =>
-        this.entityMapper.transformInbound(params.model, item)
-      );
+      const limit = params.limit ?? params.pagination?.limit;
+      const offset =
+        params.offset ??
+        params.pagination?.offset ??
+        (limit && params.pagination?.page
+          ? (params.pagination.page - 1) * limit
+          : 0);
+      if (offset || limit) {
+        rows = rows.slice(offset, limit ? offset + limit : undefined);
+      }
+      rows = await this.withJoins(rows, (params as any).join);
 
       this.updateSuccessMetrics(performance.now() - startTime);
-      return transformedResults;
+      return rows as T[];
     } catch (error) {
       this.updateErrorMetrics(error, performance.now() - startTime);
       throw this.handleError(error, 'findMany', params.model);
@@ -1259,84 +1179,15 @@ export class ApsoAdapter implements IApsoAdapter {
 
     try {
       this.updateModelMetrics(params.model);
-
-      // Build query parameters (for potential future use with query string)
-      this.queryTranslator.buildFindQuery(
-        params.where || {},
-        { limit: 1 } // We only need count, not the data
+      const rows = await this.bulkOperations.findMatching(
+        params.model,
+        params.where
       );
-
-      // Get API path
-      const apiPath = this.entityMapper.getApiPath(params.model);
-      const url = `${this.config.baseUrl}/${apiPath}`;
-
-      // A PostgREST list is a bare array with no total in the body: ask for
-      // the count alone and read it from Content-Range. Equality conditions
-      // on plain values are sent; anything else falls back to findMany below.
-      if (this.config.queryDialect === 'postgrest') {
-        const where = this.parseWhereClause(params.where || {});
-        const values = Object.entries(where);
-        if (
-          values.some(
-            ([, v]) =>
-              !['string', 'number', 'boolean'].includes(typeof v) ||
-              v instanceof Date
-          )
-        ) {
-          throw new Error('count: condition needs the findMany fallback');
-        }
-        let total: number | undefined;
-        await this.httpClient.get(
-          listUrl(this.config, apiPath, {
-            filters: values.map(([field, value]) => ({
-              field,
-              op: 'eq' as const,
-              value: value as string | number | boolean,
-            })),
-            limit: 0,
-          }),
-          {
-            headers: { ...this.buildHeaders(), Prefer: 'count=exact' },
-            ...(this.config.timeout && { timeout: this.config.timeout }),
-            onHeaders: headers => {
-              total = contentRangeTotal(headers.get('content-range'));
-            },
-          }
-        );
-        if (total === undefined) {
-          throw new Error('count: no total in Content-Range');
-        }
-        this.updateSuccessMetrics(performance.now() - startTime);
-        return total;
-      }
-
-      // Execute request
-      const response = await this.httpClient.get(url, {
-        headers: this.buildHeaders(),
-        ...(this.config.timeout && { timeout: this.config.timeout }),
-        // TODO: Add query params to URL
-      });
-
-      // Try to get count from response metadata
-      const normalizedResponse =
-        this.responseNormalizer.normalizeCountResponse(response);
-
       this.updateSuccessMetrics(performance.now() - startTime);
-      return normalizedResponse;
+      return rows.length;
     } catch (error) {
-      // Fallback: get all records and count them
-      try {
-        const allRecords = await this.findMany({
-          model: params.model,
-          ...(params.where && { where: params.where }),
-        });
-
-        this.updateSuccessMetrics(performance.now() - startTime);
-        return allRecords.length;
-      } catch (fallbackError) {
-        this.updateErrorMetrics(error, performance.now() - startTime);
-        throw this.handleError(error, 'count', params.model);
-      }
+      this.updateErrorMetrics(error, performance.now() - startTime);
+      throw this.handleError(error, 'count', params.model);
     }
   }
 
@@ -1344,8 +1195,14 @@ export class ApsoAdapter implements IApsoAdapter {
    * Better Auth 1.6 reads single-use rows (password reset, magic link and
    * email verification tokens) through consumeOne: return the row and delete
    * it. Without it every reset failed with "consumeOne is not a function".
-   * ponytail: find-then-delete over REST is not atomic; two concurrent
-   * consumers can both read the row. Needs a server-side consume endpoint.
+   *
+   * Two consumers can both read the row, in this process or in another one.
+   * The DELETE decides which of them consumed it: the service answers 404 to
+   * a DELETE of a row that is already gone, and that caller gets null. This
+   * needs a service whose DELETE answers 404 in that case: a generated
+   * service on @apso/crud-typeorm later than 1.1.0 (apsoai/apso-packages#88).
+   * An older service answers 200 to both, and both callers get the row, as
+   * before.
    */
   async consumeOne<T>(params: DeleteParams): Promise<T | null> {
     // Better Auth consumes by id, and findOne has no id lookup for
@@ -1365,10 +1222,159 @@ export class ApsoAdapter implements IApsoAdapter {
     if (!row) return null;
     const expires = row.expiresAt ?? row.expires_at;
     if (expires != null) row.expiresAt = new Date(expires as string);
-    const where =
-      row.id != null ? [{ field: 'id', value: String(row.id) }] : params.where;
-    await this.delete({ model: params.model, where });
+    if (row.id == null) {
+      await this.delete({ model: params.model, where: params.where });
+      return row;
+    }
+    const apiPath = this.entityMapper.getApiPath(params.model);
+    try {
+      await this.httpClient.delete(
+        `${this.config.baseUrl}/${apiPath}/${row.id}`,
+        {
+          headers: this.buildHeaders(),
+          ...(this.config.timeout && { timeout: this.config.timeout }),
+        }
+      );
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw this.handleError(error, 'consumeOne', params.model);
+    }
     return row;
+  }
+
+  /**
+   * Better Auth 1.7 changes a row only if it still matches: refresh token
+   * rotation sets `revoked` where it is still null. Returns the updated row,
+   * or null when no row matched.
+   *
+   * Two callers can both read a matching row, in this process or in another
+   * one. The PATCH carries the conditions, and the service decides: it
+   * updates the row only while it still meets them and answers 404 otherwise,
+   * and that caller gets null. A counter is updated where it still holds the
+   * value that was read, and read again when it does not. This needs a
+   * service that checks the condition and writes under one row lock
+   * (@apso/crud-typeorm with apsoai/apso-packages#88). An older service
+   * checks the condition at its read only.
+   * ponytail: a condition guardQuery cannot send (lt, gt, a date, OR), and a
+   * model with its own update path (user, session, account, verification),
+   * is matched here and then updated by id, so two callers can both match.
+   * Send those conditions too when a flow needs one of them decided.
+   */
+  async incrementOne<T>(params: {
+    model: string;
+    where: any;
+    increment: Record<string, number>;
+    set?: Record<string, unknown>;
+  }): Promise<T | null> {
+    const conditions = normalizeWhere(params.where);
+    const increments = Object.entries(params.increment ?? {});
+    const ownUpdatePath = [
+      'user',
+      'session',
+      'account',
+      'verification',
+      'verificationtoken',
+    ].includes(params.model.toLowerCase());
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      // The whole where clause decides, not the id alone: findOne looks a
+      // row up by id and ignores the other conditions.
+      const row = await this.findFirstMatching<Record<string, any>>(
+        params.model,
+        params.where
+      );
+      if (!row) return null;
+      const update: Record<string, unknown> = { ...params.set };
+      for (const [field, by] of increments) {
+        update[field] = (Number(row[field]) || 0) + by;
+      }
+      if (Object.keys(update).length === 0) return row as T;
+
+      const guard = ownUpdatePath
+        ? undefined
+        : guardQuery(this.config, [
+            ...conditions.filter(condition => condition.field !== 'id'),
+            ...increments.map(([field]) => ({
+              field,
+              operator: 'eq' as const,
+              value: row[field] ?? null,
+              connector: 'AND' as const,
+              insensitive: false,
+            })),
+          ]);
+      if (guard === undefined) {
+        return this.update<T>({
+          model: params.model,
+          where: { id: String(row.id) },
+          update,
+        });
+      }
+
+      const apiPath = this.entityMapper.getApiPath(params.model);
+      try {
+        const response = await this.httpClient.patch<T>(
+          `${this.config.baseUrl}/${apiPath}/${row.id}${guard && `?${guard}`}`,
+          this.entityMapper.transformOutbound(params.model, update),
+          {
+            headers: this.buildHeaders(),
+            ...(this.config.timeout && { timeout: this.config.timeout }),
+          }
+        );
+        return this.entityMapper.transformInbound(
+          params.model,
+          this.responseNormalizer.normalizeSingleResponse(response)
+        );
+      } catch (error) {
+        if (!isNotFound(error)) {
+          throw this.handleError(error, 'incrementOne', params.model);
+        }
+        // The row stopped matching between the read and the update. Without
+        // a counter that is final. With one, another caller may only have
+        // moved the counter: read again.
+        if (increments.length === 0) return null;
+      }
+    }
+    throw new AdapterError(
+      AdapterErrorCode.API_ERROR,
+      `incrementOne: ${params.model} kept changing between the read and the update`,
+      { model: params.model },
+      true
+    );
+  }
+
+  /**
+   * Attach the row Better Auth asked to join when this row holds its id:
+   * `join: { user: true }` on a member reads the user named by member.userId.
+   * The organization plugin reads a member with its user this way and treats
+   * the member as missing when the user is absent.
+   * ponytail: one request per row, and only a join found through
+   * `<model>Id` on the row. A join in the other direction (an organization
+   * with its members) is left out, as it was before. Add it when a flow
+   * needs it.
+   */
+  private async withJoins<T>(
+    rows: T[],
+    join?: Record<string, unknown>
+  ): Promise<T[]> {
+    const wanted = Object.keys(join ?? {}).filter(other => join?.[other]);
+    if (wanted.length === 0) return rows;
+    return Promise.all(
+      rows.map(async (row: any) => {
+        const joined: Record<string, unknown> = {};
+        for (const other of wanted) {
+          const id = row[`${other}Id`];
+          if (id === undefined) continue;
+          joined[other] =
+            id === null
+              ? null
+              : await this.findOne({
+                  model: other,
+                  where: [{ field: 'id', value: String(id) }] as any,
+                });
+        }
+        return { ...row, ...joined };
+      })
+    );
   }
 
   async transaction<R>(
@@ -1558,6 +1564,17 @@ export class ApsoAdapter implements IApsoAdapter {
   }
 
   /**
+   * First row of a model that matches the full where clause, or null.
+   */
+  private async findFirstMatching<T>(
+    model: string,
+    where: unknown
+  ): Promise<T | null> {
+    const rows = await this.bulkOperations.findMatching(model, where);
+    return (rows[0] as T) ?? null;
+  }
+
+  /**
    * Find a record by its ID using direct API call
    */
   private async findById<T>(model: string, id: string): Promise<T | null> {
@@ -1574,18 +1591,7 @@ export class ApsoAdapter implements IApsoAdapter {
         this.responseNormalizer.normalizeSingleResponse(response);
       return this.entityMapper.transformInbound(model, normalizedResponse);
     } catch (error) {
-      // If it's a 404, return null instead of throwing. HttpClient throws a
-      // plain Error carrying only the API message ("verification not found"
-      // or "HTTP 404: ..."), so match that too.
-      if (
-        (error &&
-          typeof error === 'object' &&
-          'statusCode' in error &&
-          error.statusCode === 404) ||
-        /not found|HTTP 404/i.test((error as Error)?.message ?? '')
-      ) {
-        return null;
-      }
+      if (isNotFound(error)) return null;
       throw error;
     }
   }

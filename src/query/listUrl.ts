@@ -11,6 +11,8 @@
  *    that accepts the PostgREST syntax only answers 400 to a nestjsx filter.
  */
 
+import { isLiteralString, type WhereCondition } from './whereMatcher';
+
 export type QueryDialect = 'nestjsx' | 'postgrest';
 
 export interface ListFilter {
@@ -137,6 +139,48 @@ export function scanUrl(
     }
   }
   return listUrl(config, apiPath, { filters, limit: SCAN_LIMIT });
+}
+
+/**
+ * Query string that makes `PATCH /<path>/<id>` apply only while the row still
+ * meets `conditions`; the service answers 404 otherwise. Undefined when a
+ * condition cannot be sent in a form the service compares reliably: anything
+ * but AND-ed equality on null, a boolean, a number or a string, and in the
+ * nestjsx dialect a string its parser would read as another type.
+ */
+export function guardQuery(
+  config: DialectConfig,
+  conditions: WhereCondition[]
+): string | undefined {
+  const postgrest = config.queryDialect === 'postgrest';
+  const nulls: string[] = [];
+  const filters: ListFilter[] = [];
+  for (const { field, operator, value, connector, insensitive } of conditions) {
+    if (connector === 'OR' || insensitive || operator !== 'eq') {
+      return undefined;
+    }
+    if (value === null) {
+      nulls.push(
+        postgrest
+          ? `${field}=is.null`
+          : `filter=${encodeURIComponent(`${field}||$isnull`)}`
+      );
+    } else if (
+      typeof value === 'boolean' ||
+      (typeof value === 'number' && Number.isFinite(value)) ||
+      (typeof value === 'string' &&
+        value !== '' &&
+        (postgrest || isLiteralString(value)))
+    ) {
+      filters.push({ field, op: '$eq', value });
+    } else {
+      return undefined;
+    }
+  }
+  const equalities = postgrest
+    ? postgrestQuery({ filters })
+    : nestjsxQuery({ filters });
+  return [...nulls, equalities].filter(Boolean).join('&');
 }
 
 /** The total in a `Content-Range` header: 42 for `0-9/42` and for `*\/42`. */

@@ -20,24 +20,26 @@
  * ### Bulk Update
  * ```typescript
  * const result = await bulkOperations.updateMany({
- *   model: EntityType.USER,
- *   where: { emailVerified: false },
- *   update: { emailVerified: true },
- *   batchSize: 50,
- *   maxConcurrency: 3
+ *   model: 'account',
+ *   where: [
+ *     { field: 'userId', value: userId },
+ *     { field: 'providerId', value: 'credential' },
+ *   ],
+ *   update: { password: hash },
  * });
- * console.log(`Updated ${result.success} users, ${result.failures} failures`);
+ * console.log(`Updated ${result.success} rows, ${result.failures} failures`);
  * ```
  *
- * ### Bulk Delete with Cascade
+ * ### Bulk Delete
  * ```typescript
  * const result = await bulkOperations.deleteMany({
- *   model: EntityType.USER,
- *   where: { lastLoginAt: { lt: oneYearAgo } },
- *   cascadeDelete: true, // Automatically deletes related sessions
- *   batchSize: 25
+ *   model: 'session',
+ *   where: [{ field: 'userId', value: userId }],
  * });
  * ```
+ *
+ * updateMany and deleteMany act only on rows that match the where clause
+ * (see findMatching) and refuse an empty one.
  *
  * ### Bulk Create with Validation
  * ```typescript
@@ -75,10 +77,28 @@ import {
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper } from '../response/EntityMapper';
 import { HttpClient } from '../client/HttpClient';
+import {
+  matchesWhere,
+  normalizeWhere,
+  serverFilters,
+} from '../query/whereMatcher';
 import { buildAuthHeaders } from '../utils/authHeaders';
+import { listUrl, type ListFilter } from '../query/listUrl';
 import { UserOperations } from './UserOperations';
 import { SessionOperations } from './SessionOperations';
 import { VerificationTokenOperations } from './VerificationTokenOperations';
+import { AccountOperations } from './AccountOperations';
+
+/** The API returns at most this many rows per page. */
+const PAGE_SIZE = 100;
+/** Safety cap on candidate pages read for one operation (20,000 rows). */
+const MAX_PAGES = 200;
+
+/** Lower-cased model name, with the legacy verification alias folded in. */
+function modelKey(model: string): string {
+  const key = model.toLowerCase();
+  return key === 'verificationtoken' ? 'verification' : key;
+}
 
 // =============================================================================
 // Types and Interfaces
@@ -135,8 +155,10 @@ export interface BulkOperationError {
  * Options for updateMany operation
  */
 export interface UpdateManyOptions {
-  model: EntityType;
-  where: Record<string, any>;
+  /** Better Auth model name, for example "account" or "session". */
+  model: string;
+  /** Better Auth where clause: a list of conditions, or a plain object. */
+  where: unknown;
   update: Record<string, any>;
   batchSize?: number;
   maxConcurrency?: number;
@@ -148,8 +170,10 @@ export interface UpdateManyOptions {
  * Options for deleteMany operation
  */
 export interface DeleteManyOptions {
-  model: EntityType;
-  where: Record<string, any>;
+  /** Better Auth model name, for example "account" or "session". */
+  model: string;
+  /** Better Auth where clause: a list of conditions, or a plain object. */
+  where: unknown;
   batchSize?: number;
   maxConcurrency?: number;
   onProgress?: BatchProgressCallback;
@@ -186,7 +210,7 @@ export interface MemoryStats {
  */
 interface OperationContext {
   operation: string;
-  model: EntityType;
+  model: string;
   startTime: number;
   config: BulkOperationConfig;
   logger: Logger | undefined;
@@ -204,7 +228,7 @@ export interface BulkOperationsDependencies {
   userOperations: UserOperations;
   sessionOperations: SessionOperations;
   verificationTokenOperations: VerificationTokenOperations;
-  accountOperations?: any; // AccountOperations type (optional)
+  accountOperations: AccountOperations;
 }
 
 // =============================================================================
@@ -222,6 +246,7 @@ export class BulkOperations {
   private readonly userOperations: UserOperations;
   private readonly sessionOperations: SessionOperations;
   private readonly verificationTokenOperations: VerificationTokenOperations;
+  private readonly accountOperations: AccountOperations;
 
   // Batch processor instance
   private readonly batchProcessor: BatchProcessor;
@@ -239,6 +264,7 @@ export class BulkOperations {
     this.userOperations = dependencies.userOperations;
     this.sessionOperations = dependencies.sessionOperations;
     this.verificationTokenOperations = dependencies.verificationTokenOperations;
+    this.accountOperations = dependencies.accountOperations;
 
     // Initialize batch processor with adapter config
     const batchConfig =
@@ -283,10 +309,12 @@ export class BulkOperations {
         concurrency: context.config.maxConcurrency,
       });
 
-      // Step 1: Find all matching records
-      const matchingRecords = await this.findMatchingRecords(
+      // Step 1: Find all matching records. An update or delete without a
+      // where clause is refused rather than applied to every row.
+      const matchingRecords = await this.findMatching(
         options.model,
-        options.where
+        options.where,
+        { requireWhere: true }
       );
 
       if (matchingRecords.length === 0) {
@@ -349,10 +377,12 @@ export class BulkOperations {
         cascade: options.cascadeDelete,
       });
 
-      // Step 1: Find all matching records
-      const matchingRecords = await this.findMatchingRecords(
+      // Step 1: Find all matching records. An update or delete without a
+      // where clause is refused rather than applied to every row.
+      const matchingRecords = await this.findMatching(
         options.model,
-        options.where
+        options.where,
+        { requireWhere: true }
       );
 
       if (matchingRecords.length === 0) {
@@ -360,7 +390,7 @@ export class BulkOperations {
       }
 
       // Step 2: Handle cascade deletion for Users
-      if (options.model === EntityType.USER && options.cascadeDelete) {
+      if (modelKey(options.model) === 'user' && options.cascadeDelete) {
         await this.handleUserCascadeDelete(matchingRecords);
       }
 
@@ -520,7 +550,7 @@ export class BulkOperations {
    */
   private createOperationContext(
     operation: string,
-    model: EntityType,
+    model: string,
     config: Partial<BulkOperationConfig>
   ): OperationContext {
     const operationConfig: BulkOperationConfig = {
@@ -555,140 +585,178 @@ export class BulkOperations {
   }
 
   /**
-   * Find all records matching the given criteria
+   * Find every row of a model that matches a where clause.
+   *
+   * This is the one place a multi-row operation decides which rows it acts
+   * on: findMany, count, updateMany and deleteMany all come through here.
+   * Candidates are read from the API a page at a time until it has no more,
+   * each row is converted to its Better Auth shape, and matchesWhere decides
+   * it. Server-side filters only reduce how many candidates are read.
+   *
+   * @throws {AdapterError} If the where clause cannot be evaluated, if
+   * requireWhere is set and the clause is empty, or if the API has more
+   * candidate pages than MAX_PAGES (acting on a partial result is refused).
    */
-  private async findMatchingRecords(
-    model: EntityType,
-    where: Record<string, any>
+  async findMatching(
+    model: string,
+    where: unknown,
+    options: { requireWhere?: boolean } = {}
   ): Promise<any[]> {
-    try {
-      // Route to entity-specific operations for optimized queries
-      switch (model) {
-        case EntityType.USER:
-          if (where.id) {
-            const user = await this.userOperations.findUserById(where.id);
-            return user ? [user] : [];
-          } else if (where.email) {
-            const user = await this.userOperations.findUserByEmail(where.email);
-            return user ? [user] : [];
-          } else {
-            return await this.userOperations.findManyUsers({ where });
-          }
-
-        case EntityType.SESSION:
-          if (where.id) {
-            const session = await this.sessionOperations.findSessionById(
-              where.id
-            );
-            return session ? [session] : [];
-          } else if (where.sessionToken) {
-            const session = await this.sessionOperations.findSessionByToken(
-              where.sessionToken
-            );
-            return session ? [session] : [];
-          } else {
-            return await this.sessionOperations.findManySessions({ where });
-          }
-
-        case EntityType.VERIFICATION_TOKEN:
-          if (where.token) {
-            const token =
-              await this.verificationTokenOperations.findVerificationTokenByToken(
-                where.token
-              );
-            return token ? [token] : [];
-          } else if (where.identifier) {
-            return await this.verificationTokenOperations.findVerificationTokensByIdentifier(
-              where.identifier,
-              { activeOnly: false }
-            );
-          } else {
-            // For other criteria, return empty array as VerificationToken has limited query options
-            return [];
-          }
-
-        default:
-          // Generic implementation for unsupported models
-          const apiPath = this.entityMapper.getApiPath(model);
-          const url = `${this.config.baseUrl}/${apiPath}`;
-
-          const response = await this.httpClient.get<any[]>(
-            url,
-            this.buildRequestConfig()
-          );
-
-          return this.responseNormalizer.normalizeArrayResponse(response);
-      }
-    } catch (error) {
-      this.logger?.error('Failed to find matching records', {
-        model,
-        where,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    const conditions = normalizeWhere(where);
+    if (options.requireWhere && conditions.length === 0) {
+      throw new AdapterErrorClass(
+        AdapterErrorCode.VALIDATION_ERROR,
+        `Refusing to update or delete every ${model} row: the where clause is empty`,
+        { model, where },
+        false,
+        400
+      );
     }
+
+    const key = modelKey(model);
+    const apiPath = this.entityMapper.getApiPath(key);
+    const baseUrl = `${this.config.baseUrl}/${apiPath}`;
+    const narrowing = serverFilters(conditions);
+    const filters = narrowing.map(
+      filter => `filter=${encodeURIComponent(filter)}`
+    );
+    // A service that accepts the PostgREST syntax only answers 400 to
+    // `filter=`. Equality filters are sent in its syntax; the others ($in,
+    // date bounds) are left out, which only widens the candidate set, and
+    // matchesWhere still decides every row.
+    const postgrest = this.config.queryDialect === 'postgrest';
+    const equalities: ListFilter[] = narrowing
+      .map(filter => filter.split('||'))
+      .filter(([, op]) => op === '$eq')
+      .map(([field, , ...value]) => ({
+        field: field as string,
+        op: 'eq' as const,
+        value: value.join('||'),
+      }));
+
+    const matches: any[] = [];
+    const seen = new Set<string>();
+    for (let page = 1; ; page++) {
+      if (page > MAX_PAGES) {
+        throw new AdapterErrorClass(
+          AdapterErrorCode.API_ERROR,
+          `More than ${MAX_PAGES * PAGE_SIZE} candidate ${model} rows; refusing to act on a partial result`,
+          { model, where },
+          false
+        );
+      }
+      // A fixed order keeps pages stable, so no row is skipped or repeated.
+      const query = [
+        ...filters,
+        `limit=${PAGE_SIZE}`,
+        `page=${page}`,
+        'sort=id,ASC',
+      ].join('&');
+      const response = await this.httpClient.get<any>(
+        postgrest
+          ? `${listUrl(this.config, apiPath, { filters: equalities, limit: PAGE_SIZE, page })}&order=id.asc`
+          : `${baseUrl}?${query}`,
+        this.buildRequestConfig()
+      );
+      const rows =
+        this.responseNormalizer.normalizeArrayResponse<any>(response);
+
+      let added = 0;
+      for (const raw of rows) {
+        if (!raw || raw.id === undefined || raw.id === null) {
+          throw new AdapterErrorClass(
+            AdapterErrorCode.API_ERROR,
+            `The API returned a ${model} row without an id`,
+            { model },
+            false
+          );
+        }
+        if (seen.has(String(raw.id))) continue;
+        seen.add(String(raw.id));
+        added++;
+
+        const row = this.toBetterAuth(key, raw);
+        // Match on the Better Auth shape, falling back to the API's own
+        // columns for fields the mapping does not carry.
+        const view = {
+          ...raw,
+          ...(raw.created_at !== undefined && { createdAt: raw.created_at }),
+          ...(raw.updated_at !== undefined && { updatedAt: raw.updated_at }),
+          ...row,
+        };
+        if (matchesWhere(view, conditions)) matches.push(row);
+      }
+
+      const pageCount = response?.pageCount;
+      const lastPage =
+        typeof pageCount === 'number'
+          ? page >= pageCount
+          : rows.length < PAGE_SIZE;
+      // An API that ignores paging returns the same rows again: stop.
+      if (added === 0 || lastPage) break;
+    }
+
+    return matches;
   }
 
   /**
-   * Create processor function for update operations
+   * Convert an API row to the shape Better Auth reads.
+   */
+  private toBetterAuth(key: string, raw: any): any {
+    if (key === 'verification') {
+      const date = (value: unknown) =>
+        value ? new Date(value as string) : undefined;
+      return {
+        id: String(raw.id),
+        identifier: raw.identifier,
+        value: raw.value,
+        expiresAt: new Date(raw.expiresAt || raw.expires_at),
+        createdAt: date(raw.createdAt || raw.created_at),
+        updatedAt: date(raw.updatedAt || raw.updated_at),
+      };
+    }
+    return this.entityMapper.transformInbound(key, raw);
+  }
+
+  /**
+   * Create processor function for update operations. Every update is
+   * addressed to one matched row by its id.
    */
   private createUpdateProcessor(
-    model: EntityType,
+    model: string,
     updateData: Record<string, any>
   ) {
+    const key = modelKey(model);
     return async (record: any, index: number): Promise<any> => {
+      const id = String(record.id);
       try {
-        switch (model) {
-          case EntityType.USER:
-            return await this.userOperations.updateUser(record.id, updateData);
+        switch (key) {
+          case 'user':
+            return await this.userOperations.updateUser(id, updateData);
 
-          case EntityType.SESSION:
-            return await this.sessionOperations.updateSession(
-              record.id,
-              updateData
-            );
+          case 'session':
+            return await this.sessionOperations.updateSession(id, updateData);
 
-          case EntityType.VERIFICATION_TOKEN:
-            // VerificationTokens are immutable - create new token with updated data
-            await this.verificationTokenOperations.deleteVerificationToken(
-              record.token
-            );
-            return await this.verificationTokenOperations.createVerificationToken(
-              {
-                identifier: updateData.identifier || record.identifier,
-                token: updateData.token || record.token,
-                expiresAt: updateData.expiresAt
-                  ? new Date(updateData.expiresAt)
-                  : record.expiresAt,
-              }
-            );
+          case 'account':
+            return await this.accountOperations.updateAccount(id, updateData);
 
-          default:
-            // Generic update implementation
-            const transformedData = this.entityMapper.transformOutbound(
-              model,
-              updateData
-            );
-            const apiPath = this.entityMapper.getApiPath(model);
-            const url = `${this.config.baseUrl}/${apiPath}/${record.id}`;
-
+          default: {
+            const url = `${this.config.baseUrl}/${this.entityMapper.getApiPath(key)}/${id}`;
             const response = await this.httpClient.patch(
               url,
-              transformedData,
+              updateData,
               this.buildRequestConfig()
             );
-
-            const normalizedResponse =
-              this.responseNormalizer.normalizeSingleResponse(response);
-            return this.entityMapper.transformInbound(
-              model,
-              normalizedResponse
+            return (
+              this.responseNormalizer.normalizeSingleResponse(response) ??
+              record
             );
+          }
         }
       } catch (error) {
         this.logger?.debug('Individual update failed', {
           model,
-          recordId: record.id,
+          recordId: id,
           index,
           error: error instanceof Error ? error.message : String(error),
         });
@@ -698,49 +766,22 @@ export class BulkOperations {
   }
 
   /**
-   * Create processor function for delete operations
+   * Create processor function for delete operations. Every delete is
+   * addressed to one matched row by its id.
    */
-  private createDeleteProcessor(model: EntityType) {
+  private createDeleteProcessor(model: string) {
+    const apiPath = this.entityMapper.getApiPath(modelKey(model));
     return async (record: any, index: number): Promise<any> => {
       try {
-        switch (model) {
-          case EntityType.USER:
-            // User deletion is handled through generic API as UserOperations
-            // doesn't have a direct delete method
-            const userApiPath = this.entityMapper.getApiPath(model);
-            const userUrl = `${this.config.baseUrl}/${userApiPath}/${record.id}`;
-
-            await this.httpClient.delete(userUrl, this.buildRequestConfig());
-
-            return record;
-
-          case EntityType.SESSION:
-            // Session deletion through generic API
-            const sessionApiPath = this.entityMapper.getApiPath(model);
-            const sessionUrl = `${this.config.baseUrl}/${sessionApiPath}/${record.id}`;
-
-            await this.httpClient.delete(sessionUrl, this.buildRequestConfig());
-
-            return record;
-
-          case EntityType.VERIFICATION_TOKEN:
-            return await this.verificationTokenOperations.deleteVerificationToken(
-              record.token
-            );
-
-          default:
-            // Generic delete implementation
-            const apiPath = this.entityMapper.getApiPath(model);
-            const url = `${this.config.baseUrl}/${apiPath}/${record.id}`;
-
-            await this.httpClient.delete(url, this.buildRequestConfig());
-
-            return record;
-        }
+        await this.httpClient.delete(
+          `${this.config.baseUrl}/${apiPath}/${record.id}`,
+          this.buildRequestConfig()
+        );
+        return record;
       } catch (error) {
         this.logger?.debug('Individual delete failed', {
           model,
-          recordId: record.id || record.token,
+          recordId: record.id,
           index,
           error: error instanceof Error ? error.message : String(error),
         });
@@ -822,21 +863,14 @@ export class BulkOperations {
         userIds: userIds.slice(0, 5), // Log first 5 for debugging
       });
 
-      // Delete sessions for all users in batches
       for (const userId of userIds) {
         try {
-          const userSessions = await this.sessionOperations.findManySessions({
-            where: { userId },
+          await this.deleteMany({
+            model: 'session',
+            where: [{ field: 'userId', value: userId }],
+            batchSize: 20,
+            maxConcurrency: 2,
           });
-
-          if (userSessions.length > 0) {
-            await this.deleteMany({
-              model: EntityType.SESSION,
-              where: { userId },
-              batchSize: 20,
-              maxConcurrency: 2,
-            });
-          }
         } catch (error) {
           this.logger?.warn('Failed to cascade delete sessions for user', {
             userId,
@@ -1085,6 +1119,9 @@ export class BulkOperations {
     error: any,
     context: OperationContext
   ): AdapterErrorClass {
+    // Keep a refusal's own message (unsupported or empty where clause).
+    if (error instanceof AdapterErrorClass) return error;
+
     let errorCode: AdapterErrorCode = AdapterErrorCode.UNKNOWN;
     let retryable = false;
 
