@@ -266,10 +266,68 @@ describe('incrementOne', () => {
     const at = new Date('2026-11-13T15:05:00.000Z');
     const row = await adapter.incrementOne(rotation(at));
     expect(row).toMatchObject({ id: REFRESH, clientId: CLIENT_ID });
+    // The condition travels with the update, so the service decides.
     expect(api.writesTo('oauthrefreshtokens')).toEqual([
-      `PATCH /oauthrefreshtokens/${REFRESH}`,
+      `PATCH /oauthrefreshtokens/${REFRESH}?filter=${encodeURIComponent('revoked||$isnull')}`,
     ]);
     expect(api.tables.oauthrefreshtokens![0]!.revoked).toBe(at.toISOString());
+  });
+
+  test('two auth app processes that both read the token: one rotates it, the other gets null', async () => {
+    // Two adapters on one API stand for two processes. Both reads are
+    // answered before either PATCH is sent. The API answers 404 to the PATCH
+    // whose condition no longer holds, as a generated service does.
+    const { api, newAdapter } = setup();
+    const first = new Date('2026-11-13T15:05:00.000Z');
+    const second = new Date('2026-11-13T15:05:01.000Z');
+    const results = await Promise.all([
+      newAdapter().incrementOne(rotation(first)),
+      newAdapter().incrementOne(rotation(second)),
+    ]);
+    expect(api.requests.map(r => r.method)).toEqual([
+      'GET',
+      'GET',
+      'PATCH',
+      'PATCH',
+    ]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(results.filter(r => r === null)).toHaveLength(1);
+    expect(api.tables.oauthrefreshtokens![0]!.revoked).toBe(
+      first.toISOString()
+    );
+  });
+
+  test('client key rotation under queryDialect postgrest sends the stored keys as the condition', async () => {
+    const sent: Array<{ method: string; url: string }> = [];
+    const client = {
+      id: '3da27c18-40f3-4fb1-b2ee-9d0e1f2a3b78',
+      clientId: CLIENT_ID,
+      jwks: '{"keys":[{"kty":"OKP","crv":"Ed25519","x":"11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo","kid":"k1"}]}',
+    };
+    const adapter = ApsoAdapterFactory.createAdapter({
+      baseUrl: BASE,
+      queryDialect: 'postgrest',
+    }) as any;
+    adapter.httpClient.request = jest.fn(async (config: any) => {
+      sent.push({ method: config.method, url: config.url });
+      return config.method === 'GET' ? [client] : { ...client, ...config.body };
+    });
+    const next =
+      '{"keys":[{"kty":"OKP","crv":"Ed25519","x":"k2x","kid":"k2"}]}';
+    const row = await adapter.incrementOne({
+      model: 'oauthClient',
+      where: [
+        { field: 'clientId', value: CLIENT_ID },
+        { field: 'jwks', value: client.jwks },
+      ],
+      increment: {},
+      set: { jwks: next },
+    });
+    expect(row).toMatchObject({ jwks: next });
+    expect(sent[1]).toEqual({
+      method: 'PATCH',
+      url: `${BASE}/oauthclients/${client.id}?clientId=eq.${CLIENT_ID}&jwks=eq.${encodeURIComponent(client.jwks)}`,
+    });
   });
 
   test('a token that is already revoked matches nothing and is not written', async () => {
@@ -298,6 +356,40 @@ describe('incrementOne', () => {
       count: 3,
       lastRequest: 1794582070000,
     });
+    // The counter is written only where it still holds the value read.
+    expect(decodeURIComponent(api.writes[0]!.url)).toContain(
+      'filter=count||$eq||2'
+    );
+  });
+
+  test('two processes that add to one counter at the same time: both additions count', async () => {
+    const { api, newAdapter } = setup();
+    const add = () =>
+      newAdapter().incrementOne({
+        model: 'rateLimit',
+        where: [{ field: 'key', value: '203.0.113.7/sign-in/email' }],
+        increment: { count: 1 },
+      });
+    const rows = await Promise.all([add(), add()]);
+    expect(api.tables.ratelimits![0]!.count).toBe(4);
+    expect(rows.map((r: any) => r.count).sort()).toEqual([3, 4]);
+  });
+
+  test('a condition the service cannot be asked to check is matched here, then updated by id', async () => {
+    const { adapter, api } = setup();
+    const row = await adapter.incrementOne({
+      model: 'rateLimit',
+      where: [
+        { field: 'key', value: '203.0.113.7/sign-in/email' },
+        { field: 'count', operator: 'lt', value: 5 },
+      ],
+      increment: {},
+      set: { lastRequest: 1794582070000 },
+    });
+    expect(row).toMatchObject({ count: 2, lastRequest: 1794582070000 });
+    expect(api.writes.map(w => w.url)).toEqual([
+      `${BASE}/ratelimits/2c916b07-3fe2-4ea0-a1dd-8c9d0e1f2a67`,
+    ]);
   });
 
   test('no matching row returns null', async () => {

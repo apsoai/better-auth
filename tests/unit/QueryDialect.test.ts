@@ -20,7 +20,13 @@
 
 import { ApsoAdapterFactory } from '../../src/adapter/ApsoAdapterFactory';
 import { ConfigValidator } from '../../src/utils/ConfigValidator';
-import { contentRangeTotal, listUrl, scanUrl } from '../../src/query/listUrl';
+import {
+  contentRangeTotal,
+  guardQuery,
+  listUrl,
+  scanUrl,
+} from '../../src/query/listUrl';
+import { normalizeWhere } from '../../src/query/whereMatcher';
 
 const KEY = 'q7Lk0V+3mXw9Zr/1TtYcB2nE8uHsJ4aGfP6dQxWvS5o=';
 const BASE = 'https://api.staging.example.invalid';
@@ -481,6 +487,78 @@ describe('listUrl', () => {
     [null, undefined],
   ])('contentRangeTotal(%p)', (header, expected) => {
     expect(contentRangeTotal(header)).toBe(expected);
+  });
+});
+
+describe('guardQuery: the condition sent with a PATCH by id', () => {
+  const nestjsx = { baseUrl: BASE };
+  const postgrest = { baseUrl: BASE, queryDialect: 'postgrest' as const };
+  const where = (
+    field: string,
+    value: unknown,
+    operator = 'eq',
+    connector = 'AND'
+  ) => normalizeWhere([{ field, value, operator, connector }]);
+
+  test('refresh token rotation: revoked is still null', () => {
+    const conditions = where('revoked', null);
+    expect(guardQuery(postgrest, conditions)).toBe('revoked=is.null');
+    expect(guardQuery(nestjsx, conditions)).toBe(
+      `filter=${encodeURIComponent('revoked||$isnull')}`
+    );
+  });
+
+  test('a number, a boolean and a plain string are equalities', () => {
+    const conditions = [
+      ...where('count', 2),
+      ...where('disabled', false),
+      ...where('clientId', 'hQ7mXw2Lr9TnB5vYc8ZsJ4aGfP6dKe3u'),
+    ];
+    expect(guardQuery(postgrest, conditions)).toBe(
+      'count=eq.2&disabled=eq.false&clientId=eq.hQ7mXw2Lr9TnB5vYc8ZsJ4aGfP6dKe3u'
+    );
+    expect(guardQuery(nestjsx, conditions)).toBe(
+      [
+        'count||$eq||2',
+        'disabled||$eq||false',
+        'clientId||$eq||hQ7mXw2Lr9TnB5vYc8ZsJ4aGfP6dKe3u',
+      ]
+        .map(f => `filter=${encodeURIComponent(f)}`)
+        .join('&')
+    );
+  });
+
+  test('postgrest quotes a string the service would read as a number', () => {
+    expect(guardQuery(postgrest, where('accountId', GOOGLE_SUB))).toBe(
+      `and=(accountId.eq.%22${GOOGLE_SUB}%22)`
+    );
+  });
+
+  test('no conditions is an empty query: the id alone decides', () => {
+    expect(guardQuery(postgrest, [])).toBe('');
+  });
+
+  test.each([
+    ['a comparison other than equality', postgrest, where('count', 5, 'lt')],
+    [
+      'a condition joined with OR',
+      postgrest,
+      where('revoked', null, 'eq', 'OR'),
+    ],
+    ['a date', postgrest, where('lockedUntil', new Date(0))],
+    ['an empty string', postgrest, where('jwks', '')],
+    [
+      'nestjsx: a string its parser reads as a number',
+      nestjsx,
+      where('accountId', GOOGLE_SUB),
+    ],
+    [
+      'nestjsx: a string with a comma',
+      nestjsx,
+      where('jwks', '{"keys":[1,2]}'),
+    ],
+  ])('%s cannot be sent', (_name, config, conditions) => {
+    expect(guardQuery(config, conditions)).toBeUndefined();
   });
 });
 

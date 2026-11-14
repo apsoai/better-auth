@@ -272,7 +272,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * strings, booleans and "null" to other types, which turned a 21-digit Google
  * account id into an imprecise number and broke sign-in in 2.0.18.
  */
-function isLiteralString(value: unknown): value is string {
+export function isLiteralString(value: unknown): value is string {
   return (
     typeof value === 'string' &&
     value !== '' &&

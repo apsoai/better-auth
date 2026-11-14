@@ -27,6 +27,8 @@ import { AdapterError, AdapterErrorCode } from '../types';
 import { ConfigValidator } from '../utils/ConfigValidator';
 import { HttpClient } from '../client/HttpClient';
 import { buildAuthHeaders } from '../utils/authHeaders';
+import { guardQuery } from '../query/listUrl';
+import { normalizeWhere } from '../query/whereMatcher';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper } from '../response/EntityMapper';
@@ -1244,8 +1246,19 @@ export class ApsoAdapter implements IApsoAdapter {
    * Better Auth 1.7 changes a row only if it still matches: refresh token
    * rotation sets `revoked` where it is still null. Returns the updated row,
    * or null when no row matched.
-   * ponytail: find-then-update over REST is not atomic; two concurrent
-   * callers can both match. Needs a conditional update on the service.
+   *
+   * Two callers can both read a matching row, in this process or in another
+   * one. The PATCH carries the conditions, and the service decides: it
+   * updates the row only while it still meets them and answers 404 otherwise,
+   * and that caller gets null. A counter is updated where it still holds the
+   * value that was read, and read again when it does not. This needs a
+   * service that checks the condition and writes under one row lock
+   * (@apso/crud-typeorm with apsoai/apso-packages#88). An older service
+   * checks the condition at its read only.
+   * ponytail: a condition guardQuery cannot send (lt, gt, a date, OR), and a
+   * model with its own update path (user, session, account, verification),
+   * is matched here and then updated by id, so two callers can both match.
+   * Send those conditions too when a flow needs one of them decided.
    */
   async incrementOne<T>(params: {
     model: string;
@@ -1253,23 +1266,80 @@ export class ApsoAdapter implements IApsoAdapter {
     increment: Record<string, number>;
     set?: Record<string, unknown>;
   }): Promise<T | null> {
-    // The whole where clause decides, not the id alone: findOne looks a row
-    // up by id and ignores the other conditions.
-    const row = await this.findFirstMatching<Record<string, any>>(
-      params.model,
-      params.where
-    );
-    if (!row) return null;
-    const update: Record<string, unknown> = { ...params.set };
-    for (const [field, by] of Object.entries(params.increment ?? {})) {
-      update[field] = (Number(row[field]) || 0) + by;
+    const conditions = normalizeWhere(params.where);
+    const increments = Object.entries(params.increment ?? {});
+    const ownUpdatePath = [
+      'user',
+      'session',
+      'account',
+      'verification',
+      'verificationtoken',
+    ].includes(params.model.toLowerCase());
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      // The whole where clause decides, not the id alone: findOne looks a
+      // row up by id and ignores the other conditions.
+      const row = await this.findFirstMatching<Record<string, any>>(
+        params.model,
+        params.where
+      );
+      if (!row) return null;
+      const update: Record<string, unknown> = { ...params.set };
+      for (const [field, by] of increments) {
+        update[field] = (Number(row[field]) || 0) + by;
+      }
+      if (Object.keys(update).length === 0) return row as T;
+
+      const guard = ownUpdatePath
+        ? undefined
+        : guardQuery(this.config, [
+            ...conditions.filter(condition => condition.field !== 'id'),
+            ...increments.map(([field]) => ({
+              field,
+              operator: 'eq' as const,
+              value: row[field] ?? null,
+              connector: 'AND' as const,
+              insensitive: false,
+            })),
+          ]);
+      if (guard === undefined) {
+        return this.update<T>({
+          model: params.model,
+          where: { id: String(row.id) },
+          update,
+        });
+      }
+
+      const apiPath = this.entityMapper.getApiPath(params.model);
+      try {
+        const response = await this.httpClient.patch<T>(
+          `${this.config.baseUrl}/${apiPath}/${row.id}${guard && `?${guard}`}`,
+          this.entityMapper.transformOutbound(params.model, update),
+          {
+            headers: this.buildHeaders(),
+            ...(this.config.timeout && { timeout: this.config.timeout }),
+          }
+        );
+        return this.entityMapper.transformInbound(
+          params.model,
+          this.responseNormalizer.normalizeSingleResponse(response)
+        );
+      } catch (error) {
+        if (!isNotFound(error)) {
+          throw this.handleError(error, 'incrementOne', params.model);
+        }
+        // The row stopped matching between the read and the update. Without
+        // a counter that is final. With one, another caller may only have
+        // moved the counter: read again.
+        if (increments.length === 0) return null;
+      }
     }
-    if (Object.keys(update).length === 0) return row as T;
-    return this.update<T>({
-      model: params.model,
-      where: { id: String(row.id) },
-      update,
-    });
+    throw new AdapterError(
+      AdapterErrorCode.API_ERROR,
+      `incrementOne: ${params.model} kept changing between the read and the update`,
+      { model: params.model },
+      true
+    );
   }
 
   /**
