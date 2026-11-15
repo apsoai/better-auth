@@ -219,8 +219,6 @@ export interface RequestConfig {
   timeout?: number;
   retryConfig?: RetryConfig;
   signal?: AbortSignal;
-  /** Called with the response headers of a successful response. */
-  onHeaders?: (headers: Headers) => void;
 }
 
 // =============================================================================

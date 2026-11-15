@@ -138,7 +138,7 @@ With `'postgrest'` the adapter also:
 - sends `X-Crud-Dialect: postgrest` on every request, so a service that accepts both syntaxes answers a list with a bare JSON array;
 - pages with `limit` and `offset` in place of `limit` and `page`;
 - sends a string that the service would otherwise read as a number, a boolean or null (`+15551234567`, `0042`, a 21-digit provider account id) as a quoted value, `and=(identifier.eq."+15551234567")`, so it is compared as text;
-- reads `count()` from the `Content-Range` response header of a `limit=0` request sent with `Prefer: count=exact`;
+- reads the rows of `findMany`, `count`, `updateMany` and `deleteMany` 100 at a time in id order (`limit=100&offset=100&order=id.asc`) and applies the where clause to each row in memory;
 - asks for 100 rows, and filters by `id` or `userId` on the server, where it otherwise lists a collection and filters in memory. A generated service returns 25 rows to a list with no `limit`.
 
 Do not set `'postgrest'` for the Apso platform server. It reads the nestjsx syntax.

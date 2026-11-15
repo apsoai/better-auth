@@ -78,6 +78,7 @@ import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper } from '../response/EntityMapper';
 import { HttpClient } from '../client/HttpClient';
 import { buildAuthHeaders } from '../utils/authHeaders';
+import { candidatesUrl } from '../query/listUrl';
 import {
   matchesWhere,
   normalizeWhere,
@@ -613,10 +614,8 @@ export class BulkOperations {
     }
 
     const key = modelKey(model);
-    const baseUrl = `${this.config.baseUrl}/${this.entityMapper.getApiPath(key)}`;
-    const filters = serverFilters(conditions).map(
-      filter => `filter=${encodeURIComponent(filter)}`
-    );
+    const apiPath = this.entityMapper.getApiPath(key);
+    const narrowing = serverFilters(conditions);
 
     const matches: any[] = [];
     const seen = new Set<string>();
@@ -630,14 +629,8 @@ export class BulkOperations {
         );
       }
       // A fixed order keeps pages stable, so no row is skipped or repeated.
-      const query = [
-        ...filters,
-        `limit=${PAGE_SIZE}`,
-        `page=${page}`,
-        'sort=id,ASC',
-      ].join('&');
       const response = await this.httpClient.get<any>(
-        `${baseUrl}?${query}`,
+        candidatesUrl(this.config, apiPath, narrowing, PAGE_SIZE, page),
         this.buildRequestConfig()
       );
       const rows =

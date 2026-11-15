@@ -139,8 +139,54 @@ export function scanUrl(
   return listUrl(config, apiPath, { filters, limit: SCAN_LIMIT });
 }
 
-/** The total in a `Content-Range` header: 42 for `0-9/42` and for `*\/42`. */
-export function contentRangeTotal(header: string | null): number | undefined {
-  const total = /\/(\d+)$/.exec(header ?? '')?.[1];
-  return total === undefined ? undefined : Number(total);
+/**
+ * URL of one page of the candidate rows BulkOperations.findMatching reads,
+ * ordered by id so that no row is skipped or repeated between pages.
+ * `narrowing` is what serverFilters returns: `field||$op||value` strings
+ * that keep a superset of the true matches.
+ *
+ * nestjsx: the request 2.0.23 sends, byte for byte.
+ * PostgREST: `field=eq.value`, `field=in.(a,b)`, `field=lte.value`, `limit`,
+ * `offset` and `order=id.asc`. A generated service caps `limit` at 100 and
+ * answers with a bare array, so the caller ends on a page shorter than
+ * `limit`; a `limit` above 100 would end the scan after the first page.
+ */
+export function candidatesUrl(
+  config: DialectConfig,
+  apiPath: string,
+  narrowing: string[],
+  limit: number,
+  page: number
+): string {
+  const base = `${config.baseUrl}/${apiPath}`;
+  if (config.queryDialect !== 'postgrest') {
+    const query = [
+      ...narrowing.map(filter => `filter=${encodeURIComponent(filter)}`),
+      `limit=${limit}`,
+      `page=${page}`,
+      'sort=id,ASC',
+    ].join('&');
+    return `${base}?${query}`;
+  }
+
+  const equalities: ListFilter[] = [];
+  const others: string[] = [];
+  for (const filter of narrowing) {
+    const [field = '', op, ...rest] = filter.split('||');
+    const value = rest.join('||');
+    if (op === '$eq') {
+      equalities.push({ field, op: '$eq', value });
+    } else if (op === '$lte' || op === '$gte') {
+      others.push(`${field}=${op.slice(1)}.${encodeURIComponent(value)}`);
+    } else if (op === '$in' && !value.includes('"')) {
+      // The service removes every double quote from an `in` list, so a list
+      // holding one is not sent. That only widens the candidate rows.
+      others.push(`${field}=in.${encodeURIComponent(`(${value})`)}`);
+    }
+  }
+  return [
+    `${base}?${postgrestQuery({ filters: equalities, limit, page })}`,
+    ...others,
+    'order=id.asc',
+  ].join('&');
 }
