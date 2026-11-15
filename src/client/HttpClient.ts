@@ -145,8 +145,6 @@ export class HttpClient implements IHttpClient {
         });
       }
 
-      config.onHeaders?.(response.headers);
-
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
         // Get raw text first for debugging

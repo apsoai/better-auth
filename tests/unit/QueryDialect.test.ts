@@ -21,7 +21,7 @@
 import { ApsoAdapterFactory } from '../../src/adapter/ApsoAdapterFactory';
 import { ConfigValidator } from '../../src/utils/ConfigValidator';
 import {
-  contentRangeTotal,
+  candidatesUrl,
   guardQuery,
   listUrl,
   scanUrl,
@@ -210,10 +210,7 @@ describe('list request URLs', () => {
       return postgrest
         ? new Response('[]', {
             status: 200,
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Range': `*/${total}`,
-            },
+            headers: { 'Content-Type': 'application/json' },
           })
         : new Response(
             JSON.stringify({
@@ -344,9 +341,9 @@ describe('list request URLs', () => {
       ]);
     });
 
-    test('a date bound is not sent; the rows are still matched in memory', async () => {
+    test('a date bound is sent a day wide; the rows are still matched in memory', async () => {
       sent = [];
-      const now = Date.now();
+      const now = Date.parse('2026-11-11T12:00:00.000Z');
       global.fetch = jest.fn(async (url: any) => {
         sent.push({ url: String(url), headers: {} });
         return new Response(
@@ -375,7 +372,7 @@ describe('list request URLs', () => {
         ],
       });
       expect(sent.map(r => r.url)).toEqual([
-        `${BASE}/sessions?userId=eq.21&limit=100&order=id.asc`,
+        `${BASE}/sessions?userId=eq.21&limit=100&expiresAt=gte.2026-11-10T12%3A00%3A00.000Z&order=id.asc`,
       ]);
       expect(live.map((s: any) => s.token)).toEqual([SESSION_TOKEN]);
     });
@@ -388,6 +385,145 @@ describe('list request URLs', () => {
       `${BASE}/users?limit=100&page=1&sort=id,ASC`,
     ]);
     expect(sent[0]!.headers).not.toHaveProperty('prefer');
+  });
+});
+
+describe("multi-row operations under queryDialect: 'postgrest'", () => {
+  type Row = Record<string, any>;
+
+  /**
+   * A service that accepts the PostgREST syntax only, mounted on the
+   * adapter's HttpClient like FakeCrudApi: 400 to a nestjsx parameter, a bare
+   * array in id order, 25 rows with no limit and never more than 100.
+   */
+  function mountPostgrestService(adapter: Adapter, rows: Row[]): string[] {
+    const requests: string[] = [];
+    const fail = (statusCode: number, message: string): never => {
+      throw Object.assign(new Error(message), { statusCode });
+    };
+    adapter.httpClient.request = jest.fn(async ({ method, url, body }: any) => {
+      requests.push(`${method} ${url.slice(BASE.length)}`);
+      const { pathname, searchParams } = new URL(url);
+      const id = pathname.split('/')[2];
+      if (id !== undefined) {
+        const index = rows.findIndex(r => String(r.id) === id);
+        if (index === -1) fail(404, 'not found');
+        if (method === 'DELETE') return rows.splice(index, 1)[0];
+        if (method === 'PATCH') {
+          Object.assign(rows[index]!, JSON.parse(JSON.stringify(body)));
+        }
+        return { ...rows[index] };
+      }
+      let result = [...rows].sort((a, b) => a.id - b.id);
+      for (const [key, value] of searchParams) {
+        if (/^(filter|page|sort|s|join|fields|per_page|cache)$/.test(key)) {
+          fail(400, `${key} is a nestjsx parameter`);
+        }
+        if (key === 'limit' || key === 'offset') continue;
+        if (key === 'order') {
+          if (value !== 'id.asc') fail(400, `Invalid order: ${value}`);
+          continue;
+        }
+        if (!value.startsWith('eq.')) fail(400, `Unsupported ${key}=${value}`);
+        result = result.filter(r => String(r[key]) === value.slice(3));
+      }
+      const limit = Math.min(Number(searchParams.get('limit') ?? 25), 100);
+      const offset = Number(searchParams.get('offset') ?? 0);
+      return result.slice(offset, offset + limit).map(r => ({ ...r }));
+    });
+    return requests;
+  }
+
+  /** 150 accounts: 130 GitHub then 20 Google, three per user id below 50. */
+  const seed = (): Row[] =>
+    Array.from({ length: 150 }, (_, index) => ({
+      id: index + 1,
+      userId: (index + 1) % 50,
+      accountId: `acct-${index + 1}`,
+      providerId: index < 130 ? 'github' : 'google',
+      password: null,
+    }));
+
+  test('findMany, count, updateMany and deleteMany page through the service in its own syntax', async () => {
+    const rows = seed();
+    const adapter: Adapter = ApsoAdapterFactory.createAdapter({
+      baseUrl: BASE,
+      apiKey: KEY,
+      queryDialect: 'postgrest',
+    });
+    const requests = mountPostgrestService(adapter, rows);
+    const all: string[] = [];
+    const next = () => all.push(...requests.splice(0));
+    const lists = () => requests.filter(r => r.startsWith('GET /accounts?'));
+    const writes = () => requests.filter(r => !r.startsWith('GET ')).sort();
+
+    const github = await adapter.findMany({
+      model: 'account',
+      where: [{ field: 'providerId', value: 'github' }],
+    });
+    expect(github).toHaveLength(130);
+    expect(lists()).toEqual([
+      'GET /accounts?providerId=eq.github&limit=100&order=id.asc',
+      'GET /accounts?providerId=eq.github&limit=100&offset=100&order=id.asc',
+    ]);
+
+    next();
+    expect(
+      await adapter.count({
+        model: 'account',
+        where: [{ field: 'providerId', value: 'google' }],
+      })
+    ).toBe(20);
+    expect(lists()).toEqual([
+      'GET /accounts?providerId=eq.google&limit=100&order=id.asc',
+    ]);
+
+    next();
+    expect(
+      await adapter.updateMany({
+        model: 'account',
+        where: [
+          { field: 'userId', value: '8' },
+          { field: 'providerId', value: 'github' },
+        ],
+        update: { scope: 'read:user' },
+      })
+    ).toBe(3);
+    expect(lists()).toEqual([
+      'GET /accounts?userId=eq.8&providerId=eq.github&limit=100&order=id.asc',
+    ]);
+    expect(writes()).toEqual([
+      'PATCH /accounts/108',
+      'PATCH /accounts/58',
+      'PATCH /accounts/8',
+    ]);
+    expect(rows.filter(r => r.scope === 'read:user').map(r => r.id)).toEqual([
+      8, 58, 108,
+    ]);
+
+    next();
+    expect(
+      await adapter.deleteMany({
+        model: 'account',
+        where: [{ field: 'userId', value: '7' }],
+      })
+    ).toBe(3);
+    expect(lists()).toEqual([
+      'GET /accounts?userId=eq.7&limit=100&order=id.asc',
+    ]);
+    expect(writes()).toEqual([
+      'DELETE /accounts/107',
+      'DELETE /accounts/57',
+      'DELETE /accounts/7',
+    ]);
+    expect(rows).toHaveLength(147);
+    expect(rows.some(r => r.userId === 7)).toBe(false);
+
+    next();
+    expect(all.length).toBeGreaterThanOrEqual(11);
+    for (const request of all) {
+      expect(request).not.toMatch(/[?&](filter|page|sort)=/);
+    }
   });
 });
 
@@ -479,14 +615,48 @@ describe('listUrl', () => {
     expect(scanUrl(postgrest, 'sessions')).toBe(`${BASE}/sessions?limit=100`);
   });
 
-  test.each([
-    ['0-9/42', 42],
-    ['*/42', 42],
-    ['*/0', 0],
-    ['0-9/*', undefined],
-    [null, undefined],
-  ])('contentRangeTotal(%p)', (header, expected) => {
-    expect(contentRangeTotal(header)).toBe(expected);
+  describe('candidatesUrl: one page of the rows the where matcher reads', () => {
+    const narrowing = [
+      'userId||$eq||21',
+      'providerId||$in||google,git(hub)',
+      'expiresAt||$lte||2026-11-12T12:00:00.000Z',
+    ];
+
+    test('nestjsx: the request 2.0.23 sends', () => {
+      expect(candidatesUrl(nestjsx, 'sessions', narrowing, 100, 2)).toBe(
+        `${BASE}/sessions?filter=userId%7C%7C%24eq%7C%7C21&filter=providerId%7C%7C%24in%7C%7Cgoogle%2Cgit(hub)&filter=expiresAt%7C%7C%24lte%7C%7C2026-11-12T12%3A00%3A00.000Z&limit=100&page=2&sort=id,ASC`
+      );
+      expect(candidatesUrl(nestjsx, 'users', [], 100, 1)).toBe(
+        `${BASE}/users?limit=100&page=1&sort=id,ASC`
+      );
+    });
+
+    test('postgrest: equality, in, date bounds, offset and order by id', () => {
+      expect(candidatesUrl(postgrest, 'sessions', narrowing, 100, 2)).toBe(
+        `${BASE}/sessions?userId=eq.21&limit=100&offset=100&providerId=in.(google%2Cgit(hub))&expiresAt=lte.2026-11-12T12%3A00%3A00.000Z&order=id.asc`
+      );
+      expect(candidatesUrl(postgrest, 'users', [], 100, 1)).toBe(
+        `${BASE}/users?limit=100&order=id.asc`
+      );
+    });
+
+    test('postgrest: an id the service would read as another number is quoted', () => {
+      expect(candidatesUrl(postgrest, 'users', ['id||$eq||0042'], 100, 1)).toBe(
+        `${BASE}/users?and=(id.eq.%220042%22)&limit=100&order=id.asc`
+      );
+    });
+
+    test('postgrest: an in list holding a double quote is not sent', () => {
+      expect(
+        candidatesUrl(
+          postgrest,
+          'accounts',
+          ['providerId||$in||google,my"idp', 'userId||$eq||21'],
+          100,
+          1
+        )
+      ).toBe(`${BASE}/accounts?userId=eq.21&limit=100&order=id.asc`);
+    });
   });
 });
 
