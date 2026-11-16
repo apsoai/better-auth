@@ -305,7 +305,9 @@ export class SessionOperations {
    * }
    * ```
    */
-  async findSessionById(id: string | number): Promise<BetterAuthSession | null> {
+  async findSessionById(
+    id: string | number
+  ): Promise<BetterAuthSession | null> {
     const startTime = performance.now();
 
     try {
