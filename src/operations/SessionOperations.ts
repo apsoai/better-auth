@@ -34,6 +34,24 @@ import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper, sessionExtras } from '../response/EntityMapper';
 
 /**
+ * A session id as the string the operations work with. The Apso API returns
+ * numeric session ids, and Better Auth hands an id back as it received it, so
+ * a number is accepted here. Refusing it left sign-out and "sign out
+ * everywhere" unable to delete the session row.
+ */
+function sessionIdString(id: unknown): string {
+  if (typeof id === 'number' && Number.isSafeInteger(id)) return String(id);
+  if (typeof id === 'string' && id) return id;
+  throw new AdapterErrorClass(
+    AdapterErrorCode.VALIDATION_ERROR,
+    'Session ID must be a non-empty string',
+    { id },
+    false,
+    400
+  );
+}
+
+/**
  * Options for finding multiple sessions
  */
 export interface FindManySessionsOptions {
@@ -287,19 +305,11 @@ export class SessionOperations {
    * }
    * ```
    */
-  async findSessionById(id: string): Promise<BetterAuthSession | null> {
+  async findSessionById(id: string | number): Promise<BetterAuthSession | null> {
     const startTime = performance.now();
 
     try {
-      if (!id || typeof id !== 'string') {
-        throw new AdapterErrorClass(
-          AdapterErrorCode.VALIDATION_ERROR,
-          'Session ID must be a non-empty string',
-          { id },
-          false,
-          400
-        );
-      }
+      id = sessionIdString(id);
 
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;
 
@@ -453,21 +463,13 @@ export class SessionOperations {
    * ```
    */
   async updateSession(
-    id: string,
+    id: string | number,
     updates: Partial<BetterAuthSession>
   ): Promise<BetterAuthSession> {
     const startTime = performance.now();
 
     try {
-      if (!id || typeof id !== 'string') {
-        throw new AdapterErrorClass(
-          AdapterErrorCode.VALIDATION_ERROR,
-          'Session ID must be a non-empty string',
-          { id },
-          false,
-          400
-        );
-      }
+      id = sessionIdString(id);
 
       // Validate update data
       this.validateUpdateSessionData(updates);
@@ -602,19 +604,11 @@ export class SessionOperations {
    * console.log('Deleted session for user:', deletedSession.userId);
    * ```
    */
-  async deleteSession(id: string): Promise<BetterAuthSession> {
+  async deleteSession(id: string | number): Promise<BetterAuthSession> {
     const startTime = performance.now();
 
     try {
-      if (!id || typeof id !== 'string') {
-        throw new AdapterErrorClass(
-          AdapterErrorCode.VALIDATION_ERROR,
-          'Session ID must be a non-empty string',
-          { id },
-          false,
-          400
-        );
-      }
+      id = sessionIdString(id);
 
       // Get session first to return it after deletion
       const existingSession = await this.findSessionById(id);
