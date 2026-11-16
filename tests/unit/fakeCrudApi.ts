@@ -2,8 +2,9 @@
  * In-memory stand-in for an Apso CRUD REST API, mounted on the adapter's
  * HttpClient.request so tests can assert on the exact requests the adapter
  * sends. It mirrors the parts of the real API that matter for bulk operations:
- * a default page of 5 rows, a 100-row page cap, AND-ed `filter=` params and
- * the query-string coercion of digit strings to numbers.
+ * a default page of 5 rows, a 100-row page cap, AND-ed `filter=` params (also
+ * as a condition on a request by id) and the query-string coercion of digit
+ * strings to numbers.
  */
 
 export interface RecordedRequest {
@@ -45,6 +46,8 @@ function compare(op: string, actual: any, expected: any): boolean {
       return actual >= expected;
     case 'in':
       return (expected as unknown[]).includes(actual);
+    case 'isnull':
+      return actual === null || actual === undefined;
     default:
       throw Object.assign(new Error(`Invalid comparison operator ${op}`), {
         statusCode: 400,
@@ -98,6 +101,16 @@ export class FakeCrudApi {
         throw Object.assign(new Error(`HTTP 404: ${table} not found`), {
           statusCode: 404,
         });
+      }
+      // A filter next to the id is a condition on the row, as on the real
+      // API: 404 when the row does not meet it.
+      for (const filter of parsed.searchParams.getAll('filter')) {
+        const [field, op, raw] = filter.split('||');
+        if (!compare(op!, rows[index]![field!], coerce(raw ?? ''))) {
+          throw Object.assign(new Error(`HTTP 404: ${table} not found`), {
+            statusCode: 404,
+          });
+        }
       }
       if (method === 'GET') return { ...rows[index] };
       if (method === 'PATCH') {

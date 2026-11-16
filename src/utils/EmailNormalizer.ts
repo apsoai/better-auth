@@ -44,7 +44,9 @@ export class EmailNormalizer {
    * @returns True if email format is valid
    */
   static isValidEmail(email: string): boolean {
-    return this.EMAIL_REGEX.test(email);
+    // 254 is the longest address RFC 5321 allows. The cap also bounds the
+    // work the format check can do on a very long string.
+    return email.length <= 254 && this.EMAIL_REGEX.test(email);
   }
 
   /**
