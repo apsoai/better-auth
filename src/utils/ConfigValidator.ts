@@ -9,6 +9,7 @@ import {
   AdapterError,
   AdapterErrorCode,
 } from '../types';
+import { buildAuthHeaders } from './authHeaders';
 
 // =============================================================================
 // Validation Result Types
@@ -347,14 +348,7 @@ export class ConfigValidator {
         'User-Agent': 'Apso-Adapter-HealthCheck/1.0',
       };
 
-      if (config.apiKey) {
-        const headerName = config.authHeader || 'Authorization';
-        if (headerName.toLowerCase() === 'authorization') {
-          headers[headerName] = `Bearer ${config.apiKey}`;
-        } else {
-          headers[headerName] = config.apiKey;
-        }
-      }
+      Object.assign(headers, buildAuthHeaders(config));
 
       try {
         const response = await fetch(config.baseUrl, {
@@ -580,7 +574,7 @@ export class ConfigValidator {
         field: 'authentication',
         message: 'No authentication configured - API requests may fail',
         suggestion:
-          'Set apiKey for Bearer token auth or authHeader for custom authentication',
+          'Set apiKey; it is sent as Authorization: Bearer by default, or bare under authHeader (for example x-api-key)',
       });
     }
 

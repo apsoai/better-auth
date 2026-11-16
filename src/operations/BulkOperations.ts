@@ -77,6 +77,7 @@ import {
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper } from '../response/EntityMapper';
 import { HttpClient } from '../client/HttpClient';
+import { buildAuthHeaders } from '../utils/authHeaders';
 import {
   matchesWhere,
   normalizeWhere,
@@ -1048,10 +1049,7 @@ export class BulkOperations {
       Accept: 'application/json',
     };
 
-    if (this.config.apiKey) {
-      const authHeader = this.config.authHeader || 'Authorization';
-      headers[authHeader] = `Bearer ${this.config.apiKey}`;
-    }
+    Object.assign(headers, buildAuthHeaders(this.config));
 
     return headers;
   }

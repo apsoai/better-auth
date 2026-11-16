@@ -13,6 +13,7 @@
  */
 
 import { HttpClient } from '../client/HttpClient';
+import { buildAuthHeaders } from '../utils/authHeaders';
 import { EntityMapper } from '../response/EntityMapper';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import {
@@ -51,7 +52,7 @@ export interface AccountOperationsConfig {
   enableRetries?: boolean;
   maxRetries?: number;
   retryDelay?: number;
-  /** Shared adapter key sent as a bearer token to authenticate adapter calls. */
+  /** Shared adapter key; see buildAuthHeaders for how it is sent. */
   apiKey?: string;
   /** Header name for the adapter key (defaults to Authorization). */
   authHeader?: string;
@@ -551,10 +552,7 @@ export class AccountOperations {
     // Authenticate adapter calls the same way UserOperations does. Without
     // this, account creation hits the server unauthenticated (401) once the
     // server stops exposing /accounts publicly.
-    if (this.config.apiKey) {
-      const authHeader = this.config.authHeader || 'Authorization';
-      headers[authHeader] = `Bearer ${this.config.apiKey}`;
-    }
+    Object.assign(headers, buildAuthHeaders(this.config));
 
     return headers;
   }
