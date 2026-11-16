@@ -14,6 +14,7 @@
 
 import { HttpClient } from '../client/HttpClient';
 import { buildAuthHeaders } from '../utils/authHeaders';
+import { listUrl, type QueryDialect } from '../query/listUrl';
 import { EntityMapper } from '../response/EntityMapper';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import {
@@ -56,6 +57,8 @@ export interface AccountOperationsConfig {
   apiKey?: string;
   /** Header name for the adapter key (defaults to Authorization). */
   authHeader?: string;
+  /** Query syntax of list requests (defaults to nestjsx). */
+  queryDialect?: QueryDialect;
   logger?: Logger;
 }
 
@@ -188,8 +191,10 @@ export class AccountOperations {
       }
 
       // Filter server-side; the in-memory match below stays as a safety net.
-      const filter = encodeURIComponent(`userId||$eq||${userId}`);
-      const url = `${this.config.baseUrl}/${this.apiPath}?filter=${filter}&limit=1`;
+      const url = listUrl(this.config, this.apiPath, {
+        filters: [{ field: 'userId', op: '$eq', value: userId }],
+        limit: 1,
+      });
 
       const response = await this.httpClient.get<
         ApiResponseWithStatus<ApsoAccount[]>
@@ -259,21 +264,26 @@ export class AccountOperations {
       // matching nothing, which broke Google sign-in in 2.0.18. accountId is
       // matched in memory below. Page through results: the API caps pages at
       // 100 rows, so a single request could miss the matching account.
-      const params = Object.entries(options.where ?? {})
+      const filters = Object.entries(options.where ?? {})
         .filter(
           ([key, value]) =>
             value !== undefined &&
             value !== null &&
             !IN_MEMORY_ONLY_KEYS.has(key)
         )
-        .map(
-          ([key, value]) =>
-            `filter=${encodeURIComponent(`${key}||$eq||${String(value)}`)}`
-        );
+        .map(([field, value]) => ({
+          field,
+          op: '$eq' as const,
+          value: String(value),
+        }));
 
       const accounts: BetterAuthAccount[] = [];
       for (let page = 1; page <= MAX_PAGES; page++) {
-        const url = `${this.config.baseUrl}/${this.apiPath}?${[...params, `limit=${PAGE_SIZE}`, `page=${page}`].join('&')}`;
+        const url = listUrl(this.config, this.apiPath, {
+          filters,
+          limit: PAGE_SIZE,
+          page,
+        });
         const response = await this.httpClient.get<{ data: ApsoAccount[] }>(
           url,
           {

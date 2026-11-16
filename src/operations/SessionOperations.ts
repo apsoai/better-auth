@@ -28,6 +28,7 @@ import type {
 import { AdapterError as AdapterErrorClass, AdapterErrorCode } from '../types';
 import { HttpClient } from '../client/HttpClient';
 import { buildAuthHeaders } from '../utils/authHeaders';
+import { listUrl, scanUrl } from '../query/listUrl';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper } from '../response/EntityMapper';
@@ -225,8 +226,10 @@ export class SessionOperations {
       // Use server-side filtering to find session by token
       // This is much more efficient than paginating through all sessions
       // Note: Apso API uses 'token' field and 'eq' operator (not '$eq')
-      const filterValue = encodeURIComponent(`token||eq||${sessionToken}`);
-      const url = `${this.config.baseUrl}/${this.apiPath}?filter=${filterValue}&limit=1`;
+      const url = listUrl(this.config, this.apiPath, {
+        filters: [{ field: 'token', op: 'eq', value: sessionToken }],
+        limit: 1,
+      });
 
       const response = await this.httpClient.get<any>(url, {
         headers: this.buildHeaders(),
@@ -379,7 +382,7 @@ export class SessionOperations {
       }
 
       // Build query with user filter
-      const url = `${this.config.baseUrl}/${this.apiPath}`;
+      const url = scanUrl(this.config, this.apiPath, { userId });
 
       const response = await this.httpClient.get<ApsoSession[]>(url, {
         headers: this.buildHeaders(),
@@ -957,7 +960,7 @@ export class SessionOperations {
         this.convertSortOptions(options.sort)
       );
 
-      const url = `${this.config.baseUrl}/${this.apiPath}`;
+      const url = scanUrl(this.config, this.apiPath, options.where);
 
       // Execute request
       const response = await this.httpClient.get<ApsoSession[]>(url, {

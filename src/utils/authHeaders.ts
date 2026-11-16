@@ -10,13 +10,20 @@
 export function buildAuthHeaders(config: {
   apiKey?: string;
   authHeader?: string;
+  queryDialect?: 'nestjsx' | 'postgrest';
 }): Record<string, string> {
-  if (!config.apiKey) return {};
+  // A service that still accepts both query syntaxes picks one per request
+  // from the query string, and a list with no filter gives it nothing to go
+  // on. Naming the dialect also makes it answer with a bare array.
+  const headers: Record<string, string> =
+    config.queryDialect === 'postgrest'
+      ? { 'X-Crud-Dialect': 'postgrest' }
+      : {};
+  if (!config.apiKey) return headers;
   const name = config.authHeader || 'Authorization';
-  return {
-    [name]:
-      name.toLowerCase() === 'authorization'
-        ? `Bearer ${config.apiKey}`
-        : config.apiKey,
-  };
+  headers[name] =
+    name.toLowerCase() === 'authorization'
+      ? `Bearer ${config.apiKey}`
+      : config.apiKey;
+  return headers;
 }

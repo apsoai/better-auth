@@ -521,6 +521,7 @@ interface ApsoAdapterConfig {
   // Authentication
   apiKey?: string;
   authHeader?: string;
+  queryDialect?: 'nestjsx' | 'postgrest';
 
   // HTTP Client
   fetchImpl?: HttpClient;
@@ -558,6 +559,7 @@ interface ApsoAdapterConfig {
 | `baseUrl` | `string` | ✅ | - | Base URL of Apso API |
 | `apiKey` | `string` | ❌ | - | API authentication key |
 | `authHeader` | `string` | ❌ | `'Authorization'` | Header that carries `apiKey`. `Authorization` sends `Bearer <key>`; any other name, such as `x-api-key`, sends the bare key |
+| `queryDialect` | `'nestjsx' \| 'postgrest'` | ❌ | `'nestjsx'` | Query syntax of list requests. `'postgrest'` is for a generated service that accepts the PostgREST query syntax only |
 | `fetchImpl` | [`HttpClient`](#httpclient) | ❌ | Built-in | Custom HTTP client |
 | `timeout` | `number` | ❌ | `10000` | Request timeout (ms) |
 | `retryConfig` | [`RetryConfig`](#retryconfig) | ❌ | See below | Retry settings |
