@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.1](https://github.com/apsoai/better-auth/compare/v2.2.0...v2.2.1) (2026-11-16)
+
 ## [2.2.0](https://github.com/apsoai/better-auth/compare/v2.1.0...v2.2.0) (2026-11-16)
 
 ## [2.1.0](https://github.com/apsoai/better-auth/compare/v2.0.24...v2.1.0) (2026-11-16)
