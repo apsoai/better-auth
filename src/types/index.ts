@@ -101,7 +101,20 @@ export interface ApsoAdapterConfig {
 
   // Authentication
   apiKey?: string;
+  /**
+   * Header that carries `apiKey`. Default `Authorization`, sent as
+   * `Bearer <apiKey>`. Any other name (use `x-api-key` for Apso-generated
+   * services) is sent as the bare key.
+   */
   authHeader?: string;
+
+  /**
+   * Query syntax of the list requests the adapter sends. Default `nestjsx`
+   * (`filter=email||$eqL||a@b.c`), which the Apso platform server reads.
+   * Set `postgrest` (`email=ilike.a@b.c`) for a generated service that
+   * accepts the PostgREST query syntax only.
+   */
+  queryDialect?: 'nestjsx' | 'postgrest';
 
   // HTTP Client
   fetchImpl?: HttpClient;
@@ -206,6 +219,8 @@ export interface RequestConfig {
   timeout?: number;
   retryConfig?: RetryConfig;
   signal?: AbortSignal;
+  /** Called with the response headers of a successful response. */
+  onHeaders?: (headers: Headers) => void;
 }
 
 // =============================================================================

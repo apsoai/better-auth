@@ -62,6 +62,7 @@ interface ApsoAdapterConfig {
   // Authentication
   apiKey?: string;
   authHeader?: string;
+  queryDialect?: 'nestjsx' | 'postgrest';
 
   // HTTP Client
   fetchImpl?: HttpClient;
@@ -120,13 +121,44 @@ API key for authenticating requests to your Apso API.
 
 #### `authHeader` (Optional)
 
-Custom authorization header name. Defaults to `'Authorization'`.
+Name of the header that carries `apiKey`. Defaults to `'Authorization'`.
+
+| `authHeader` | Header sent |
+|--------------|-------------|
+| not set, or `'Authorization'` | `Authorization: Bearer your-api-key` |
+| any other name, for example `'x-api-key'` | `x-api-key: your-api-key` (the bare key, no `Bearer ` prefix) |
+
+Apso-generated services and services hosted behind the Apso gateway read the key from `x-api-key` and treat `Authorization: Bearer` as a user token, so set `authHeader: 'x-api-key'` for them:
 
 ```typescript
 {
-  authHeader: 'X-API-Key' // Will send: X-API-Key: Bearer your-api-key
+  apiKey: process.env.APSO_API_KEY,
+  authHeader: 'x-api-key' // Will send: x-api-key: your-api-key
 }
 ```
+
+Before 2.0.23 a custom header still carried `Bearer your-api-key`, which no Apso service accepts under `x-api-key`.
+
+#### `queryDialect` (Optional)
+
+Query syntax of the filtered list requests the adapter sends. Defaults to `'nestjsx'`.
+
+| `queryDialect` | A session by token is requested as |
+|----------------|-----------------------------------|
+| not set, or `'nestjsx'` | `GET /sessions?filter=token\|\|eq\|\|abc&limit=1` |
+| `'postgrest'` | `GET /sessions?token=eq.abc&limit=1` |
+
+The Apso platform server reads the nestjsx syntax, so leave the option unset for it. A generated service that accepts the PostgREST query syntax only answers 400 to `filter=`, so set `'postgrest'` for it, together with `authHeader: 'x-api-key'`:
+
+```typescript
+{
+  apiKey: process.env.APSO_API_KEY,
+  authHeader: 'x-api-key',
+  queryDialect: 'postgrest'
+}
+```
+
+With `'postgrest'` every request also carries `X-Crud-Dialect: postgrest`, lists are read as a bare JSON array, and pages use `limit` and `offset`.
 
 #### `timeout` (Optional)
 
@@ -760,7 +792,7 @@ const secureConfig = {
 const customAuthConfig = {
   baseUrl: 'https://api.yourdomain.com',
   apiKey: process.env.APSO_API_KEY,
-  authHeader: 'X-API-Key', // Custom header
+  authHeader: 'x-api-key', // Sends the bare key, as Apso-generated services expect
 };
 ```
 

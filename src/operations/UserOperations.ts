@@ -23,6 +23,8 @@ import type {
 } from '../types';
 import { AdapterError, AdapterErrorCode } from '../types';
 import { HttpClient } from '../client/HttpClient';
+import { buildAuthHeaders } from '../utils/authHeaders';
+import { listUrl, scanUrl } from '../query/listUrl';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper } from '../response/EntityMapper';
@@ -324,8 +326,10 @@ export class UserOperations {
 
       // Case-insensitive server-side match ($eqL); the in-memory check below
       // stays as a safety net.
-      const filter = encodeURIComponent(`email||$eqL||${normalizedEmail}`);
-      const url = `${this.config.baseUrl}/${this.apiPath}?filter=${filter}&limit=1`;
+      const url = listUrl(this.config, this.apiPath, {
+        filters: [{ field: 'email', op: '$eqL', value: normalizedEmail }],
+        limit: 1,
+      });
 
       const response = await this.httpClient.get<ApsoUser[]>(url, {
         headers: this.buildHeaders(),
@@ -395,7 +399,7 @@ export class UserOperations {
         this.convertSortOptions(options.sort)
       );
 
-      const url = `${this.config.baseUrl}/${this.apiPath}`;
+      const url = scanUrl(this.config, this.apiPath, options.where);
 
       // Execute request
       const response = await this.httpClient.get<ApsoUser[]>(url, {
@@ -913,10 +917,7 @@ export class UserOperations {
     };
 
     // Add API key if configured
-    if (this.config.apiKey) {
-      const authHeader = this.config.authHeader || 'Authorization';
-      headers[authHeader] = `Bearer ${this.config.apiKey}`;
-    }
+    Object.assign(headers, buildAuthHeaders(this.config));
 
     // Add tenant context if available and multi-tenancy is enabled
     if (this.config.multiTenancy?.enabled) {

@@ -75,6 +75,39 @@ const DEFAULT_CONFIG: EntityMapperConfig = {
  * - Comprehensive validation
  * - Null/undefined value handling
  */
+/** Session columns this mapper names itself; anything else is a plugin's field. */
+const SESSION_CORE_FIELDS = new Set([
+  'id',
+  'token',
+  'sessionToken',
+  'userId',
+  'user',
+  'expiresAt',
+  'ipAddress',
+  'userAgent',
+  'createdAt',
+  'updatedAt',
+  'created_at',
+  'updated_at',
+]);
+
+/** The fields of a session that Better Auth plugins added. */
+export function sessionExtras(session: object): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(session).filter(([key]) => !SESSION_CORE_FIELDS.has(key))
+  );
+}
+
+/** createdAt and updatedAt of an API session row, as Dates. */
+function sessionTimestamps(session: any): { createdAt?: Date; updatedAt?: Date } {
+  const created = session.createdAt ?? session.created_at;
+  const updated = session.updatedAt ?? session.updated_at;
+  return {
+    ...(created && { createdAt: new Date(created) }),
+    ...(updated && { updatedAt: new Date(updated) }),
+  };
+}
+
 export class EntityMapper {
   private readonly config: EntityMapperConfig;
 
@@ -305,6 +338,13 @@ export class EntityMapper {
             : new Date(apiSession.expiresAt),
         ipAddress: apiSession.ipAddress || '',
         userAgent: apiSession.userAgent || '',
+        // Better Auth's OAuth provider stamps the sign-in time of a grant
+        // from session.createdAt; without it the stored authorization code
+        // fails its own check ("malformed verification value").
+        ...sessionTimestamps(apiSession),
+        // Fields Better Auth plugins add to the session, such as the
+        // organization plugin's activeOrganizationId.
+        ...sessionExtras(apiSession),
       };
 
       if (this.config.enableValidation) {

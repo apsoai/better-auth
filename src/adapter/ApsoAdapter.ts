@@ -26,6 +26,7 @@ import { EntityType } from '../types';
 import { AdapterError, AdapterErrorCode } from '../types';
 import { ConfigValidator } from '../utils/ConfigValidator';
 import { HttpClient } from '../client/HttpClient';
+import { buildAuthHeaders } from '../utils/authHeaders';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
 import { EntityMapper } from '../response/EntityMapper';
@@ -1080,18 +1081,17 @@ export class ApsoAdapter implements IApsoAdapter {
           const genericWhere = this.parseWhereClause(params.where);
 
           // Fall back to generic implementation for unsupported models
-          if (genericWhere.id && typeof genericWhere.id === 'string') {
-            return this.findById<T>(params.model, genericWhere.id);
-          }
-
-          // The first row matching the full where clause. This used to
-          // return the first row of the table whatever the clause said.
-          const result = await this.findFirstMatching<T>(
-            params.model,
-            params.where
-          );
+          const found =
+            genericWhere.id && typeof genericWhere.id === 'string'
+              ? await this.findById<T>(params.model, genericWhere.id)
+              : // The first row matching the full where clause. This used to
+                // return the first row of the table whatever the clause said.
+                await this.findFirstMatching<T>(params.model, params.where);
+          const [result = null] = found
+            ? await this.withJoins(params.model, [found], (params as any).join)
+            : [];
           this.updateSuccessMetrics(performance.now() - startTime);
-          return result;
+          return result as T | null;
       }
     } catch (error) {
       this.updateErrorMetrics(error, performance.now() - startTime);
@@ -1146,6 +1146,7 @@ export class ApsoAdapter implements IApsoAdapter {
       if (offset || limit) {
         rows = rows.slice(offset, limit ? offset + limit : undefined);
       }
+      rows = await this.withJoins(params.model, rows, (params as any).join);
 
       this.updateSuccessMetrics(performance.now() - startTime);
       return rows as T[];
@@ -1201,6 +1202,83 @@ export class ApsoAdapter implements IApsoAdapter {
       row.id != null ? [{ field: 'id', value: String(row.id) }] : params.where;
     await this.delete({ model: params.model, where });
     return row;
+  }
+
+  /**
+   * Better Auth 1.7 changes a row only if it still matches: refresh token
+   * rotation sets `revoked` where it is still null. Returns the updated row,
+   * or null when no row matched.
+   * ponytail: find-then-update over REST is not atomic; two concurrent
+   * callers can both match. Needs a conditional update on the service.
+   */
+  async incrementOne<T>(params: {
+    model: string;
+    where: any;
+    increment: Record<string, number>;
+    set?: Record<string, unknown>;
+  }): Promise<T | null> {
+    const row = (await this.findOne({
+      model: params.model,
+      where: params.where,
+    })) as Record<string, any> | null;
+    if (!row) return null;
+    const update: Record<string, unknown> = { ...params.set };
+    for (const [field, by] of Object.entries(params.increment ?? {})) {
+      update[field] = (Number(row[field]) || 0) + by;
+    }
+    if (Object.keys(update).length === 0) return row as T;
+    return this.update<T>({
+      model: params.model,
+      where: { id: String(row.id) },
+      update,
+    });
+  }
+
+  /**
+   * Attach the rows Better Auth asked to join (`join: { user: true }`). The
+   * organization plugin reads a member with its user this way and treats the
+   * member as missing when the user is absent.
+   * ponytail: relations are found by Better Auth's naming convention
+   * (member.userId -> user, organization <- member.organizationId) and read
+   * with one request per row. Read the references from Better Auth's schema
+   * if an app renames these fields.
+   */
+  private async withJoins<T>(
+    model: string,
+    rows: T[],
+    join?: Record<string, boolean | { limit?: number }> | string
+  ): Promise<T[]> {
+    const wanted = Object.entries(
+      (typeof join === 'string' ? JSON.parse(join) : join) ?? {}
+    ).filter(([, on]) => on);
+    if (wanted.length === 0) return rows;
+    return Promise.all(
+      rows.map(async (row: any) => {
+        const joined: Record<string, unknown> = {};
+        for (const [other, on] of wanted) {
+          if (row[other] !== undefined) continue;
+          const key = `${other}Id`;
+          if (key in row) {
+            joined[other] =
+              row[key] == null
+                ? null
+                : await this.findOne({
+                    model: other,
+                    where: [{ field: 'id', value: String(row[key]) }] as any,
+                  });
+          } else {
+            const limit =
+              on === true ? undefined : (on as { limit?: number }).limit;
+            joined[other] = await this.findMany({
+              model: other,
+              where: [{ field: `${model}Id`, value: String(row.id) }] as any,
+              ...(limit && { limit }),
+            } as any);
+          }
+        }
+        return { ...row, ...joined };
+      })
+    );
   }
 
   async transaction<R>(
@@ -1443,10 +1521,7 @@ export class ApsoAdapter implements IApsoAdapter {
     };
 
     // Add API key if configured
-    if (this.config.apiKey) {
-      const authHeader = this.config.authHeader || 'Authorization';
-      headers[authHeader] = `Bearer ${this.config.apiKey}`;
-    }
+    Object.assign(headers, buildAuthHeaders(this.config));
 
     // Add tenant context if available
     if (this.tenantContext && this.config.multiTenancy?.enabled) {

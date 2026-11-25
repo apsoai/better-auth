@@ -27,9 +27,11 @@ import type {
 } from '../types';
 import { AdapterError as AdapterErrorClass, AdapterErrorCode } from '../types';
 import { HttpClient } from '../client/HttpClient';
+import { buildAuthHeaders } from '../utils/authHeaders';
+import { listUrl, scanUrl } from '../query/listUrl';
 import { QueryTranslator } from '../query/QueryTranslator';
 import { ResponseNormalizer } from '../response/ResponseNormalizer';
-import { EntityMapper } from '../response/EntityMapper';
+import { EntityMapper, sessionExtras } from '../response/EntityMapper';
 
 /**
  * Options for finding multiple sessions
@@ -224,8 +226,10 @@ export class SessionOperations {
       // Use server-side filtering to find session by token
       // This is much more efficient than paginating through all sessions
       // Note: Apso API uses 'token' field and 'eq' operator (not '$eq')
-      const filterValue = encodeURIComponent(`token||eq||${sessionToken}`);
-      const url = `${this.config.baseUrl}/${this.apiPath}?filter=${filterValue}&limit=1`;
+      const url = listUrl(this.config, this.apiPath, {
+        filters: [{ field: 'token', op: 'eq', value: sessionToken }],
+        limit: 1,
+      });
 
       const response = await this.httpClient.get<any>(url, {
         headers: this.buildHeaders(),
@@ -378,7 +382,7 @@ export class SessionOperations {
       }
 
       // Build query with user filter
-      const url = `${this.config.baseUrl}/${this.apiPath}`;
+      const url = scanUrl(this.config, this.apiPath, { userId });
 
       const response = await this.httpClient.get<ApsoSession[]>(url, {
         headers: this.buildHeaders(),
@@ -493,8 +497,12 @@ export class SessionOperations {
         id: existingSession.id, // Ensure ID cannot be changed
       };
 
-      // Transform to API format
-      const apiData = this.entityMapper.mapSessionToApi(updatedSession);
+      // Transform to API format. Plugin fields in the update (the
+      // organization plugin's activeOrganizationId) are sent as they are.
+      const apiData = {
+        ...this.entityMapper.mapSessionToApi(updatedSession),
+        ...sessionExtras(updates),
+      };
 
       // Execute update request
       const url = `${this.config.baseUrl}/${this.apiPath}/${id}`;
@@ -956,7 +964,7 @@ export class SessionOperations {
         this.convertSortOptions(options.sort)
       );
 
-      const url = `${this.config.baseUrl}/${this.apiPath}`;
+      const url = scanUrl(this.config, this.apiPath, options.where);
 
       // Execute request
       const response = await this.httpClient.get<ApsoSession[]>(url, {
@@ -1294,10 +1302,7 @@ export class SessionOperations {
     };
 
     // Add API key if configured
-    if (this.config.apiKey) {
-      const authHeader = this.config.authHeader || 'Authorization';
-      headers[authHeader] = `Bearer ${this.config.apiKey}`;
-    }
+    Object.assign(headers, buildAuthHeaders(this.config));
 
     // Add tenant context if available and multi-tenancy is enabled
     if (this.config.multiTenancy?.enabled) {
